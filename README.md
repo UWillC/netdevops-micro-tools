@@ -1,123 +1,149 @@
-# Cisco Micro-Tool Generator
-
+# Cisco Micro-Tool Generator  
 ### **Automated configuration & security tools for Cisco engineers**
 
-Cisco Micro-Tool Generator to zestaw narzędzi, który automatyzuje powtarzalną pracę inżynierów sieciowych.
-Generuje konfiguracje, analizuje CVE, proponuje hardening oraz skraca troubleshooting z godzin do minut.
+This project is part of a micro-SaaS toolkit designed for network engineers who work with Cisco IOS/XE.  
+The goal is simple: eliminate repetitive CLI work and generate secure, production-ready configurations in seconds.
 
 ---
 
-## **Misja projektu**
+## **Project Mission**
 
-Stworzyć zestaw lekkich micro-narzędzi, które:
+Cisco Micro-Tool Generator aims to provide a set of lightweight micro-tools that:
 
-* generują konfiguracje Cisco w kilka sekund
-* analizują konfiguracje pod kątem bezpieczeństwa
-* oceniają podatności i rekomendują aktualizacje
-* analizują logi i wskazują możliwe przyczyny problemów
+* generate Cisco configurations in a few seconds  
+* validate and improve security baselines  
+* help assess vulnerabilities and mitigation options  
+* speed up troubleshooting by automating repetitive tasks  
 
-Docelowo: **ekosystem SaaS dla network engineerów.**
+Long-term, this evolves into a **micro-SaaS ecosystem for network engineers**.
 
 ---
 
-## **Moduły (roadmap v0.1 → v1.0)**
+## **Roadmap (v0.1 → v1.0)**
 
-###v0.1 (MVP – to build now)
+### v0.1 (MVP – current focus)
 
 * **SNMPv3 Config Generator**
 * **NTP Config Generator**
-* **AAA/TACACS+ Basic Template**
-* **Base Golden Config Template**
+* **AAA/TACACS+ Generator**
+* **Golden Config Generator**
 
-###v0.5 (next)
+### v0.5 (next)
 
-* **Cisco CVE Analyzer**
-  Input: device model + OS version → output: list of CVE + mitigation steps
+* **Cisco CVE Analyzer**  
+  Input: device model + OS version → output: relevant CVEs + mitigation ideas
 
-* **Security Hardening Advisor**
-  Input: running-config → output: recommended fixes
+* **Security Hardening Advisor**  
+  Input: running configuration → output: recommended fixes / hardening tips
 
-###v1.0 (SaaS Beta)
+### v1.0 (SaaS Beta)
 
-* Web UI
-* API endpoints
-* User profiles
-* Configuration history
-* Simple subscription model
+* Web UI  
+* API endpoints  
+* User accounts / profiles  
+* Configuration history  
+* Simple subscription model  
 
 ---
 
-## **Struktura projektu**
+## **Project Structure**
 
 ```
 /cisco-microtool-generator
 │
 ├── snmpv3-generator/
-│   └── snmpv3_mvp.py
+│   ├── snmpv3_mvp.py       # main SNMPv3 config generator (CLI tool)
+│   └── snmpv3_demo.py      # fixed demo script used for GIFs and docs
 │
 ├── ntp-generator/
-│   └── ntp_mvp.py
+│   └── ntp_mvp.py          # NTP config generator (CLI tool)
 │
 ├── aaa/
-│   └── aaa_basic_template.py
+│   └── aaa_basic_template.py   # AAA / TACACS+ generator (CLI tool)
 │
 ├── golden-config/
-│   └── base_template.py
+│   ├── golden_config_mvp.py    # initial golden config builder (v0.1)
+│   └── golden_config_v02.py    # golden config v0.2 with auto-detected modules
 │
 ├── cve-analyzer/
-│   └── cve_mvp.py
+│   └── cve_mvp.py          # placeholder for future CVE analyzer module
 │
-└── README.md
+├── demo/
+│   ├── README.md           # explanation of the SNMPv3 demo
+│   └── snmpv3_demo.gif     # CLI demo GIF of the SNMPv3 generator
+│
+└── README.md               # this file
 ```
 
 ---
 
-## **Dlaczego ten projekt powstaje**
+## **Why this project exists**
 
-Jestem inżynierem sieciowym, który wraca do networkingu po latach SysOps.
-Widzę, że:
+I’m a network engineer returning to networking after years in SysOps and infrastructure. In day-to-day work I see that:
 
-* inżynierowie tracą 30–60 minut na proste configi,
-* nikt nie wie, które CVE dotyczą których urządzeń,
-* brakuje automatycznych narzędzi bezpieczeństwa dla Cisco.
+* engineers waste 30–60 minutes on basic but repetitive configs
+* it’s not always clear which CVEs actually affect which devices and software versions
+* there is a lack of small, focused automation tools for Cisco security baselines
 
-> Ten projekt eliminuje te problemy — krok po kroku.
-
----
-
-## **Wymagania**
-
-* Python 3.10+
-* Biblioteki: `requests`, `rich` (opcjonalnie)
-* (W przyszłości) Docker + FastAPI
+> This project is my way of solving those problems step-by-step and turning that experience into a usable product.
 
 ---
 
-## **Status**
-
-Projekt jest w aktywnym rozwoju.
-Aktualna faza: **MVP SNMPv3 + NTP + AAA**
-Cel: **pierwsze demo SaaS do końca Q1 2026**.
-
----
-
-## Current modules
+## **Current Modules**
 
 ### SNMPv3 Config Generator
 
-Generuje kompletną konfigurację SNMPv3 zgodną z najlepszymi praktykami bezpieczeństwa, opartą na danych wejściowych użytkownika.
+Generates a complete SNMPv3 configuration aligned with security best practices, including:
+
+* security modes (secure-default, balanced, legacy-compatible, custom)
+* multi-user support
+* password validation and warnings
+* multiple output formats:
+  * CLI (multi-line)
+  * oneline (single line, ; separated)
+  * YAML template (for automation tools like Ansible)
 
 ### NTP Config Generator
 
-Tworzy poprawną i powtarzalną konfigurację NTP, pozwalając szybko zdefiniować serwery czasu i ustawienia bezpieczeństwa.
+Builds consistent NTP configuration for Cisco devices:
+
+* primary and secondary NTP servers
+* timezone configuration
+* optional NTP authentication (key ID + MD5 key)
+* supports CLI and single-line output
+* optional export to file
 
 ### AAA/TACACS+ Generator
 
-Buduje szkielet konfiguracji AAA wraz z integracją TACACS+/RADIUS, zapewniając spójny i bezpieczny proces logowania oraz autoryzacji.
+Creates a baseline AAA configuration with two modes:
+
+* local-only AAA (no external server)
+* TACACS+ with local fallback (primary and optional secondary TACACS+ server)
+
+Features:
+
+* optional enable secret with basic password quality checks
+* optional TACACS+ source interface
+* CLI and one-line formats
+* ready to paste into Cisco IOS/XE device configs
 
 ### Golden Config Generator
 
-Dostarcza bazowy "golden config" dla nowych urządzeń Cisco, standaryzując początkową konfigurację zgodnie z dobrymi praktykami.
+Generates a golden baseline configuration for new Cisco devices by combining:
+
+* SNMPv3 configuration
+* NTP configuration
+* AAA/TACACS+ configuration
+* login banner
+* logging baseline
+* security baseline (with multiple modes in v0.2)
+
+### Golden Config v0.2 can:
+
+* auto-detect module config files in the current directory (e.g. snmpv3_config*.txt, ntp_config*.txt, aaa_tacacs*.txt)
+* merge them into a single baseline configuration
+* apply different security profiles: standard, secure, hardened
+* export the final golden config to a file (e.g. golden_config_secure.txt)
 
 ---
 
@@ -137,6 +163,30 @@ Below is a short demo of the **SNMPv3 Config Generator** running in secure-defau
 
 ---
 
-## **Kontakt**
+## **Requirements**
+
+* Python 3.9+
+* Optional libraries (planned / future):
+  `requests`
+  `rich`
+* In the future:
+  * Docker
+  * FastAPI (for API / SaaS version)
+
+---
+
+## **Status**
+
+The project is under active development.
+Current focus:
+
+* solid CLI tools for SNMPv3, NTP, AAA, Golden Config
+* preparing the codebase for an API and web UI
+
+Target: **first public SaaS demo environment.**
+
+---
+
+## **Contact**
 
 LinkedIn: [https://www.linkedin.com/in/przemyslaw-snow](https://www.linkedin.com/in/przemyslaw-snow)

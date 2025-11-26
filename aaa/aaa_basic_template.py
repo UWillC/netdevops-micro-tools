@@ -26,6 +26,11 @@ def generate_header(device: str):
 
 
 def validate_password(pw: str, label: str) -> str:
+    """
+    Basic password validation:
+    - if < 8 characters -> error
+    - if 8–10, no digits, no uppercase -> warning
+    """
     if len(pw) < 8:
         raise ValueError(f"{label} password is too short (min 8 characters required).")
 

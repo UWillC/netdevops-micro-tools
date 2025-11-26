@@ -27,7 +27,7 @@ snmp-server enable traps
 
 
 def main():
-    # Stałe wartości demo – zawsze ten sam, ładny output
+    # Fixed demo values – always the same output for GIFs / documentation
     mode = "secure-default"
     device = "Cisco IOS XE"
     user = "monitoring"

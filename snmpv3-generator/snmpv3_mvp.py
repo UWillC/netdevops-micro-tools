@@ -37,9 +37,9 @@ def get_non_empty(prompt: str) -> str:
 
 def validate_password(pw: str, label: str) -> str:
     """
-    Minimalna walidacja haseł:
-    - < 8 znaków -> błąd
-    - 8–10, brak cyfr, brak dużych liter -> WARNING (ale przechodzi)
+    Minimal password validation:
+    - length < 8  -> error
+    - length 8–10, no digits, no uppercase -> warning (but allowed)
     """
     if len(pw) < 8:
         raise ValueError(f"{label} password is too short (min 8 characters required).")
@@ -124,7 +124,7 @@ def generate_snmpv3_oneline(user, group, auth_algo, auth_pass, priv_algo, priv_p
 
 
 def generate_snmpv3_template_entry(user, group, auth_algo, auth_pass, priv_algo, priv_pass, host):
-    # Fragment YAML dla jednego użytkownika
+    # YAML fragment for a single SNMPv3 user
     return f"""  - name: "{user}"
     group: "{group}"
     auth_algo: "{auth_algo}"
@@ -138,7 +138,7 @@ def generate_snmpv3_template_entry(user, group, auth_algo, auth_pass, priv_algo,
 def main():
     print("=== SNMPv3 Config Generator v0.4 ===\n")
 
-    # 1. Tryb bezpieczeństwa + format
+    # 1. Security mode + output format
     mode = choose_mode()
     device = input("Device type (default: Cisco IOS XE): ").strip() or "Cisco IOS XE"
     host = get_non_empty("SNMP manager IP/hostname (trap host): ")
@@ -154,7 +154,7 @@ def main():
     except ValueError:
         raise ValueError("Number of users must be a positive integer.")
 
-    # 2. Generowanie configów
+    # 2. Generate configs per user
     configs = []
 
     for i in range(num_users):
@@ -202,7 +202,7 @@ def main():
 
         configs.append(cfg)
 
-    # 3. Składanie finalnego outputu
+    # 3. Compose final output
     if output_format == "template":
         full_output = generate_template_header(mode, device, host)
         full_output += "\n".join(configs) + "\n"
@@ -210,7 +210,7 @@ def main():
         header = generate_header(mode, device)
         full_output = header + "".join(configs) + "\n"
 
-    # 4. Eksport
+    # 4. Export
     export = input("\nExport to file? (y/n): ").strip().lower()
     if export == "y":
         default_filename = {

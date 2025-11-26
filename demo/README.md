@@ -14,10 +14,11 @@ The GIF below demonstrates the fully automated `secure-default` workflow.
 ### About the Demo
 
 The demo script (`snmpv3_demo.py`) outputs a clean, fixed configuration using predefined secure parameters:
-- Secure defaults (SHA-256, AES-256)
-- Monitoring user profile
-- Automatic metadata header  
-- Ready-to-paste CLI config
+
+- secure defaults (SHA-256, AES-256)  
+- monitoring user profile  
+- automatic metadata header  
+- ready-to-paste CLI config  
 
 This makes the demo ideal for sharing publicly (LinkedIn, GitHub, documentation).
 

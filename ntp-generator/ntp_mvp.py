@@ -9,7 +9,7 @@ def get_non_empty(prompt: str) -> str:
 
 
 def validate_server(server: str) -> str:
-    # Minimalna walidacja inputu – nie komplikujemy na v0.1
+    # Minimal input validation – keep it simple for v0.1
     if " " in server:
         raise ValueError("NTP server cannot contain spaces.")
     return server
