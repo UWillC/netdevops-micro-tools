@@ -45,6 +45,32 @@ document
   });
 
 // -----------------------------
+// Download buttons (.txt files)
+// -----------------------------
+document
+  .querySelectorAll(".btn-secondary[data-download-target]")
+  .forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const targetId = btn.dataset.downloadTarget;
+      const filename = btn.dataset.filename || "config.txt";
+      const textarea = document.getElementById(targetId);
+      if (!textarea) return;
+
+      const blob = new Blob([textarea.value || ""], {
+        type: "text/plain;charset=utf-8",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    });
+  });
+
+// -----------------------------
 // Helper: generic POST JSON
 // -----------------------------
 async function postJSON(path, payload) {
@@ -67,12 +93,166 @@ async function postJSON(path, payload) {
 }
 
 // -----------------------------
+// LocalStorage helpers
+// -----------------------------
+function saveFormState(key, formElement) {
+  const data = {};
+  const formData = new FormData(formElement);
+  formData.forEach((value, name) => {
+    data[name] = value;
+  });
+  localStorage.setItem(key, JSON.stringify(data));
+}
+
+function loadFormState(key, formElement) {
+  const raw = localStorage.getItem(key);
+  if (!raw) return;
+  try {
+    const data = JSON.parse(raw);
+    Object.entries(data).forEach(([name, value]) => {
+      const field = formElement.querySelector(`[name="${name}"]`);
+      if (!field || value === undefined || value === null) return;
+      if (field.tagName === "SELECT" || field.tagName === "INPUT" || field.tagName === "TEXTAREA") {
+        field.value = value;
+      }
+    });
+  } catch (_) {
+    // ignore
+  }
+}
+
+// -----------------------------
+// Profiles (Lab / Branch / DC)
+// -----------------------------
+const profiles = {
+  "lab-router": {
+    snmp: {
+      host: "10.0.0.10",
+      user: "lab-monitor",
+      group: "lab_grp",
+      auth_password: "LabSnmpAuth123",
+      priv_password: "LabSnmpPriv123",
+    },
+    ntp: {
+      primary_server: "0.pool.ntp.org",
+      secondary_server: "1.pool.ntp.org",
+      timezone: "UTC",
+    },
+    aaa: {
+      enable_secret: "LabEnable123",
+      tacacs1_name: "lab-tacacs",
+      tacacs1_ip: "10.0.0.20",
+      tacacs1_key: "LabTacacsKey123",
+    },
+  },
+  "branch-router": {
+    snmp: {
+      host: "192.168.10.10",
+      user: "branch-monitor",
+      group: "branch_grp",
+      auth_password: "BranchAuth123",
+      priv_password: "BranchPriv123",
+    },
+    ntp: {
+      primary_server: "192.168.0.1",
+      secondary_server: "0.pool.ntp.org",
+      timezone: "UTC",
+    },
+    aaa: {
+      enable_secret: "BranchEnable123",
+      tacacs1_name: "branch-tacacs",
+      tacacs1_ip: "172.16.0.10",
+      tacacs1_key: "BranchTacacsKey123",
+    },
+  },
+  "dc-router": {
+    snmp: {
+      host: "10.1.1.10",
+      user: "dc-monitor",
+      group: "dc_grp",
+      auth_password: "DcAuth123",
+      priv_password: "DcPriv123",
+    },
+    ntp: {
+      primary_server: "time.google.com",
+      secondary_server: "1.pool.ntp.org",
+      timezone: "UTC",
+    },
+    aaa: {
+      enable_secret: "DcEnable123",
+      tacacs1_name: "dc-tacacs",
+      tacacs1_ip: "10.1.1.20",
+      tacacs1_key: "DcTacacsKey123",
+    },
+  },
+};
+
+function applyProfile(profileKey) {
+  const profile = profiles[profileKey];
+  if (!profile) return;
+
+  // SNMPv3
+  const snmpForm = document.getElementById("snmpv3-form");
+  if (snmpForm && profile.snmp) {
+    const set = (name, val) => {
+      const field = snmpForm.querySelector(`[name="${name}"]`);
+      if (field && val) field.value = val;
+    };
+    set("host", profile.snmp.host);
+    set("user", profile.snmp.user);
+    set("group", profile.snmp.group);
+    set("auth_password", profile.snmp.auth_password);
+    set("priv_password", profile.snmp.priv_password);
+  }
+
+  // NTP
+  const ntpForm = document.getElementById("ntp-form");
+  if (ntpForm && profile.ntp) {
+    const set = (name, val) => {
+      const field = ntpForm.querySelector(`[name="${name}"]`);
+      if (field && val) field.value = val;
+    };
+    set("primary_server", profile.ntp.primary_server);
+    set("secondary_server", profile.ntp.secondary_server);
+    set("timezone", profile.ntp.timezone);
+  }
+
+  // AAA
+  const aaaForm = document.getElementById("aaa-form");
+  if (aaaForm && profile.aaa) {
+    const set = (name, val) => {
+      const field = aaaForm.querySelector(`[name="${name}"]`);
+      if (field && val) field.value = val;
+    };
+    set("enable_secret", profile.aaa.enable_secret);
+    set("tacacs1_name", profile.aaa.tacacs1_name);
+    set("tacacs1_ip", profile.aaa.tacacs1_ip);
+    set("tacacs1_key", profile.aaa.tacacs1_key);
+  }
+}
+
+// Global profile selector
+const globalProfileSelect = document.getElementById("global-profile");
+const applyProfileBtn = document.getElementById("apply-profile");
+
+if (applyProfileBtn && globalProfileSelect) {
+  applyProfileBtn.addEventListener("click", () => {
+    const key = globalProfileSelect.value;
+    if (!key) return;
+    applyProfile(key);
+  });
+}
+
+// -----------------------------
 // SNMPv3 form
 // -----------------------------
 const snmpForm = document.getElementById("snmpv3-form");
 const snmpOutput = document.getElementById("snmpv3-output");
 
 if (snmpForm && snmpOutput) {
+  // load previous state
+  loadFormState("snmpv3-form", snmpForm);
+
   snmpForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     snmpOutput.value = "Generating SNMPv3 config...";
@@ -88,6 +268,9 @@ if (snmpForm && snmpOutput) {
       priv_password: formData.get("priv_password"),
       output_format: formData.get("output_format"),
     };
+
+    // save last used values
+    saveFormState("snmpv3-form", snmpForm);
 
     try {
       const data = await postJSON("/generate/snmpv3", payload);
@@ -105,6 +288,8 @@ const ntpForm = document.getElementById("ntp-form");
 const ntpOutput = document.getElementById("ntp-output");
 
 if (ntpForm && ntpOutput) {
+  loadFormState("ntp-form", ntpForm);
+
   ntpForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     ntpOutput.value = "Generating NTP config...";
@@ -123,6 +308,8 @@ if (ntpForm && ntpOutput) {
       output_format: formData.get("output_format"),
     };
 
+    saveFormState("ntp-form", ntpForm);
+
     try {
       const data = await postJSON("/generate/ntp", payload);
       ntpOutput.value = data.config || "";
@@ -139,6 +326,8 @@ const aaaForm = document.getElementById("aaa-form");
 const aaaOutput = document.getElementById("aaa-output");
 
 if (aaaForm && aaaOutput) {
+  loadFormState("aaa-form", aaaForm);
+
   aaaForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     aaaOutput.value = "Generating AAA config...";
@@ -159,6 +348,8 @@ if (aaaForm && aaaOutput) {
       output_format: formData.get("output_format"),
     };
 
+    saveFormState("aaa-form", aaaForm);
+
     try {
       const data = await postJSON("/generate/aaa", payload);
       aaaOutput.value = data.config || "";
@@ -175,6 +366,8 @@ const goldenForm = document.getElementById("golden-form");
 const goldenOutput = document.getElementById("golden-output");
 
 if (goldenForm && goldenOutput) {
+  loadFormState("golden-form", goldenForm);
+
   goldenForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     goldenOutput.value = "Generating Golden Config...";
@@ -189,6 +382,8 @@ if (goldenForm && goldenOutput) {
       aaa_config: formData.get("aaa_config") || null,
       output_format: formData.get("output_format"),
     };
+
+    saveFormState("golden-form", goldenForm);
 
     try {
       const data = await postJSON("/generate/golden-config", payload);
@@ -206,6 +401,8 @@ const cveForm = document.getElementById("cve-form");
 const cveOutput = document.getElementById("cve-output");
 
 if (cveForm && cveOutput) {
+  loadFormState("cve-form", cveForm);
+
   cveForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     cveOutput.value = "Analyzing CVEs...";
@@ -217,6 +414,8 @@ if (cveForm && cveOutput) {
       version: formData.get("version"),
       include_suggestions: formData.get("include_suggestions") === "true",
     };
+
+    saveFormState("cve-form", cveForm);
 
     try {
       const data = await postJSON("/analyze/cve", payload);

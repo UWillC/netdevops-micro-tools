@@ -252,3 +252,32 @@ textarea:focus {
     padding: 0 10px 32px;
   }
 }
+
+.profile-bar {
+  margin-bottom: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+}
+
+.profile-bar-label {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.profile-bar-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.profile-bar select {
+  min-width: 150px;
+}
+
+.output-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}

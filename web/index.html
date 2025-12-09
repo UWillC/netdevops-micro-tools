@@ -13,6 +13,20 @@
   </header>
 
   <main class="container">
+
+    <div class="profile-bar card">
+      <div class="profile-bar-label">Profiles</div>
+      <div class="profile-bar-controls">
+        <select id="global-profile">
+          <option value="">Custom</option>
+          <option value="lab-router">Lab router</option>
+          <option value="branch-router">Branch router</option>
+          <option value="dc-router">Datacenter router</option>
+        </select>
+        <button id="apply-profile" class="btn-secondary">Apply profile</button>
+      </div>
+    </div>
+
     <nav class="tab-nav">
       <button class="tab-button active" data-tab="snmpv3">SNMPv3</button>
       <button class="tab-button" data-tab="ntp">NTP</button>
@@ -78,7 +92,10 @@
       <div class="output-card">
         <div class="output-header">
           <span>Generated SNMPv3 configuration</span>
-          <button class="btn-secondary" data-copy-target="snmpv3-output">Copy</button>
+          <div class="output-actions">
+            <button class="btn-secondary" data-copy-target="snmpv3-output">Copy</button>
+            <button class="btn-secondary" data-download-target="snmpv3-output" data-filename="snmpv3_config.txt">Download</button>
+          </div>
         </div>
         <textarea id="snmpv3-output" class="output-text" readonly></textarea>
       </div>
@@ -140,7 +157,10 @@
       <div class="output-card">
         <div class="output-header">
           <span>Generated NTP configuration</span>
-          <button class="btn-secondary" data-copy-target="ntp-output">Copy</button>
+          <div class="output-actions">
+            <button class="btn-secondary" data-copy-target="ntp-output">Copy</button>
+            <button class="btn-secondary" data-download-target="ntp-output" data-filename="ntp_config.txt">Download</button>
+          </div>
         </div>
         <textarea id="ntp-output" class="output-text" readonly></textarea>
       </div>
@@ -217,7 +237,10 @@
       <div class="output-card">
         <div class="output-header">
           <span>Generated AAA configuration</span>
-          <button class="btn-secondary" data-copy-target="aaa-output">Copy</button>
+          <div class="output-actions">
+            <button class="btn-secondary" data-copy-target="aaa-output">Copy</button>
+            <button class="btn-secondary" data-download-target="aaa-output" data-filename="aaa_config.txt">Download</button>
+          </div>
         </div>
         <textarea id="aaa-output" class="output-text" readonly></textarea>
       </div>
@@ -270,7 +293,10 @@
       <div class="output-card">
         <div class="output-header">
           <span>Generated Golden Config</span>
-          <button class="btn-secondary" data-copy-target="golden-output">Copy</button>
+          <div class="output-actions">
+            <button class="btn-secondary" data-copy-target="golden-output">Copy</button>
+            <button class="btn-secondary" data-download-target="golden-output" data-filename="golden_config.txt">Download</button>
+          </div>
         </div>
         <textarea id="golden-output" class="output-text" readonly></textarea>
       </div>
@@ -304,7 +330,10 @@
       <div class="output-card">
         <div class="output-header">
           <span>CVE analysis result</span>
-          <button class="btn-secondary" data-copy-target="cve-output">Copy</button>
+          <div class="output-actions">
+            <button class="btn-secondary" data-copy-target="cve-output">Copy</button>
+            <button class="btn-secondary" data-download-target="cve-output" data-filename="cve_analysis.txt">Download</button>
+          </div>
         </div>
         <textarea id="cve-output" class="output-text" readonly></textarea>
       </div>
