@@ -316,6 +316,33 @@ If you change the API port, update `API_BASE_URL` accordingly.
 The Web UI is intentionally minimal and focused on network engineers:
 you fill in parameters, click **Generate**, and get a ready-to-paste Cisco configuration
 
+## 🧩 UX Enhancements (Profiles, Persistence & Downloads)
+
+To make the Web UI more practical for day-to-day use by network engineers, several quality-of-life features were added:
+
+### Profiles (Lab / Branch / Datacenter)
+
+The UI now includes predefined configuration profiles that automatically populate SNMPv3, NTP and AAA fields with sensible defaults for:
+
+* **Lab router**
+* **Branch router**
+* **Datacenter router**
+
+This allows you to generate complete configs with almost zero typing.
+
+### Persistent form values (`localStorage`)
+
+All input forms (SNMPv3, NTP, AAA, Golden Config and CVE Analyzer) now save the last used values locally in the browser.  
+When you refresh or reopen the tool, your previous inputs automatically reappear.
+
+This drastically speeds up repetitive config generation.
+
+### Download as `.txt`
+
+Each generator output panel now includes a **Download** button that exports the generated configuration or CVE analysis as a clean `.txt` file — ready to attach to tickets, email threads, documentation, or device deployment workflows.
+
+These UX improvements aim to move the project closer to a real micro-SaaS experience, not just a backend API with forms.
+
 ---
 
 ## **Status**
