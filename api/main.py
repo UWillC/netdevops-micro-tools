@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from api.routers import snmpv3, ntp, golden_config, aaa, cve
-
+from models.meta import MetaInfo
+import datetime
 
 # to run backend cd /Users/uwillc/SaaS/cisco-microtool-generator
 # python3 -m uvicorn api.main:app --reload --port 8000
@@ -41,3 +42,15 @@ def root():
         "status": "ok",
         "message": "Cisco Micro-Tool Generator API is running.",
     }
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+@app.get("/meta/version", response_model=MetaInfo)
+def meta_version():
+    return MetaInfo(
+        version="0.2.0-dev",
+        build_time=datetime.datetime.utcnow().isoformat() + "Z",
+        feature_flags=["cve_engine_v2", "profiles_v2_pre"]
+    )
