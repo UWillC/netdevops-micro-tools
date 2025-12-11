@@ -417,47 +417,44 @@ if (cveForm && cveOutput) {
 
     saveFormState("cve-form", cveForm);
 
-    try {
-      const data = await postJSON("/analyze/cve", payload);
+try {
+  const data = await postJSON("/analyze/cve", payload);
 
-      if (!data.matched_cves || data.matched_cves.length === 0) {
-        let out = "No demo CVEs matched for this platform/version.\n\n";
-        if (data.note) {
-          out += `Note: ${data.note}\n`;
-        }
-        cveOutput.value = out;
-        return;
-      }
+  if (!data.matched || data.matched.length === 0) {
+    let out = "No CVEs matched for this platform/version.\n\n";
+    cveOutput.value = out;
+    return;
+  }
 
-      let out = "";
-      data.matched_cves.forEach((cve) => {
-        out += `${cve.cve_id} [${cve.severity.toUpperCase()}] – ${
-          cve.title
-        }\n`;
-        out += `  ${cve.description}\n`;
-        if (cve.fixed_in) {
-          out += `  Fixed in: ${cve.fixed_in}\n`;
-        }
-        if (cve.workaround) {
-          out += `  Workaround: ${cve.workaround}\n`;
-        }
-        if (cve.advisory_url) {
-          out += `  Advisory: ${cve.advisory_url}\n`;
-        }
-        out += "\n";
-      });
+  let out = "";
+  out += `Platform: ${data.platform}\n`;
+  out += `Version: ${data.version}\n`;
+  out += `Timestamp: ${data.timestamp}\n\n`;
 
-      if (data.recommended_action) {
-        out += `Recommended action:\n${data.recommended_action}\n\n`;
-      }
+  out += "Matched CVEs:\n";
+  data.matched.forEach((cve) => {
+    out += `${cve.cve_id} [${cve.severity.toUpperCase()}]\n`;
+    out += `  Title: ${cve.title}\n`;
+    out += `  Tags: ${cve.tags.join(", ")}\n`;
+    out += `  Description: ${cve.description}\n`;
+    if (cve.fixed_in) out += `  Fixed in: ${cve.fixed_in}\n`;
+    if (cve.workaround) out += `  Workaround: ${cve.workaround}\n`;
+    out += `  Advisory: ${cve.advisory_url}\n\n`;
+  });
 
-      if (data.note) {
-        out += `Note: ${data.note}\n`;
-      }
+  out += "Summary:\n";
+  Object.entries(data.summary).forEach(([sev, count]) => {
+    out += `  ${sev}: ${count}\n`;
+  });
 
-      cveOutput.value = out;
-    } catch (err) {
-      cveOutput.value = `Error: ${err.message}`;
-    }
+  if (data.recommended_upgrade) {
+    out += `\nRecommended upgrade target: ${data.recommended_upgrade}\n`;
+  }
+
+  cveOutput.value = out;
+
+} catch (err) {
+  cveOutput.value = `Error: ${err.message}`;
+}
   });
 }
