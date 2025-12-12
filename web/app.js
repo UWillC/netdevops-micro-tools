@@ -399,6 +399,7 @@ if (goldenForm && goldenOutput) {
 // -----------------------------
 const cveForm = document.getElementById("cve-form");
 const cveOutput = document.getElementById("cve-output");
+const cveSummary = document.getElementById("cve-summary");
 
 if (cveForm && cveOutput) {
   loadFormState("cve-form", cveForm);
@@ -417,44 +418,97 @@ if (cveForm && cveOutput) {
 
     saveFormState("cve-form", cveForm);
 
-try {
-  const data = await postJSON("/analyze/cve", payload);
+    try {
+      const data = await postJSON("/analyze/cve", payload);
 
-  if (!data.matched || data.matched.length === 0) {
-    let out = "No CVEs matched for this platform/version.\n\n";
-    cveOutput.value = out;
-    return;
-  }
+      if (!data.matched || data.matched.length === 0) {
+        let out = "No CVEs matched for this platform/version.\n\n";
+        cveOutput.value = out;
 
-  let out = "";
-  out += `Platform: ${data.platform}\n`;
-  out += `Version: ${data.version}\n`;
-  out += `Timestamp: ${data.timestamp}\n\n`;
+        if (cveSummary) {
+          cveSummary.innerHTML = `
+            <h3>Security posture</h3>
+            <p class="summary-muted">
+              No CVEs from the current dataset matched this platform/version.
+            </p>
+          `;
+        }
+        return;
+      }
 
-  out += "Matched CVEs:\n";
-  data.matched.forEach((cve) => {
-    out += `${cve.cve_id} [${cve.severity.toUpperCase()}]\n`;
-    out += `  Title: ${cve.title}\n`;
-    out += `  Tags: ${cve.tags.join(", ")}\n`;
-    out += `  Description: ${cve.description}\n`;
-    if (cve.fixed_in) out += `  Fixed in: ${cve.fixed_in}\n`;
-    if (cve.workaround) out += `  Workaround: ${cve.workaround}\n`;
-    out += `  Advisory: ${cve.advisory_url}\n\n`;
-  });
+      let out = "";
+      out += `Platform: ${data.platform}\n`;
+      out += `Version: ${data.version}\n`;
+      out += `Timestamp: ${data.timestamp}\n\n`;
 
-  out += "Summary:\n";
-  Object.entries(data.summary).forEach(([sev, count]) => {
-    out += `  ${sev}: ${count}\n`;
-  });
+      out += "Matched CVEs:\n";
+      data.matched.forEach((cve) => {
+        out += `${cve.cve_id} [${cve.severity.toUpperCase()}]\n`;
+        out += `  Title: ${cve.title}\n`;
+        out += `  Tags: ${cve.tags.join(", ")}\n`;
+        out += `  Description: ${cve.description}\n`;
+        if (cve.fixed_in) out += `  Fixed in: ${cve.fixed_in}\n`;
+        if (cve.workaround) out += `  Workaround: ${cve.workaround}\n`;
+        out += `  Advisory: ${cve.advisory_url}\n\n`;
+      });
 
-  if (data.recommended_upgrade) {
-    out += `\nRecommended upgrade target: ${data.recommended_upgrade}\n`;
-  }
+      out += "Summary:\n";
+      Object.entries(data.summary).forEach(([sev, count]) => {
+        out += `  ${sev}: ${count}\n`;
+      });
 
-  cveOutput.value = out;
+      if (data.recommended_upgrade) {
+        out += `\nRecommended upgrade target: ${data.recommended_upgrade}\n`;
+      }
 
-} catch (err) {
-  cveOutput.value = `Error: ${err.message}`;
-}
+      cveOutput.value = out;
+
+      if (cveSummary) {
+        const s = data.summary || {};
+        const critical = s.critical || 0;
+        const high = s.high || 0;
+        const medium = s.medium || 0;
+        const low = s.low || 0;
+
+        cveSummary.innerHTML = `
+          <h3>Security posture</h3>
+          <div class="summary-row">
+            <span>Severity breakdown</span>
+          </div>
+          <div class="summary-row">
+            <span>
+              <span class="severity-badge sev-critical">CRITICAL</span>
+              <span class="severity-badge sev-high">HIGH</span>
+              <span class="severity-badge sev-medium">MEDIUM</span>
+              <span class="severity-badge sev-low">LOW</span>
+            </span>
+          </div>
+          <div class="summary-row">
+            <span>Counts</span>
+            <span>${critical} / ${high} / ${medium} / ${low}</span>
+          </div>
+          ${
+            data.recommended_upgrade
+              ? `<div class="summary-upgrade">
+                   Recommended upgrade target:<br/>
+                   <strong>${data.recommended_upgrade}</strong>
+                 </div>`
+              : `<div class="summary-upgrade summary-muted">
+                   No specific upgrade target recommended based on current CVEs.
+                 </div>`
+          }
+        `;
+      }
+
+    } catch (err) {
+      cveOutput.value = `Error: ${err.message}`;
+      if (cveSummary) {
+        cveSummary.innerHTML = `
+          <h3>Security posture</h3>
+          <p class="summary-muted">Error during CVE analysis: ${err.message}</p>
+        `;
+      }
+    }
+
   });
 }

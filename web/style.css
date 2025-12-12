@@ -281,3 +281,134 @@ textarea:focus {
   gap: 6px;
   align-items: center;
 }
+
+/* -------- Web UI v2 layout -------- */
+
+.layout {
+  max-width: 1200px;
+  margin: 18px auto 40px;
+  padding: 0 12px;
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 16px;
+}
+
+.sidebar {
+  align-self: flex-start;
+  padding: 14px 14px 12px;
+}
+
+.sidebar-header {
+  margin-bottom: 10px;
+}
+
+.sidebar-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.sidebar-subtitle {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+/* Vertical nav in sidebar */
+.sidebar .tab-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sidebar .tab-button {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+/* Main panel tweaks */
+.main-panel {
+  padding: 0;
+}
+
+/* CVE layout: output + summary side by side */
+.cve-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 2.1fr) minmax(0, 1.3fr);
+  gap: 10px;
+  align-items: stretch;
+  margin-top: 12px;
+}
+
+.summary-card {
+  background: radial-gradient(circle at top left, #020617, #020617 70%);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  padding: 12px 12px 10px;
+  box-shadow: var(--shadow);
+  font-size: 0.82rem;
+}
+
+.summary-card h3 {
+  margin: 0 0 6px;
+  font-size: 0.9rem;
+}
+
+.summary-muted {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  margin: 4px 0;
+}
+
+.summary-row span:first-child {
+  color: var(--muted);
+}
+
+.severity-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.7rem;
+  margin-right: 4px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+}
+
+.sev-critical {
+  border-color: rgba(248, 113, 113, 0.9);
+}
+
+.sev-high {
+  border-color: rgba(252, 211, 77, 0.9);
+}
+
+.sev-medium {
+  border-color: rgba(56, 189, 248, 0.9);
+}
+
+.sev-low {
+  border-color: rgba(52, 211, 153, 0.9);
+}
+
+.summary-upgrade {
+  margin-top: 8px;
+  font-size: 0.8rem;
+}
+
+/* Responsive: stack sidebar on small screens */
+@media (max-width: 860px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sidebar {
+    order: -1;
+  }
+
+  .cve-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

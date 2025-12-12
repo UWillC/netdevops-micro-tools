@@ -12,333 +12,353 @@
     <div class="subtitle">Secure config generator for Cisco IOS/XE</div>
   </header>
 
-  <main class="container">
+    <main class="layout">
 
-    <div class="profile-bar card">
-      <div class="profile-bar-label">Profiles</div>
-      <div class="profile-bar-controls">
-        <select id="global-profile">
-          <option value="">Custom</option>
-          <option value="lab-router">Lab router</option>
-          <option value="branch-router">Branch router</option>
-          <option value="dc-router">Datacenter router</option>
-        </select>
-        <button id="apply-profile" class="btn-secondary">Apply profile</button>
+    <!-- Sidebar navigation -->
+    <aside class="sidebar card">
+      <div class="sidebar-header">
+        <div class="sidebar-title">Tools</div>
+        <div class="sidebar-subtitle">Generators & analysis</div>
       </div>
-    </div>
+      <nav class="tab-nav">
+        <button class="tab-button active" data-tab="snmpv3">SNMPv3</button>
+        <button class="tab-button" data-tab="ntp">NTP</button>
+        <button class="tab-button" data-tab="aaa">AAA / TACACS+</button>
+        <button class="tab-button" data-tab="golden">Golden Config</button>
+        <button class="tab-button" data-tab="cve">CVE Analyzer</button>
+      </nav>
+    </aside>
 
-    <nav class="tab-nav">
-      <button class="tab-button active" data-tab="snmpv3">SNMPv3</button>
-      <button class="tab-button" data-tab="ntp">NTP</button>
-      <button class="tab-button" data-tab="aaa">AAA / TACACS+</button>
-      <button class="tab-button" data-tab="golden">Golden Config</button>
-      <button class="tab-button" data-tab="cve">CVE Analyzer</button>
-    </nav>
-
-    <!-- SNMPv3 TAB -->
-    <section id="tab-snmpv3" class="tab-content active">
-      <h2>SNMPv3 Config Generator</h2>
-      <form id="snmpv3-form" class="card">
-        <div class="form-row">
-          <label>Mode</label>
-          <select name="mode">
-            <option value="secure-default">secure-default</option>
-            <option value="balanced">balanced</option>
-            <option value="legacy-compatible">legacy-compatible</option>
+    <!-- Main panel -->
+    <section class="container main-panel">
+      <!-- Profiles bar stays on top -->
+      <div class="profile-bar card">
+        <div class="profile-bar-label">Profiles</div>
+        <div class="profile-bar-controls">
+          <select id="global-profile">
+            <option value="">Custom</option>
+            <option value="lab-router">Lab router</option>
+            <option value="branch-router">Branch router</option>
+            <option value="dc-router">Datacenter router</option>
           </select>
+          <button id="apply-profile" class="btn-secondary">Apply profile</button>
         </div>
+      </div>
 
-        <div class="form-row">
-          <label>Device</label>
-          <input type="text" name="device" value="Cisco IOS XE" />
+      <!-- SNMPv3 TAB -->
+      <section id="tab-snmpv3" class="tab-content active">
+        <h2>SNMPv3 Config Generator</h2>
+        <form id="snmpv3-form" class="card">
+          <div class="form-row">
+            <label>Mode</label>
+            <select name="mode">
+              <option value="secure-default">secure-default</option>
+              <option value="balanced">balanced</option>
+              <option value="legacy-compatible">legacy-compatible</option>
+            </select>
+          </div>
+
+          <div class="form-row">
+            <label>Device</label>
+            <input type="text" name="device" value="Cisco IOS XE" />
+          </div>
+
+          <div class="form-row">
+            <label>SNMP manager host</label>
+            <input type="text" name="host" placeholder="10.10.10.10" />
+          </div>
+
+          <div class="form-row">
+            <label>Username</label>
+            <input type="text" name="user" value="monitoring" />
+          </div>
+
+          <div class="form-row">
+            <label>Group</label>
+            <input type="text" name="group" value="monitoring_grp" />
+          </div>
+
+          <div class="form-row">
+            <label>Auth password</label>
+            <input type="password" name="auth_password" value="SecurePass123" />
+          </div>
+
+          <div class="form-row">
+            <label>Privacy password</label>
+            <input type="password" name="priv_password" value="SecurePass123" />
+          </div>
+
+          <div class="form-row">
+            <label>Output format</label>
+            <select name="output_format">
+              <option value="cli">CLI</option>
+              <option value="oneline">oneline</option>
+            </select>
+          </div>
+
+          <button type="submit" class="btn-primary">Generate SNMPv3 config</button>
+        </form>
+
+        <div class="output-card">
+          <div class="output-header">
+            <span>Generated SNMPv3 configuration</span>
+            <div class="output-actions">
+              <button class="btn-secondary" data-copy-target="snmpv3-output">Copy</button>
+              <button class="btn-secondary" data-download-target="snmpv3-output" data-filename="snmpv3_config.txt">Download</button>
+            </div>
+          </div>
+          <textarea id="snmpv3-output" class="output-text" readonly></textarea>
         </div>
+      </section>
 
-        <div class="form-row">
-          <label>SNMP manager host</label>
-          <input type="text" name="host" placeholder="10.10.10.10" />
+      <!-- NTP TAB -->
+      <section id="tab-ntp" class="tab-content">
+        <h2>NTP Config Generator</h2>
+        <form id="ntp-form" class="card">
+          <div class="form-row">
+            <label>Device</label>
+            <input type="text" name="device" value="Cisco IOS XE" />
+          </div>
+
+          <div class="form-row">
+            <label>Primary NTP server</label>
+            <input type="text" name="primary_server" value="0.pool.ntp.org" />
+          </div>
+
+          <div class="form-row">
+            <label>Secondary NTP server</label>
+            <input type="text" name="secondary_server" value="1.pool.ntp.org" />
+          </div>
+
+          <div class="form-row">
+            <label>Timezone</label>
+            <input type="text" name="timezone" value="UTC" />
+          </div>
+
+          <div class="form-row">
+            <label>Use authentication</label>
+            <select name="use_auth">
+              <option value="false" selected>No</option>
+              <option value="true">Yes</option>
+            </select>
+          </div>
+
+          <div class="form-row">
+            <label>Key ID</label>
+            <input type="text" name="key_id" placeholder="1" />
+          </div>
+
+          <div class="form-row">
+            <label>Key value</label>
+            <input type="password" name="key_value" placeholder="NtpKey123" />
+          </div>
+
+          <div class="form-row">
+            <label>Output format</label>
+            <select name="output_format">
+              <option value="cli">CLI</option>
+              <option value="oneline">oneline</option>
+            </select>
+          </div>
+
+          <button type="submit" class="btn-primary">Generate NTP config</button>
+        </form>
+
+        <div class="output-card">
+          <div class="output-header">
+            <span>Generated NTP configuration</span>
+            <div class="output-actions">
+              <button class="btn-secondary" data-copy-target="ntp-output">Copy</button>
+              <button class="btn-secondary" data-download-target="ntp-output" data-filename="ntp_config.txt">Download</button>
+            </div>
+          </div>
+          <textarea id="ntp-output" class="output-text" readonly></textarea>
         </div>
+      </section>
 
-        <div class="form-row">
-          <label>Username</label>
-          <input type="text" name="user" value="monitoring" />
+      <!-- AAA TAB -->
+      <section id="tab-aaa" class="tab-content">
+        <h2>AAA / TACACS+ Config Generator</h2>
+        <form id="aaa-form" class="card">
+          <div class="form-row">
+            <label>Mode</label>
+            <select name="mode">
+              <option value="tacacs">TACACS+ with local fallback</option>
+              <option value="local-only">Local-only</option>
+            </select>
+          </div>
+
+          <div class="form-row">
+            <label>Device</label>
+            <input type="text" name="device" value="Cisco IOS XE" />
+          </div>
+
+          <div class="form-row">
+            <label>Enable secret (optional)</label>
+            <input type="password" name="enable_secret" placeholder="EnablePass123" />
+          </div>
+
+          <div class="form-row">
+            <label>Primary TACACS+ name</label>
+            <input type="text" name="tacacs1_name" value="tacacs-primary" />
+          </div>
+
+          <div class="form-row">
+            <label>Primary TACACS+ IP</label>
+            <input type="text" name="tacacs1_ip" value="10.10.10.1" />
+          </div>
+
+          <div class="form-row">
+            <label>Primary TACACS+ key</label>
+            <input type="password" name="tacacs1_key" value="TacacsKey123" />
+          </div>
+
+          <div class="form-row">
+            <label>Secondary TACACS+ name</label>
+            <input type="text" name="tacacs2_name" placeholder="tacacs-backup" />
+          </div>
+
+          <div class="form-row">
+            <label>Secondary TACACS+ IP</label>
+            <input type="text" name="tacacs2_ip" placeholder="10.10.10.2" />
+          </div>
+
+          <div class="form-row">
+            <label>Secondary TACACS+ key</label>
+            <input type="password" name="tacacs2_key" placeholder="TacacsKey123" />
+          </div>
+
+          <div class="form-row">
+            <label>Source interface (optional)</label>
+            <input type="text" name="source_interface" placeholder="Loopback0" />
+          </div>
+
+          <div class="form-row">
+            <label>Output format</label>
+            <select name="output_format">
+              <option value="cli">CLI</option>
+              <option value="oneline">oneline</option>
+            </select>
+          </div>
+
+          <button type="submit" class="btn-primary">Generate AAA config</button>
+        </form>
+
+        <div class="output-card">
+          <div class="output-header">
+            <span>Generated AAA configuration</span>
+            <div class="output-actions">
+              <button class="btn-secondary" data-copy-target="aaa-output">Copy</button>
+              <button class="btn-secondary" data-download-target="aaa-output" data-filename="aaa_config.txt">Download</button>
+            </div>
+          </div>
+          <textarea id="aaa-output" class="output-text" readonly></textarea>
         </div>
+      </section>
 
-        <div class="form-row">
-          <label>Group</label>
-          <input type="text" name="group" value="monitoring_grp" />
+      <!-- GOLDEN CONFIG TAB -->
+      <section id="tab-golden" class="tab-content">
+        <h2>Golden Config Builder</h2>
+        <form id="golden-form" class="card">
+          <div class="form-row">
+            <label>Device</label>
+            <input type="text" name="device" value="Cisco IOS XE" />
+          </div>
+
+          <div class="form-row">
+            <label>Mode</label>
+            <select name="mode">
+              <option value="standard">standard</option>
+              <option value="secure">secure</option>
+              <option value="hardened">hardened</option>
+            </select>
+          </div>
+
+          <div class="form-row">
+            <label>SNMPv3 config (optional)</label>
+            <textarea name="snmpv3_config" rows="3" placeholder="Paste existing SNMPv3 config here"></textarea>
+          </div>
+
+          <div class="form-row">
+            <label>NTP config (optional)</label>
+            <textarea name="ntp_config" rows="3" placeholder="Paste existing NTP config here"></textarea>
+          </div>
+
+          <div class="form-row">
+            <label>AAA config (optional)</label>
+            <textarea name="aaa_config" rows="3" placeholder="Paste existing AAA config here"></textarea>
+          </div>
+
+          <div class="form-row">
+            <label>Output format</label>
+            <select name="output_format">
+              <option value="cli">CLI</option>
+              <option value="oneline">oneline</option>
+            </select>
+          </div>
+
+          <button type="submit" class="btn-primary">Generate Golden Config</button>
+        </form>
+
+        <div class="output-card">
+          <div class="output-header">
+            <span>Generated Golden Config</span>
+            <div class="output-actions">
+              <button class="btn-secondary" data-copy-target="golden-output">Copy</button>
+              <button class="btn-secondary" data-download-target="golden-output" data-filename="golden_config.txt">Download</button>
+            </div>
+          </div>
+          <textarea id="golden-output" class="output-text" readonly></textarea>
         </div>
+      </section>
 
-        <div class="form-row">
-          <label>Auth password</label>
-          <input type="password" name="auth_password" value="SecurePass123" />
-        </div>
+      <!-- CVE TAB -->    
+      <section id="tab-cve" class="tab-content">
+        <h2>CVE Analyzer (v0.2)</h2>
+        <form id="cve-form" class="card">
+          <div class="form-row">
+            <label>Platform</label>
+            <input type="text" name="platform" value="ISR4451-X" />
+          </div>
 
-        <div class="form-row">
-          <label>Privacy password</label>
-          <input type="password" name="priv_password" value="SecurePass123" />
-        </div>
+          <div class="form-row">
+            <label>Software version</label>
+            <input type="text" name="version" value="17.5.1" />
+          </div>
 
-        <div class="form-row">
-          <label>Output format</label>
-          <select name="output_format">
-            <option value="cli">CLI</option>
-            <option value="oneline">oneline</option>
-          </select>
-        </div>
+          <div class="form-row">
+            <label>Include suggestions</label>
+            <select name="include_suggestions">
+              <option value="true" selected>Yes</option>
+              <option value="false">No</option>
+            </select>
+          </div>
 
-        <button type="submit" class="btn-primary">Generate SNMPv3 config</button>
-      </form>
+          <button type="submit" class="btn-primary">Analyze CVEs</button>
+        </form>
 
-      <div class="output-card">
-        <div class="output-header">
-          <span>Generated SNMPv3 configuration</span>
-          <div class="output-actions">
-            <button class="btn-secondary" data-copy-target="snmpv3-output">Copy</button>
-            <button class="btn-secondary" data-download-target="snmpv3-output" data-filename="snmpv3_config.txt">Download</button>
+        <div class="cve-layout">
+          <div class="output-card">
+            <div class="output-header">
+              <span>CVE analysis result</span>
+              <div class="output-actions">
+                <button class="btn-secondary" data-copy-target="cve-output">Copy</button>
+                <button class="btn-secondary" data-download-target="cve-output" data-filename="cve_analysis.txt">Download</button>
+              </div>
+            </div>
+            <textarea id="cve-output" class="output-text" readonly></textarea>
+          </div>
+
+          <div class="summary-card" id="cve-summary">
+            <h3>Security posture</h3>
+            <p class="summary-muted">
+              Run an analysis to see severity breakdown and recommended upgrade target.
+            </p>
           </div>
         </div>
-        <textarea id="snmpv3-output" class="output-text" readonly></textarea>
-      </div>
+      </section>
+
     </section>
-
-    <!-- NTP TAB -->
-    <section id="tab-ntp" class="tab-content">
-      <h2>NTP Config Generator</h2>
-      <form id="ntp-form" class="card">
-        <div class="form-row">
-          <label>Device</label>
-          <input type="text" name="device" value="Cisco IOS XE" />
-        </div>
-
-        <div class="form-row">
-          <label>Primary NTP server</label>
-          <input type="text" name="primary_server" value="0.pool.ntp.org" />
-        </div>
-
-        <div class="form-row">
-          <label>Secondary NTP server</label>
-          <input type="text" name="secondary_server" value="1.pool.ntp.org" />
-        </div>
-
-        <div class="form-row">
-          <label>Timezone</label>
-          <input type="text" name="timezone" value="UTC" />
-        </div>
-
-        <div class="form-row">
-          <label>Use authentication</label>
-          <select name="use_auth">
-            <option value="false" selected>No</option>
-            <option value="true">Yes</option>
-          </select>
-        </div>
-
-        <div class="form-row">
-          <label>Key ID</label>
-          <input type="text" name="key_id" placeholder="1" />
-        </div>
-
-        <div class="form-row">
-          <label>Key value</label>
-          <input type="password" name="key_value" placeholder="NtpKey123" />
-        </div>
-
-        <div class="form-row">
-          <label>Output format</label>
-          <select name="output_format">
-            <option value="cli">CLI</option>
-            <option value="oneline">oneline</option>
-          </select>
-        </div>
-
-        <button type="submit" class="btn-primary">Generate NTP config</button>
-      </form>
-
-      <div class="output-card">
-        <div class="output-header">
-          <span>Generated NTP configuration</span>
-          <div class="output-actions">
-            <button class="btn-secondary" data-copy-target="ntp-output">Copy</button>
-            <button class="btn-secondary" data-download-target="ntp-output" data-filename="ntp_config.txt">Download</button>
-          </div>
-        </div>
-        <textarea id="ntp-output" class="output-text" readonly></textarea>
-      </div>
-    </section>
-
-    <!-- AAA TAB -->
-    <section id="tab-aaa" class="tab-content">
-      <h2>AAA / TACACS+ Config Generator</h2>
-      <form id="aaa-form" class="card">
-        <div class="form-row">
-          <label>Mode</label>
-          <select name="mode">
-            <option value="tacacs">TACACS+ with local fallback</option>
-            <option value="local-only">Local-only</option>
-          </select>
-        </div>
-
-        <div class="form-row">
-          <label>Device</label>
-          <input type="text" name="device" value="Cisco IOS XE" />
-        </div>
-
-        <div class="form-row">
-          <label>Enable secret (optional)</label>
-          <input type="password" name="enable_secret" placeholder="EnablePass123" />
-        </div>
-
-        <div class="form-row">
-          <label>Primary TACACS+ name</label>
-          <input type="text" name="tacacs1_name" value="tacacs-primary" />
-        </div>
-
-        <div class="form-row">
-          <label>Primary TACACS+ IP</label>
-          <input type="text" name="tacacs1_ip" value="10.10.10.1" />
-        </div>
-
-        <div class="form-row">
-          <label>Primary TACACS+ key</label>
-          <input type="password" name="tacacs1_key" value="TacacsKey123" />
-        </div>
-
-        <div class="form-row">
-          <label>Secondary TACACS+ name</label>
-          <input type="text" name="tacacs2_name" placeholder="tacacs-backup" />
-        </div>
-
-        <div class="form-row">
-          <label>Secondary TACACS+ IP</label>
-          <input type="text" name="tacacs2_ip" placeholder="10.10.10.2" />
-        </div>
-
-        <div class="form-row">
-          <label>Secondary TACACS+ key</label>
-          <input type="password" name="tacacs2_key" placeholder="TacacsKey123" />
-        </div>
-
-        <div class="form-row">
-          <label>Source interface (optional)</label>
-          <input type="text" name="source_interface" placeholder="Loopback0" />
-        </div>
-
-        <div class="form-row">
-          <label>Output format</label>
-          <select name="output_format">
-            <option value="cli">CLI</option>
-            <option value="oneline">oneline</option>
-          </select>
-        </div>
-
-        <button type="submit" class="btn-primary">Generate AAA config</button>
-      </form>
-
-      <div class="output-card">
-        <div class="output-header">
-          <span>Generated AAA configuration</span>
-          <div class="output-actions">
-            <button class="btn-secondary" data-copy-target="aaa-output">Copy</button>
-            <button class="btn-secondary" data-download-target="aaa-output" data-filename="aaa_config.txt">Download</button>
-          </div>
-        </div>
-        <textarea id="aaa-output" class="output-text" readonly></textarea>
-      </div>
-    </section>
-
-    <!-- GOLDEN CONFIG TAB -->
-    <section id="tab-golden" class="tab-content">
-      <h2>Golden Config Builder</h2>
-      <form id="golden-form" class="card">
-        <div class="form-row">
-          <label>Device</label>
-          <input type="text" name="device" value="Cisco IOS XE" />
-        </div>
-
-        <div class="form-row">
-          <label>Mode</label>
-          <select name="mode">
-            <option value="standard">standard</option>
-            <option value="secure">secure</option>
-            <option value="hardened">hardened</option>
-          </select>
-        </div>
-
-        <div class="form-row">
-          <label>SNMPv3 config (optional)</label>
-          <textarea name="snmpv3_config" rows="3" placeholder="Paste existing SNMPv3 config here"></textarea>
-        </div>
-
-        <div class="form-row">
-          <label>NTP config (optional)</label>
-          <textarea name="ntp_config" rows="3" placeholder="Paste existing NTP config here"></textarea>
-        </div>
-
-        <div class="form-row">
-          <label>AAA config (optional)</label>
-          <textarea name="aaa_config" rows="3" placeholder="Paste existing AAA config here"></textarea>
-        </div>
-
-        <div class="form-row">
-          <label>Output format</label>
-          <select name="output_format">
-            <option value="cli">CLI</option>
-            <option value="oneline">oneline</option>
-          </select>
-        </div>
-
-        <button type="submit" class="btn-primary">Generate Golden Config</button>
-      </form>
-
-      <div class="output-card">
-        <div class="output-header">
-          <span>Generated Golden Config</span>
-          <div class="output-actions">
-            <button class="btn-secondary" data-copy-target="golden-output">Copy</button>
-            <button class="btn-secondary" data-download-target="golden-output" data-filename="golden_config.txt">Download</button>
-          </div>
-        </div>
-        <textarea id="golden-output" class="output-text" readonly></textarea>
-      </div>
-    </section>
-
-    <!-- CVE TAB -->    
-    <section id="tab-cve" class="tab-content">
-      <h2>CVE Analyzer (MVP)</h2>
-      <form id="cve-form" class="card">
-        <div class="form-row">
-          <label>Platform</label>
-          <input type="text" name="platform" value="ISR4451-X" />
-        </div>
-
-        <div class="form-row">
-          <label>Software version</label>
-          <input type="text" name="version" value="17.5.1" />
-        </div>
-
-        <div class="form-row">
-          <label>Include suggestions</label>
-          <select name="include_suggestions">
-            <option value="true" selected>Yes</option>
-            <option value="false">No</option>
-          </select>
-        </div>
-
-        <button type="submit" class="btn-primary">Analyze CVEs</button>
-      </form>
-
-      <div class="output-card">
-        <div class="output-header">
-          <span>CVE analysis result</span>
-          <div class="output-actions">
-            <button class="btn-secondary" data-copy-target="cve-output">Copy</button>
-            <button class="btn-secondary" data-download-target="cve-output" data-filename="cve_analysis.txt">Download</button>
-          </div>
-        </div>
-        <textarea id="cve-output" class="output-text" readonly></textarea>
-      </div>
-    </section>
-
   </main>
 
   <footer class="footer">
