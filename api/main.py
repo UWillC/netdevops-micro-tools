@@ -50,7 +50,7 @@ def health():
 @app.get("/meta/version", response_model=MetaInfo)
 def meta_version():
     return MetaInfo(
-        version="0.2.0-dev",
+        version="0.2.0",
         build_time=datetime.datetime.utcnow().isoformat() + "Z",
-        feature_flags=["cve_engine_v2", "profiles_v2_pre"]
+        feature_flags=["cve_engine_v2", "web_ui_v2"]
     )
