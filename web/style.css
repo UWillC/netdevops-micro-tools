@@ -412,3 +412,48 @@ textarea:focus {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* -------- Profiles UI v2 -------- */
+
+.profiles-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.profiles-card h3 {
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+}
+
+.profiles-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.profiles-status {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: rgba(2, 6, 23, 0.6);
+  font-size: 0.82rem;
+  color: var(--muted);
+  white-space: pre-wrap;
+}
+
+.profiles-hint {
+  margin: 8px 0 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+@media (max-width: 860px) {
+  .profiles-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

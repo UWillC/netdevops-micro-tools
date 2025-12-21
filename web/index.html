@@ -26,6 +26,7 @@
         <button class="tab-button" data-tab="aaa">AAA / TACACS+</button>
         <button class="tab-button" data-tab="golden">Golden Config</button>
         <button class="tab-button" data-tab="cve">CVE Analyzer</button>
+        <button class="tab-button" data-tab="profiles">Profiles</button>
       </nav>
     </aside>
 
@@ -354,6 +355,60 @@
             <p class="summary-muted">
               Run an analysis to see severity breakdown and recommended upgrade target.
             </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- PROFILES TAB -->
+      <section id="tab-profiles" class="tab-content">
+        <h2>Device Profiles (v2)</h2>
+
+        <div class="profiles-grid">
+          <!-- Left: list + actions -->
+          <div class="card profiles-card">
+            <h3>Saved profiles</h3>
+
+            <div class="form-row">
+              <label>Available profiles</label>
+              <select id="profiles-select"></select>
+            </div>
+
+            <div class="profiles-actions">
+              <button id="profiles-refresh" class="btn-secondary">Refresh</button>
+              <button id="profiles-load" class="btn-primary">Load</button>
+              <button id="profiles-delete" class="btn-secondary">Delete</button>
+            </div>
+
+            <div class="profiles-status" id="profiles-status">
+              Ready.
+            </div>
+          </div>
+
+          <!-- Right: create/save -->
+          <div class="card profiles-card">
+            <h3>Create / update profile</h3>
+
+            <div class="form-row">
+              <label>Profile name</label>
+              <input id="profile-name" type="text" placeholder="e.g. branch-standard" />
+            </div>
+
+            <div class="form-row">
+              <label>Description (optional)</label>
+              <input id="profile-description" type="text" placeholder="Short description" />
+            </div>
+
+            <p class="profiles-hint">
+              Save the current values from SNMPv3, NTP and AAA forms as a reusable profile.
+            </p>
+
+            <div class="profiles-actions">
+              <button id="profiles-save" class="btn-primary">Save profile</button>
+            </div>
+
+            <div class="profiles-status" id="profiles-preview">
+              Tip: Fill SNMPv3 / NTP / AAA forms first, then click “Save profile”.
+            </div>
           </div>
         </div>
       </section>

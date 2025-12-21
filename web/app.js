@@ -512,3 +512,283 @@ if (cveForm && cveOutput) {
 
   });
 }
+
+// -----------------------------
+// Profiles UI v2 (backend-driven)
+// Endpoints used:
+// - GET    /profiles/list            -> { profiles: ["lab", "branch"] }
+// - GET    /profiles/load/{name}     -> DeviceProfile JSON
+// - POST   /profiles/save            -> DeviceProfile JSON
+// - DELETE /profiles/delete/{name}   -> { status: "deleted" }
+// -----------------------------
+
+const profilesSelect = document.getElementById("profiles-select");
+const profilesRefreshBtn = document.getElementById("profiles-refresh");
+const profilesLoadBtn = document.getElementById("profiles-load");
+const profilesDeleteBtn = document.getElementById("profiles-delete");
+const profilesSaveBtn = document.getElementById("profiles-save");
+
+const profileNameInput = document.getElementById("profile-name");
+const profileDescriptionInput = document.getElementById("profile-description");
+
+const profilesStatus = document.getElementById("profiles-status");
+const profilesPreview = document.getElementById("profiles-preview");
+
+function setProfilesStatus(message) {
+  if (!profilesStatus) return;
+  profilesStatus.textContent = message;
+}
+
+function setProfilesPreview(message) {
+  if (!profilesPreview) return;
+  profilesPreview.textContent = message;
+}
+
+async function fetchProfilesList() {
+  const data = await fetch(`${API_BASE_URL}/profiles/list`);
+  if (!data.ok) {
+    throw new Error(`Profiles list failed (${data.status})`);
+  }
+  return data.json();
+}
+
+async function fetchProfile(name) {
+  const res = await fetch(`${API_BASE_URL}/profiles/load/${encodeURIComponent(name)}`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Load failed (${res.status}): ${text || "unknown error"}`);
+  }
+  return res.json();
+}
+
+async function saveProfile(profilePayload) {
+  const res = await fetch(`${API_BASE_URL}/profiles/save`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(profilePayload),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Save failed (${res.status}): ${text || "unknown error"}`);
+  }
+  return res.json();
+}
+
+async function deleteProfile(name) {
+  const res = await fetch(`${API_BASE_URL}/profiles/delete/${encodeURIComponent(name)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Delete failed (${res.status}): ${text || "unknown error"}`);
+  }
+  return res.json();
+}
+
+function getCurrentFormSnapshot() {
+  // SNMPv3 form snapshot
+  const snmpForm = document.getElementById("snmpv3-form");
+  const ntpForm = document.getElementById("ntp-form");
+  const aaaForm = document.getElementById("aaa-form");
+
+  const snmp = {};
+  const ntp = {};
+  const aaa = {};
+
+  if (snmpForm) {
+    const fd = new FormData(snmpForm);
+    snmp.host = fd.get("host") || null;
+    snmp.user = fd.get("user") || null;
+    snmp.group = fd.get("group") || null;
+    snmp.auth_password = fd.get("auth_password") || null;
+    snmp.priv_password = fd.get("priv_password") || null;
+  }
+
+  if (ntpForm) {
+    const fd = new FormData(ntpForm);
+    ntp.primary_server = fd.get("primary_server") || null;
+    ntp.secondary_server = fd.get("secondary_server") || null;
+    ntp.timezone = fd.get("timezone") || null;
+  }
+
+  if (aaaForm) {
+    const fd = new FormData(aaaForm);
+    aaa.enable_secret = fd.get("enable_secret") || null;
+    aaa.tacacs1_name = fd.get("tacacs1_name") || null;
+    aaa.tacacs1_ip = fd.get("tacacs1_ip") || null;
+    aaa.tacacs1_key = fd.get("tacacs1_key") || null;
+    aaa.tacacs2_name = fd.get("tacacs2_name") || null;
+    aaa.tacacs2_ip = fd.get("tacacs2_ip") || null;
+    aaa.tacacs2_key = fd.get("tacacs2_key") || null;
+  }
+
+  return { snmp, ntp, aaa };
+}
+
+function applyProfileToForms(profileData) {
+  // Applies only SNMP/NTP/AAA keys that exist in the profile payload.
+  const snmpForm = document.getElementById("snmpv3-form");
+  const ntpForm = document.getElementById("ntp-form");
+  const aaaForm = document.getElementById("aaa-form");
+
+  const setField = (form, name, value) => {
+    if (!form) return;
+    const field = form.querySelector(`[name="${name}"]`);
+    if (!field) return;
+    if (value === undefined || value === null) return;
+    field.value = value;
+  };
+
+  if (profileData.snmp) {
+    setField(snmpForm, "host", profileData.snmp.host);
+    setField(snmpForm, "user", profileData.snmp.user);
+    setField(snmpForm, "group", profileData.snmp.group);
+    setField(snmpForm, "auth_password", profileData.snmp.auth_password);
+    setField(snmpForm, "priv_password", profileData.snmp.priv_password);
+  }
+
+  if (profileData.ntp) {
+    setField(ntpForm, "primary_server", profileData.ntp.primary_server);
+    setField(ntpForm, "secondary_server", profileData.ntp.secondary_server);
+    setField(ntpForm, "timezone", profileData.ntp.timezone);
+  }
+
+  if (profileData.aaa) {
+    setField(aaaForm, "enable_secret", profileData.aaa.enable_secret);
+    setField(aaaForm, "tacacs1_name", profileData.aaa.tacacs1_name);
+    setField(aaaForm, "tacacs1_ip", profileData.aaa.tacacs1_ip);
+    setField(aaaForm, "tacacs1_key", profileData.aaa.tacacs1_key);
+    setField(aaaForm, "tacacs2_name", profileData.aaa.tacacs2_name);
+    setField(aaaForm, "tacacs2_ip", profileData.aaa.tacacs2_ip);
+    setField(aaaForm, "tacacs2_key", profileData.aaa.tacacs2_key);
+  }
+
+  // Persist form state in localStorage (re-using your existing persistence)
+  if (snmpForm) saveFormState("snmpv3-form", snmpForm);
+  if (ntpForm) saveFormState("ntp-form", ntpForm);
+  if (aaaForm) saveFormState("aaa-form", aaaForm);
+}
+
+async function refreshProfilesUI() {
+  if (!profilesSelect) return;
+
+  setProfilesStatus("Loading profiles...");
+  profilesSelect.innerHTML = "";
+
+  try {
+    const data = await fetchProfilesList();
+    const profiles = data.profiles || [];
+
+    if (profiles.length === 0) {
+      profilesSelect.innerHTML = `<option value="">(no profiles found)</option>`;
+      setProfilesStatus("No profiles found on the backend. Save one to get started.");
+      return;
+    }
+
+    profiles.forEach((name) => {
+      const opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name;
+      profilesSelect.appendChild(opt);
+    });
+
+    setProfilesStatus(`Loaded ${profiles.length} profile(s).`);
+  } catch (err) {
+    setProfilesStatus(`Error: ${err.message}`);
+  }
+}
+
+function getSelectedProfileName() {
+  if (!profilesSelect) return "";
+  return profilesSelect.value || "";
+}
+
+// Wire up buttons
+if (profilesRefreshBtn) {
+  profilesRefreshBtn.addEventListener("click", async () => {
+    await refreshProfilesUI();
+  });
+}
+
+if (profilesLoadBtn) {
+  profilesLoadBtn.addEventListener("click", async () => {
+    const name = getSelectedProfileName();
+    if (!name) {
+      setProfilesStatus("Select a profile first.");
+      return;
+    }
+
+    setProfilesStatus(`Loading profile: ${name}...`);
+
+    try {
+      const profile = await fetchProfile(name);
+      applyProfileToForms(profile);
+
+      // Update UI fields for visibility
+      if (profileNameInput) profileNameInput.value = profile.name || name;
+      if (profileDescriptionInput) profileDescriptionInput.value = profile.description || "";
+
+      setProfilesStatus(`Profile loaded: ${name}. Forms updated.`);
+      setProfilesPreview(JSON.stringify(profile, null, 2));
+    } catch (err) {
+      setProfilesStatus(`Error: ${err.message}`);
+    }
+  });
+}
+
+if (profilesDeleteBtn) {
+  profilesDeleteBtn.addEventListener("click", async () => {
+    const name = getSelectedProfileName();
+    if (!name) {
+      setProfilesStatus("Select a profile first.");
+      return;
+    }
+
+    setProfilesStatus(`Deleting profile: ${name}...`);
+
+    try {
+      await deleteProfile(name);
+      setProfilesStatus(`Deleted profile: ${name}`);
+      await refreshProfilesUI();
+    } catch (err) {
+      setProfilesStatus(`Error: ${err.message}`);
+    }
+  });
+}
+
+if (profilesSaveBtn) {
+  profilesSaveBtn.addEventListener("click", async () => {
+    const name = (profileNameInput && profileNameInput.value || "").trim();
+    const description = (profileDescriptionInput && profileDescriptionInput.value || "").trim();
+
+    if (!name) {
+      setProfilesStatus("Profile name is required.");
+      return;
+    }
+
+    // Build payload from current form values
+    const snapshot = getCurrentFormSnapshot();
+    const payload = {
+      name,
+      description: description || null,
+      snmp: snapshot.snmp,
+      ntp: snapshot.ntp,
+      aaa: snapshot.aaa,
+    };
+
+    setProfilesStatus(`Saving profile: ${name}...`);
+
+    try {
+      await saveProfile(payload);
+      setProfilesStatus(`Saved profile: ${name}`);
+      setProfilesPreview(JSON.stringify(payload, null, 2));
+      await refreshProfilesUI();
+      if (profilesSelect) profilesSelect.value = name;
+    } catch (err) {
+      setProfilesStatus(`Error: ${err.message}`);
+    }
+  });
+}
+
+// Auto-load list on page load
+refreshProfilesUI();
