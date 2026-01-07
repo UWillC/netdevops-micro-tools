@@ -1,11 +1,11 @@
 # ROADMAP — Cisco Micro-Tool Generator
 
-Current version: **v0.3.3**
-Last updated: 2026-01-01
+Current version: **v0.3.4**
+Last updated: 2026-01-07
 
 ---
 
-## ✅ Completed (v0.1.0 → v0.3.3)
+## ✅ Completed (v0.1.0 → v0.3.4)
 
 ### v0.1.0 — MVP Release
 - [x] FastAPI backend with SNMPv3, NTP, AAA, Golden Config generators
@@ -27,35 +27,38 @@ Last updated: 2026-01-01
 - [x] CVSS, CWE, references fields
 - [x] Safe merge strategy (local JSON as source of truth)
 
+### v0.3.4 — Stability & Performance
+- [x] NVD response caching (file-based, 24h TTL)
+- [x] Graceful error handling (HttpTimeoutError, HttpConnectionError)
+- [x] Real CVE data (CVE-2023-20198, CVE-2023-20273, CVE-2025-20188)
+- [x] .gitignore and project cleanup
+
 ---
 
-## 🎯 Next: v0.3.4 — Stability & Performance
+## 🎯 Next: v0.3.5 — Profile Intelligence
 
-Focus: Make NVD enrichment production-ready.
+Focus: Connect profiles with CVE analysis.
 
 ### Planned features
 
-#### 1. NVD Response Caching
-- Cache NVD responses to avoid rate limiting
-- Options: file-based cache or Redis
-- TTL: 24 hours (CVE data doesn't change frequently)
-
-#### 2. Profiles × CVE Integration
+#### 1. Profiles × CVE Integration
 - "Which saved profiles are affected by known CVEs?"
 - Cross-reference profile IOS versions with CVE database
 - Alert panel in Profiles tab
+- Batch analysis endpoint
 
-#### 3. Security Score (0-100)
+#### 2. Security Score (0-100)
 - Aggregate score based on:
   - Number of critical/high CVEs
   - Max CVSS score
   - Availability of fixes
-- Visual indicator in Web UI
+- Visual indicator in Web UI per profile
+- Score history tracking
 
-#### 4. Error Handling Improvements
-- Better user-facing error messages
-- Graceful degradation when NVD is unavailable
-- Loading states in Web UI
+#### 3. Web UI Improvements
+- Loading states during NVD enrichment
+- Profile vulnerability badges
+- One-click "Check all profiles" button
 
 ---
 
