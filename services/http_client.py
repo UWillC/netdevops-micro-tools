@@ -29,7 +29,7 @@ def http_get_json(url: str, timeout_seconds: int = 10) -> Any:
     req = urllib.request.Request(
         url,
         headers={
-            "User-Agent": "cisco-microtool-generator/0.3.4 (+https://github.com/UWillC/cisco-microtool-generator)"
+            "User-Agent": "netdevops-micro-tools/0.3.4 (+https://github.com/UWillC/netdevops-micro-tools)"
         },
         method="GET",
     )

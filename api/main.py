@@ -4,12 +4,12 @@ from api.routers import snmpv3, ntp, golden_config, aaa, cve, profiles
 from models.meta import MetaInfo
 import datetime
 
-# to run backend cd /Users/uwillc/SaaS/cisco-microtool-generator
+# to run backend cd /Users/uwillc/SaaS/netdevops-micro-tools
 # python3 -m uvicorn api.main:app --reload --port 8000
 
 app = FastAPI(
-    title="Cisco Micro-Tool Generator API",
-    description="Micro-SaaS backend for generating secure Cisco configurations.",
+    title="NetDevOps Micro-Tools API",
+    description="Small tools. Real automation. AI-assisted. Backend for generating secure Cisco configurations.",
     version="0.3.4",
 )
 
@@ -42,7 +42,7 @@ app.include_router(profiles.router, tags=["Profiles"])
 def root():
     return {
         "status": "ok",
-        "message": "Cisco Micro-Tool Generator API is running.",
+        "message": "NetDevOps Micro-Tools API is running.",
     }
 
 @app.get("/health")

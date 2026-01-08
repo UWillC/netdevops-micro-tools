@@ -1,8 +1,10 @@
-# Cisco Micro-Tool Generator
+# NetDevOps Micro-Tools
 
 ![Version](https://img.shields.io/badge/version-0.3.4-blue)
 ![Python](https://img.shields.io/badge/python-3.10+-green)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
+
+**Small tools. Real automation. AI-assisted.**
 
 A **micro-SaaS–oriented backend + Web UI** for generating **secure Cisco IOS / IOS XE configurations**
 and performing **lightweight security analysis** (CVE awareness).
@@ -27,7 +29,7 @@ As network engineers, we often:
 - rely on ad-hoc scripts with no UI or consistency,
 - lack quick visibility into *“is this IOS XE version already known-bad?”*
 
-Cisco Micro-Tool Generator aims to solve this by providing:
+NetDevOps Micro-Tools aims to solve this by providing:
 - opinionated but configurable secure defaults,
 - reusable **device profiles**,
 - a simple **Web UI** on top of a versioned API,
@@ -138,7 +140,7 @@ The Web UI provides a clean, distraction-free interface for daily use.
 ## 🧱 Architecture Overview
 
 ```
-cisco-microtool-generator/
+netdevops-micro-tools/
 ├── api/
 │   ├── main.py              # FastAPI app, CORS, routers
 │   └── routers/
@@ -193,19 +195,19 @@ http://127.0.0.1:8000/docs
 
 ### Build image
 ```bash
-docker build -t cisco-microtool-api .
+docker build -t netdevops-micro-tools .
 ```
 
 ### Run (ephemeral profiles)
 ```bash
-docker run --rm -p 8000:8000 cisco-microtool-api
+docker run --rm -p 8000:8000 netdevops-micro-tools
 ```
 
 ### Run with persistent profiles (recommended)
 ```bash
 docker run --rm -p 8000:8000 \
   -v "$(pwd)/profiles:/app/profiles" \
-  cisco-microtool-api
+  netdevops-micro-tools
 ```
 
 This ensures that profiles created via `/profiles/save`
