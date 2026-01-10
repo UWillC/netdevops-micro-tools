@@ -10,7 +10,7 @@ import datetime
 app = FastAPI(
     title="NetDevOps Micro-Tools API",
     description="Small tools. Real automation. AI-assisted. Backend for generating secure Cisco configurations.",
-    version="0.3.4",
+    version="0.3.5",
 )
 
 # CORS for local frontend (dev)
@@ -52,7 +52,7 @@ def health():
 @app.get("/meta/version", response_model=MetaInfo)
 def meta_version():
     return MetaInfo(
-        version="0.3.4",
+        version="0.3.5",
         build_time=datetime.datetime.utcnow().isoformat() + "Z",
-        feature_flags=["cve_engine_v3", "nvd_enrichment", "nvd_cache", "web_ui_v2", "profiles_v2"]
+        feature_flags=["cve_engine_v3", "nvd_enrichment", "nvd_cache", "web_ui_v2", "profiles_v2", "profiles_cve"]
     )

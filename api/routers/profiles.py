@@ -1,8 +1,7 @@
 from fastapi import APIRouter, HTTPException
-from typing import Dict, Any
 
 from services.profile_service import ProfileService
-from models.profile_model import DeviceProfile
+from models.profile_model import DeviceProfile, ProfileVulnerabilitiesResponse
 
 router = APIRouter()
 svc = ProfileService()
@@ -39,3 +38,17 @@ def delete_profile(name: str):
         return {"status": "deleted", "name": name}
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Profile not found")
+
+
+# ------------------------------------------
+# v0.3.5: Profiles × CVE integration
+# ------------------------------------------
+@router.get("/profiles/vulnerabilities", response_model=ProfileVulnerabilitiesResponse)
+def check_vulnerabilities():
+    """
+    Check all profiles against CVE database.
+
+    Returns vulnerability status for each profile with platform/version info.
+    Profiles without platform/version are marked as 'unknown'.
+    """
+    return svc.check_all_vulnerabilities()
