@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.3.5] – 2026-01-10
+
+### Added
+
+- Profiles × CVE integration:
+  - Device profiles now include `platform` and `version` fields for CVE matching.
+  - New endpoint `GET /profiles/vulnerabilities` for batch vulnerability checking.
+  - Vulnerability status mapping: critical / high / medium / low / clean / unknown.
+  - Response includes per-profile CVE count, max CVSS score, and matched CVE IDs.
+- New Pydantic schemas:
+  - `ProfileVulnerabilityResult`, `ProfileVulnerabilitySummary`, `ProfileVulnerabilitiesResponse`.
+- New feature flag: `profiles_cve`.
+
+### Changed
+
+- Sample profiles updated with device info:
+  - `lab.json`: ISR4451-X, 17.5.1
+  - `branch.json`: Catalyst 9300, 17.9.4
+  - `dc.json`: Nexus 9000, 10.2.3
+
+---
+
 ## [v0.3.4] – 2026-01-04
 
 ### Added
@@ -154,6 +176,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - Authentication and multi-user support.
-- External CVE ingestion (Cisco advisories / NVD).
+- Security Score feature (aggregate risk metric).
+- Frontend widget for Profiles × CVE.
 - Export formats (Markdown / JSON).
 - Advanced Profiles UX (rename, duplicate, diff preview).
