@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ---
 
-## [v0.3.5] – 2026-01-10
+## [v0.3.5] – 2026-01-11
 
 ### Added
 
@@ -13,9 +13,14 @@ All notable changes to this project will be documented in this file.
   - New endpoint `GET /profiles/vulnerabilities` for batch vulnerability checking.
   - Vulnerability status mapping: critical / high / medium / low / clean / unknown.
   - Response includes per-profile CVE count, max CVSS score, and matched CVE IDs.
+- **Vulnerability Status widget** in Web UI:
+  - Summary badges (critical/high/medium/low/clean counts)
+  - Per-profile vulnerability cards with status indicator
+  - Real-time fetch from `/profiles/vulnerabilities` endpoint
 - New Pydantic schemas:
   - `ProfileVulnerabilityResult`, `ProfileVulnerabilitySummary`, `ProfileVulnerabilitiesResponse`.
 - New feature flag: `profiles_cve`.
+- Unit tests: 13 tests for Profiles × CVE service (`tests/test_profiles.py`).
 
 ### Changed
 
@@ -23,6 +28,7 @@ All notable changes to this project will be documented in this file.
   - `lab.json`: ISR4451-X, 17.5.1
   - `branch.json`: Catalyst 9300, 17.9.4
   - `dc.json`: Nexus 9000, 10.2.3
+- Web UI: Unified grid layout for SNMP/NTP/AAA/Golden Config generators (consistent with CVE/Profiles)
 
 ---
 
@@ -177,6 +183,5 @@ All notable changes to this project will be documented in this file.
 
 - Authentication and multi-user support.
 - Security Score feature (aggregate risk metric).
-- Frontend widget for Profiles × CVE.
 - Export formats (Markdown / JSON).
 - Advanced Profiles UX (rename, duplicate, diff preview).

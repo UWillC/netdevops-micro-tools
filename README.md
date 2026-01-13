@@ -1,10 +1,12 @@
 # NetDevOps Micro-Tools
 
-![Version](https://img.shields.io/badge/version-0.3.4-blue)
+![Version](https://img.shields.io/badge/version-0.3.5-blue)
 ![Python](https://img.shields.io/badge/python-3.10+-green)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
 **Small tools. Real automation. AI-assisted.**
+
+![Demo](demo/netdevops-demo.gif)
 
 A **micro-SaaS–oriented backend + Web UI** for generating **secure Cisco IOS / IOS XE configurations**
 and performing **lightweight security analysis** (CVE awareness).
@@ -63,7 +65,7 @@ NetDevOps Micro-Tools aims to solve this by providing:
 
 ---
 
-## 🔐 CVE Analyzer (v0.3.4)
+## 🔐 CVE Analyzer (v0.3.5)
 
 A lightweight CVE awareness engine focused on Cisco IOS XE with optional NVD enrichment.
 
@@ -74,9 +76,10 @@ A lightweight CVE awareness engine focused on Cisco IOS XE with optional NVD enr
 - Structured JSON output via API
 - Real-time NVD API enrichment (opt-in via `CVE_NVD_ENRICH=1`)
 
-**v0.3.4 improvements:**
+**v0.3.5 highlights:**
+- **Profiles × CVE** — batch vulnerability checking across all device profiles
+- **Vulnerability Status widget** — see affected profiles at a glance in Web UI
 - **File-based cache** — NVD responses cached for 24h (eliminates rate limiting)
-- **Graceful error handling** — NVD failures don't break local CVE lookup
 - **Real CVE data** — CVE-2023-20198, CVE-2023-20273, CVE-2025-20188 (validated)
 
 **Data enrichment fields:**
@@ -117,7 +120,21 @@ GET    /profiles/list
 GET    /profiles/load/{name}
 POST   /profiles/save
 DELETE /profiles/delete/{name}
+GET    /profiles/vulnerabilities   # NEW in v0.3.5
 ```
+
+### Profiles × CVE (v0.3.5)
+
+Check all profiles for known vulnerabilities in one call:
+
+```bash
+curl http://localhost:8000/profiles/vulnerabilities
+```
+
+Response includes:
+- Per-profile vulnerability status (critical/high/medium/low/clean/unknown)
+- CVE count and max CVSS score per profile
+- Summary counts across all profiles
 
 Profiles are stored on disk and can be persisted via Docker volumes.
 
@@ -228,14 +245,14 @@ are persisted across container restarts.
 
 ## 🛣 Roadmap (high level)
 
-**v0.3.4 (current):** ✅
-- NVD response caching (24h TTL)
-- Graceful error handling
-- Real CVE data (validated)
+**v0.3.5 (current):** ✅
+- Profiles × CVE integration
+- Vulnerability Status widget in Web UI
+- Batch vulnerability checking API
 
-**v0.3.5 (next):**
-- Profiles × CVE integration ("which profiles are affected?")
+**v0.3.6 (next):**
 - Security Score (0-100 per profile)
+- Export formats (Markdown / JSON reports)
 
 **v0.4.0 (SaaS):**
 - Authentication & multi-user mode
