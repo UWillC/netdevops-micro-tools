@@ -50,6 +50,56 @@
       <!-- SNMPv3 TAB -->
       <section id="tab-snmpv3" class="tab-content active">
         <h2>SNMPv3 Config Generator</h2>
+
+        <!-- Collapsible hints panel -->
+        <div class="hints-panel card" id="snmpv3-hints-panel">
+          <div class="hints-header" id="snmpv3-hints-toggle">
+            <div class="hints-title">
+              <span class="hints-icon">💡</span>
+              Verification Commands — How to check current SNMP config
+            </div>
+            <span class="hints-arrow">▼</span>
+          </div>
+          <div class="hints-content" id="snmpv3-hints-content">
+            <div class="hints-grid">
+              <div class="hints-section">
+                <div class="hints-section-title">Check SNMP Status</div>
+                <code class="hints-code">show snmp</code>
+                <code class="hints-code">show snmp engineID</code>
+                <code class="hints-code">show snmp group</code>
+                <code class="hints-code">show snmp user</code>
+              </div>
+              <div class="hints-section">
+                <div class="hints-section-title">Check SNMP Views</div>
+                <code class="hints-code">show snmp view</code>
+                <code class="hints-code">show snmp mib</code>
+              </div>
+              <div class="hints-section">
+                <div class="hints-section-title">Check Running Config</div>
+                <code class="hints-code">show running-config | section snmp</code>
+                <code class="hints-code">show running-config | include snmp</code>
+              </div>
+              <div class="hints-section">
+                <div class="hints-section-title">Check SNMP Host</div>
+                <code class="hints-code">show snmp host</code>
+                <code class="hints-code">show snmp sessions</code>
+              </div>
+              <div class="hints-section">
+                <div class="hints-section-title">Check Statistics</div>
+                <code class="hints-code">show snmp statistics</code>
+                <code class="hints-code">show snmp contact</code>
+                <code class="hints-code">show snmp location</code>
+              </div>
+              <div class="hints-section">
+                <div class="hints-section-title">Troubleshooting</div>
+                <code class="hints-code">debug snmp packets</code>
+                <code class="hints-code">debug snmp requests</code>
+                <code class="hints-code">undebug all</code>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="generator-layout">
         <form id="snmpv3-form" class="card">
           <div class="form-row">
@@ -117,22 +167,75 @@
 
       <!-- NTP TAB -->
       <section id="tab-ntp" class="tab-content">
-        <h2>NTP Config Generator</h2>
+        <h2>NTP Config Generator <span class="version-badge">v2 - Cisco Best Practices</span></h2>
+
+        <!-- Collapsible hints panel -->
+        <div class="hints-panel card" id="ntp-hints-panel">
+          <div class="hints-header" id="ntp-hints-toggle">
+            <div class="hints-title">
+              <span class="hints-icon">💡</span>
+              Verification Commands — How to check current NTP config
+            </div>
+            <span class="hints-arrow">▼</span>
+          </div>
+          <div class="hints-content" id="ntp-hints-content">
+            <div class="hints-grid">
+              <div class="hints-section">
+                <div class="hints-section-title">Check NTP Status</div>
+                <code class="hints-code">show ntp status</code>
+                <code class="hints-code">show ntp associations</code>
+                <code class="hints-code">show ntp associations detail</code>
+              </div>
+              <div class="hints-section">
+                <div class="hints-section-title">Check Clock</div>
+                <code class="hints-code">show clock</code>
+                <code class="hints-code">show clock detail</code>
+                <code class="hints-code">show calendar</code>
+              </div>
+              <div class="hints-section">
+                <div class="hints-section-title">Check Running Config</div>
+                <code class="hints-code">show running-config | section ntp</code>
+                <code class="hints-code">show running-config | include ntp</code>
+                <code class="hints-code">show running-config | section clock</code>
+              </div>
+              <div class="hints-section">
+                <div class="hints-section-title">Check Authentication</div>
+                <code class="hints-code">show ntp authentication-keys</code>
+                <code class="hints-code">show ntp trusted-keys</code>
+                <code class="hints-code">show ntp authentication-status</code>
+              </div>
+              <div class="hints-section">
+                <div class="hints-section-title">Check Access Control</div>
+                <code class="hints-code">show access-lists</code>
+                <code class="hints-code">show ntp access-groups</code>
+              </div>
+              <div class="hints-section">
+                <div class="hints-section-title">Troubleshooting</div>
+                <code class="hints-code">debug ntp events</code>
+                <code class="hints-code">debug ntp packets</code>
+                <code class="hints-code">undebug all</code>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="generator-layout">
         <form id="ntp-form" class="card">
+          <!-- Network Hierarchy -->
+          <div class="form-section-title">Network Hierarchy</div>
+
+          <div class="form-row">
+            <label>Network Tier</label>
+            <select name="network_tier">
+              <option value="CORE">CORE (External GPS / Stratum 1)</option>
+              <option value="DISTRIBUTION">DISTRIBUTION (Upstream CORE)</option>
+              <option value="ACCESS" selected>ACCESS (Upstream CORE)</option>
+            </select>
+          </div>
+
           <div class="form-row">
             <label>Device</label>
             <input type="text" name="device" value="Cisco IOS XE" />
-          </div>
-
-          <div class="form-row">
-            <label>Primary NTP server</label>
-            <input type="text" name="primary_server" value="0.pool.ntp.org" />
-          </div>
-
-          <div class="form-row">
-            <label>Secondary NTP server</label>
-            <input type="text" name="secondary_server" value="1.pool.ntp.org" />
           </div>
 
           <div class="form-row">
@@ -140,29 +243,112 @@
             <input type="text" name="timezone" value="UTC" />
           </div>
 
+          <!-- NTP Servers -->
+          <div class="form-section-title">NTP Servers</div>
+
           <div class="form-row">
-            <label>Use authentication</label>
-            <select name="use_auth">
+            <label>Primary NTP (prefer)</label>
+            <input type="text" name="primary_server" placeholder="10.0.0.1 or time.google.com" />
+          </div>
+
+          <div class="form-row">
+            <label>Secondary NTP</label>
+            <input type="text" name="secondary_server" placeholder="10.0.0.2 or time.cloudflare.com" />
+          </div>
+
+          <div class="form-row">
+            <label>Tertiary NTP (optional)</label>
+            <input type="text" name="tertiary_server" placeholder="Cisco recommends 3 sources" />
+          </div>
+
+          <div class="form-row">
+            <label>Source Interface</label>
+            <input type="text" name="source_interface" placeholder="Loopback0 (recommended)" />
+          </div>
+
+          <!-- Authentication -->
+          <div class="form-section-title">Authentication</div>
+
+          <div class="form-row">
+            <label>Use NTP Authentication</label>
+            <select name="use_auth" id="ntp-use-auth">
               <option value="false" selected>No</option>
               <option value="true">Yes</option>
             </select>
           </div>
 
-          <div class="form-row">
+          <div class="form-row ntp-auth-field">
+            <label>Auth Algorithm</label>
+            <select name="auth_algorithm">
+              <option value="md5">MD5 (legacy)</option>
+              <option value="sha1" selected>SHA1 (recommended)</option>
+              <option value="sha256">SHA256 (most secure)</option>
+            </select>
+          </div>
+
+          <div class="form-row ntp-auth-field">
             <label>Key ID</label>
             <input type="text" name="key_id" placeholder="1" />
           </div>
 
+          <div class="form-row ntp-auth-field">
+            <label>Key Value</label>
+            <input type="password" name="key_value" placeholder="NtpSecretKey123" />
+          </div>
+
+          <!-- Additional Options -->
+          <div class="form-section-title">Additional Options</div>
+
           <div class="form-row">
-            <label>Key value</label>
-            <input type="password" name="key_value" placeholder="NtpKey123" />
+            <label>NTP Logging</label>
+            <select name="use_logging">
+              <option value="true" selected>Yes (recommended)</option>
+              <option value="false">No</option>
+            </select>
           </div>
 
           <div class="form-row">
-            <label>Output format</label>
+            <label>Update Hardware Calendar</label>
+            <select name="update_calendar">
+              <option value="false" selected>No</option>
+              <option value="true">Yes (for devices with RTC)</option>
+            </select>
+          </div>
+
+          <!-- Access Control -->
+          <div class="form-section-title">Access Control</div>
+
+          <div class="form-row">
+            <label>Use NTP Access Control</label>
+            <select name="use_access_control" id="ntp-use-acl">
+              <option value="false" selected>No</option>
+              <option value="true">Yes (recommended for security)</option>
+            </select>
+          </div>
+
+          <div class="form-row ntp-acl-field">
+            <label>Peer Hosts (comma-separated)</label>
+            <input type="text" name="acl_peer_hosts" placeholder="10.0.0.1, 10.0.0.2, 10.0.0.3" />
+          </div>
+
+          <div class="form-row ntp-acl-field">
+            <label>Serve Network</label>
+            <input type="text" name="acl_serve_network" placeholder="192.168.0.0" />
+          </div>
+
+          <div class="form-row ntp-acl-field">
+            <label>Serve Wildcard Mask</label>
+            <input type="text" name="acl_serve_wildcard" placeholder="0.0.255.255" />
+          </div>
+
+          <!-- Output -->
+          <div class="form-section-title">Output</div>
+
+          <div class="form-row">
+            <label>Output Format</label>
             <select name="output_format">
-              <option value="cli">CLI</option>
-              <option value="oneline">oneline</option>
+              <option value="cli">CLI (multi-line)</option>
+              <option value="oneline">One-line</option>
             </select>
           </div>
 
@@ -185,6 +371,59 @@
       <!-- AAA TAB -->
       <section id="tab-aaa" class="tab-content">
         <h2>AAA / TACACS+ Config Generator</h2>
+
+        <!-- Collapsible hints panel -->
+        <div class="hints-panel card" id="aaa-hints-panel">
+          <div class="hints-header" id="aaa-hints-toggle">
+            <div class="hints-title">
+              <span class="hints-icon">💡</span>
+              Verification Commands — How to check current AAA/TACACS+ config
+            </div>
+            <span class="hints-arrow">▼</span>
+          </div>
+          <div class="hints-content" id="aaa-hints-content">
+            <div class="hints-grid">
+              <div class="hints-section">
+                <div class="hints-section-title">Check AAA Status</div>
+                <code class="hints-code">show aaa servers</code>
+                <code class="hints-code">show aaa sessions</code>
+                <code class="hints-code">show aaa user all</code>
+              </div>
+              <div class="hints-section">
+                <div class="hints-section-title">Check TACACS+</div>
+                <code class="hints-code">show tacacs</code>
+                <code class="hints-code">show tacacs private</code>
+                <code class="hints-code">test aaa group tacacs+ [user] [pass] legacy</code>
+              </div>
+              <div class="hints-section">
+                <div class="hints-section-title">Check Running Config</div>
+                <code class="hints-code">show running-config | section aaa</code>
+                <code class="hints-code">show running-config | section tacacs</code>
+                <code class="hints-code">show running-config | include aaa</code>
+              </div>
+              <div class="hints-section">
+                <div class="hints-section-title">Check Authentication</div>
+                <code class="hints-code">show aaa method-lists authentication</code>
+                <code class="hints-code">show aaa method-lists authorization</code>
+                <code class="hints-code">show aaa method-lists accounting</code>
+              </div>
+              <div class="hints-section">
+                <div class="hints-section-title">Check Local Users</div>
+                <code class="hints-code">show running-config | include username</code>
+                <code class="hints-code">show users</code>
+                <code class="hints-code">show privilege</code>
+              </div>
+              <div class="hints-section">
+                <div class="hints-section-title">Troubleshooting</div>
+                <code class="hints-code">debug aaa authentication</code>
+                <code class="hints-code">debug aaa authorization</code>
+                <code class="hints-code">debug tacacs</code>
+                <code class="hints-code">undebug all</code>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="generator-layout">
         <form id="aaa-form" class="card">
           <div class="form-row">
@@ -267,6 +506,57 @@
       <!-- GOLDEN CONFIG TAB -->
       <section id="tab-golden" class="tab-content">
         <h2>Golden Config Builder</h2>
+
+        <!-- Collapsible hints panel -->
+        <div class="hints-panel card" id="golden-hints-panel">
+          <div class="hints-header" id="golden-hints-toggle">
+            <div class="hints-title">
+              <span class="hints-icon">💡</span>
+              Verification Commands — How to check device baseline config
+            </div>
+            <span class="hints-arrow">▼</span>
+          </div>
+          <div class="hints-content" id="golden-hints-content">
+            <div class="hints-grid">
+              <div class="hints-section">
+                <div class="hints-section-title">Check Device Info</div>
+                <code class="hints-code">show version</code>
+                <code class="hints-code">show inventory</code>
+                <code class="hints-code">show platform</code>
+              </div>
+              <div class="hints-section">
+                <div class="hints-section-title">Check Security Settings</div>
+                <code class="hints-code">show running-config | section line</code>
+                <code class="hints-code">show running-config | section service</code>
+                <code class="hints-code">show running-config | include password</code>
+              </div>
+              <div class="hints-section">
+                <div class="hints-section-title">Check Logging</div>
+                <code class="hints-code">show logging</code>
+                <code class="hints-code">show running-config | section logging</code>
+                <code class="hints-code">show archive log config all</code>
+              </div>
+              <div class="hints-section">
+                <div class="hints-section-title">Check Interfaces</div>
+                <code class="hints-code">show ip interface brief</code>
+                <code class="hints-code">show interfaces status</code>
+                <code class="hints-code">show running-config | section interface</code>
+              </div>
+              <div class="hints-section">
+                <div class="hints-section-title">Check Banner</div>
+                <code class="hints-code">show running-config | section banner</code>
+                <code class="hints-code">show running-config | include banner</code>
+              </div>
+              <div class="hints-section">
+                <div class="hints-section-title">Full Config Review</div>
+                <code class="hints-code">show running-config</code>
+                <code class="hints-code">show startup-config</code>
+                <code class="hints-code">show archive config differences</code>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="generator-layout">
         <form id="golden-form" class="card">
           <div class="form-row">

@@ -884,13 +884,183 @@ textarea:focus {
 /* ----------------------------- */
 .generator-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
   gap: 12px;
   margin-top: 12px;
+  align-items: stretch;
+}
+
+/* Output card fills height of form */
+.generator-layout .output-card {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0;
+}
+
+/* Textarea fills available space with scrollbar */
+.generator-layout .output-text {
+  flex: 1;
+  min-height: 200px;
+  overflow-y: auto;
+  resize: none;
 }
 
 @media (max-width: 860px) {
   .generator-layout {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* ----------------------------- */
+/* Form sections & badges */
+/* ----------------------------- */
+.form-section-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 16px 0 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.form-section-title:first-of-type {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.version-badge {
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+/* Conditional field visibility */
+.ntp-auth-field,
+.ntp-acl-field {
+  display: none;
+}
+
+.ntp-auth-field.visible,
+.ntp-acl-field.visible {
+  display: flex;
+}
+
+/* ----------------------------- */
+/* Hints panel (collapsible) */
+/* ----------------------------- */
+.hints-panel {
+  margin-bottom: 16px;
+}
+
+.hints-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+  padding: 4px 0;
+}
+
+.hints-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.hints-icon {
+  font-size: 1rem;
+}
+
+.hints-arrow {
+  font-size: 0.75rem;
+  color: var(--muted);
+  transition: transform 0.2s ease;
+}
+
+.hints-panel.collapsed .hints-arrow {
+  transform: rotate(-90deg);
+}
+
+.hints-content {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  overflow: hidden;
+  max-height: 500px;
+  transition: max-height 0.3s ease, margin-top 0.3s ease, padding-top 0.3s ease, opacity 0.3s ease;
+  opacity: 1;
+}
+
+.hints-panel.collapsed .hints-content {
+  max-height: 0;
+  margin-top: 0;
+  padding-top: 0;
+  opacity: 0;
+  border-top: none;
+}
+
+.hints-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 860px) {
+  .hints-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .hints-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.hints-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hints-section-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 2px;
+}
+
+.hints-code {
+  font-family: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.78rem;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.hints-code:hover {
+  border-color: var(--accent);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.hints-code.copied {
+  border-color: #22c55e;
+  background: rgba(34, 197, 94, 0.1);
 }

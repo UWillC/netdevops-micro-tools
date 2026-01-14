@@ -298,29 +298,73 @@ if (snmpForm && snmpOutput) {
 }
 
 // -----------------------------
-// NTP form
+// NTP form (v2 - Cisco Best Practices)
 // -----------------------------
 const ntpForm = document.getElementById("ntp-form");
 const ntpOutput = document.getElementById("ntp-output");
+const ntpUseAuth = document.getElementById("ntp-use-auth");
+const ntpUseAcl = document.getElementById("ntp-use-acl");
+
+// Toggle visibility of auth fields
+function updateNtpAuthFieldsVisibility() {
+  const show = ntpUseAuth && ntpUseAuth.value === "true";
+  document.querySelectorAll(".ntp-auth-field").forEach((el) => {
+    if (show) el.classList.add("visible");
+    else el.classList.remove("visible");
+  });
+}
+
+// Toggle visibility of ACL fields
+function updateNtpAclFieldsVisibility() {
+  const show = ntpUseAcl && ntpUseAcl.value === "true";
+  document.querySelectorAll(".ntp-acl-field").forEach((el) => {
+    if (show) el.classList.add("visible");
+    else el.classList.remove("visible");
+  });
+}
+
+if (ntpUseAuth) {
+  ntpUseAuth.addEventListener("change", updateNtpAuthFieldsVisibility);
+  updateNtpAuthFieldsVisibility(); // initial state
+}
+
+if (ntpUseAcl) {
+  ntpUseAcl.addEventListener("change", updateNtpAclFieldsVisibility);
+  updateNtpAclFieldsVisibility(); // initial state
+}
 
 if (ntpForm && ntpOutput) {
   loadFormState("ntp-form", ntpForm);
+  // Re-apply visibility after loading state
+  updateNtpAuthFieldsVisibility();
+  updateNtpAclFieldsVisibility();
 
   ntpForm.addEventListener("submit", async (e) => {
     e.preventDefault();
-    ntpOutput.value = "Generating NTP config...";
+    ntpOutput.value = "Generating NTP config (Cisco Best Practices)...";
 
     const formData = new FormData(ntpForm);
     const useAuth = formData.get("use_auth") === "true";
+    const useAcl = formData.get("use_access_control") === "true";
 
     const payload = {
       device: formData.get("device"),
+      network_tier: formData.get("network_tier"),
+      timezone: formData.get("timezone"),
       primary_server: formData.get("primary_server"),
       secondary_server: formData.get("secondary_server") || null,
-      timezone: formData.get("timezone"),
+      tertiary_server: formData.get("tertiary_server") || null,
+      source_interface: formData.get("source_interface") || null,
       use_auth: useAuth,
+      auth_algorithm: useAuth ? formData.get("auth_algorithm") : "sha1",
       key_id: useAuth ? formData.get("key_id") || null : null,
       key_value: useAuth ? formData.get("key_value") || null : null,
+      use_logging: formData.get("use_logging") === "true",
+      update_calendar: formData.get("update_calendar") === "true",
+      use_access_control: useAcl,
+      acl_peer_hosts: useAcl ? formData.get("acl_peer_hosts") || null : null,
+      acl_serve_network: useAcl ? formData.get("acl_serve_network") || null : null,
+      acl_serve_wildcard: useAcl ? formData.get("acl_serve_wildcard") || null : null,
       output_format: formData.get("output_format"),
     };
 
@@ -1160,3 +1204,62 @@ async function refreshSecurityScoreWidget() {
 if (scoreRefreshBtn) {
   scoreRefreshBtn.addEventListener("click", refreshSecurityScoreWidget);
 }
+
+// -----------------------------
+// Hints panels (collapsible + click-to-copy)
+// -----------------------------
+function initHintsPanel(panelId, toggleId) {
+  const panel = document.getElementById(panelId);
+  const toggle = document.getElementById(toggleId);
+
+  if (!panel || !toggle) return;
+
+  // Start collapsed by default
+  panel.classList.add("collapsed");
+
+  toggle.addEventListener("click", () => {
+    panel.classList.toggle("collapsed");
+  });
+}
+
+// Initialize all hints panels
+initHintsPanel("snmpv3-hints-panel", "snmpv3-hints-toggle");
+initHintsPanel("ntp-hints-panel", "ntp-hints-toggle");
+initHintsPanel("aaa-hints-panel", "aaa-hints-toggle");
+initHintsPanel("golden-hints-panel", "golden-hints-toggle");
+
+// Click-to-copy for hints code blocks
+document.querySelectorAll(".hints-code").forEach((codeEl) => {
+  codeEl.addEventListener("click", () => {
+    const text = codeEl.textContent;
+
+    // Copy to clipboard
+    navigator.clipboard.writeText(text).then(() => {
+      codeEl.classList.add("copied");
+      const original = codeEl.textContent;
+      codeEl.textContent = "Copied!";
+
+      setTimeout(() => {
+        codeEl.textContent = original;
+        codeEl.classList.remove("copied");
+      }, 1000);
+    }).catch(() => {
+      // Fallback for older browsers
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+
+      codeEl.classList.add("copied");
+      const original = codeEl.textContent;
+      codeEl.textContent = "Copied!";
+
+      setTimeout(() => {
+        codeEl.textContent = original;
+        codeEl.classList.remove("copied");
+      }, 1000);
+    });
+  });
+});
