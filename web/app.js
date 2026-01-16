@@ -680,7 +680,17 @@ const profileNameInput = document.getElementById("profile-name");
 const profileDescriptionInput = document.getElementById("profile-description");
 
 const profilesStatus = document.getElementById("profiles-status");
-const profilesPreview = document.getElementById("profiles-preview");
+const profilesSaveStatus = document.getElementById("profiles-save-status");
+const profilesEditor = document.getElementById("profiles-editor");
+const profilesEditorStatus = document.getElementById("profiles-editor-status");
+const profilesUpdateBtn = document.getElementById("profiles-update");
+const profilesApplyToFormsBtn = document.getElementById("profiles-apply-to-forms");
+
+// View toggle elements
+const profilesCreateView = document.getElementById("profiles-create-view");
+const profilesEditView = document.getElementById("profiles-edit-view");
+const profilesEditName = document.getElementById("profiles-edit-name");
+const profilesNewBtn = document.getElementById("profiles-new");
 
 let profilesCache = [];
 
@@ -689,9 +699,31 @@ function setProfilesStatus(message) {
   profilesStatus.textContent = message;
 }
 
-function setProfilesPreview(message) {
-  if (!profilesPreview) return;
-  profilesPreview.textContent = message;
+function setProfilesSaveStatus(message) {
+  if (!profilesSaveStatus) return;
+  profilesSaveStatus.textContent = message;
+}
+
+function setProfilesEditorStatus(message) {
+  if (!profilesEditorStatus) return;
+  profilesEditorStatus.textContent = message;
+}
+
+function setProfilesEditorContent(jsonObj) {
+  if (!profilesEditor) return;
+  profilesEditor.value = JSON.stringify(jsonObj, null, 2);
+}
+
+// View switching functions
+function showCreateView() {
+  if (profilesCreateView) profilesCreateView.style.display = "block";
+  if (profilesEditView) profilesEditView.style.display = "none";
+}
+
+function showEditView(profileName) {
+  if (profilesCreateView) profilesCreateView.style.display = "none";
+  if (profilesEditView) profilesEditView.style.display = "block";
+  if (profilesEditName) profilesEditName.textContent = profileName || "—";
 }
 
 function setBtnEnabled(btn, enabled) {
@@ -931,8 +963,12 @@ if (profilesLoadBtn) {
         profileDescriptionInput.value = profile.description || "";
 
       setProfilesStatus(`Profile loaded: ${name}. Forms updated.`);
-      setProfilesPreview(JSON.stringify(profile, null, 2));
+      setProfilesEditorContent(profile);
+      setProfilesEditorStatus(`Editing: ${name}`);
       showToast("Profile loaded", name);
+
+      // Switch to Edit view
+      showEditView(name);
     } catch (err) {
       setProfilesStatus(`Error: ${err.message}`);
     }
@@ -961,7 +997,8 @@ if (profilesDeleteBtn) {
     try {
       await deleteProfile(name);
       setProfilesStatus(`Deleted profile: ${name}`);
-      setProfilesPreview(`Deleted: ${name}`);
+      setProfilesEditorStatus(`Deleted: ${name}`);
+      if (profilesEditor) profilesEditor.value = "";
       if (profilesConfirmDelete) profilesConfirmDelete.checked = false;
       showToast("Profile deleted", name);
       await refreshProfilesUI();
@@ -984,6 +1021,9 @@ if (profilesSaveBtn) {
       return;
     }
 
+    // Check if this is an update (profile exists) or create (new profile)
+    const isUpdate = profilesCache.includes(name);
+
     const snapshot = getCurrentFormSnapshot();
     const payload = {
       name,
@@ -993,13 +1033,19 @@ if (profilesSaveBtn) {
       aaa: snapshot.aaa,
     };
 
-    setProfilesStatus(`Saving profile: ${name}...`);
+    const action = isUpdate ? "Updating" : "Saving";
+    setProfilesStatus(`${action} profile: ${name}...`);
 
     try {
       await saveProfile(payload);
-      setProfilesStatus(`Saved profile: ${name}`);
-      setProfilesPreview(JSON.stringify(payload, null, 2));
-      showToast("Profile saved", name);
+
+      const actionDone = isUpdate ? "updated" : "saved";
+      const actionTitle = isUpdate ? "Profile updated" : "Profile saved";
+
+      setProfilesSaveStatus(`Profile ${actionDone}: ${name}`);
+      setProfilesEditorContent(payload);
+      setProfilesEditorStatus(`Saved: ${name}`);
+      showToast(actionTitle, name);
       await refreshProfilesUI();
 
       // keep selection after refresh if available
@@ -1008,6 +1054,87 @@ if (profilesSaveBtn) {
     } catch (err) {
       setProfilesStatus(`Error: ${err.message}`);
     }
+  });
+}
+
+// Update profile from editor (JSON)
+if (profilesUpdateBtn) {
+  profilesUpdateBtn.addEventListener("click", async () => {
+    if (!profilesEditor || !profilesEditor.value.trim()) {
+      setProfilesEditorStatus("Editor is empty. Load a profile first.");
+      return;
+    }
+
+    let profileData;
+    try {
+      profileData = JSON.parse(profilesEditor.value);
+    } catch (err) {
+      setProfilesEditorStatus(`Invalid JSON: ${err.message}`);
+      showToast("JSON Error", "Invalid JSON format");
+      return;
+    }
+
+    if (!profileData.name) {
+      setProfilesEditorStatus("Profile must have a 'name' field.");
+      return;
+    }
+
+    setProfilesEditorStatus(`Updating profile: ${profileData.name}...`);
+
+    try {
+      await saveProfile(profileData);
+      setProfilesEditorStatus(`Profile updated: ${profileData.name}`);
+      showToast("Profile updated", profileData.name);
+      await refreshProfilesUI();
+
+      // Keep selection
+      if (profilesSelect) profilesSelect.value = profileData.name;
+      updateProfilesButtonsState();
+    } catch (err) {
+      setProfilesEditorStatus(`Error: ${err.message}`);
+    }
+  });
+}
+
+// Apply editor JSON to forms
+if (profilesApplyToFormsBtn) {
+  profilesApplyToFormsBtn.addEventListener("click", () => {
+    if (!profilesEditor || !profilesEditor.value.trim()) {
+      setProfilesEditorStatus("Editor is empty. Load a profile first.");
+      return;
+    }
+
+    let profileData;
+    try {
+      profileData = JSON.parse(profilesEditor.value);
+    } catch (err) {
+      setProfilesEditorStatus(`Invalid JSON: ${err.message}`);
+      showToast("JSON Error", "Invalid JSON format");
+      return;
+    }
+
+    applyProfileToForms(profileData);
+
+    if (profileNameInput && profileData.name) {
+      profileNameInput.value = profileData.name;
+    }
+    if (profileDescriptionInput && profileData.description) {
+      profileDescriptionInput.value = profileData.description;
+    }
+
+    setProfilesEditorStatus("Applied to forms. Switch to generator tabs to see values.");
+    showToast("Applied to forms", profileData.name || "profile");
+  });
+}
+
+// New Profile button → switch to Create view
+if (profilesNewBtn) {
+  profilesNewBtn.addEventListener("click", () => {
+    showCreateView();
+    // Clear form fields for new profile
+    if (profileNameInput) profileNameInput.value = "";
+    if (profileDescriptionInput) profileDescriptionInput.value = "";
+    setProfilesSaveStatus("");
   });
 }
 

@@ -523,8 +523,97 @@ textarea:focus {
   color: var(--muted);
 }
 
+/* Profiles info box (how it works) */
+.profiles-info-box {
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 16px;
+}
+
+.profiles-info-title {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+
+.profiles-info-steps {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 0.82rem;
+  color: var(--text);
+  line-height: 1.7;
+}
+
+.profiles-info-steps li {
+  margin-bottom: 4px;
+}
+
+.profiles-info-steps strong {
+  color: var(--accent);
+}
+
+.profiles-info-note {
+  margin-top: 10px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  border-top: 1px solid rgba(59, 130, 246, 0.15);
+  padding-top: 8px;
+}
+
+.profiles-info-edit-hint {
+  margin-top: 10px;
+  font-size: 0.8rem;
+  color: var(--text);
+  background: rgba(59, 130, 246, 0.12);
+  padding: 8px 10px;
+  border-radius: 6px;
+}
+
 #profiles-select {
   width: 100%;
+}
+
+/* Profile editor textarea */
+.profile-editor-textarea {
+  font-family: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.78rem;
+  width: 100%;
+  min-height: 180px;
+  resize: vertical;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 10px;
+  color: var(--text);
+}
+
+.profile-editor-textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.55);
+  outline: none;
+}
+
+/* Profile views toggle */
+.profiles-view {
+  /* Views are shown/hidden via JS */
+}
+
+.profiles-edit-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.profiles-edit-header h3 {
+  margin: 0;
+}
+
+#profiles-edit-name {
+  color: var(--accent);
 }
 
 .inline-row {
