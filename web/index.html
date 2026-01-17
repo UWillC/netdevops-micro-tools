@@ -49,7 +49,7 @@
 
       <!-- SNMPv3 TAB -->
       <section id="tab-snmpv3" class="tab-content active">
-        <h2>SNMPv3 Config Generator</h2>
+        <h2>SNMPv3 Config Generator <span class="version-badge">v2 - Cisco Best Practices</span></h2>
 
         <!-- Collapsible hints panel -->
         <div class="hints-panel card" id="snmpv3-hints-panel">
@@ -102,12 +102,23 @@
 
         <div class="generator-layout">
         <form id="snmpv3-form" class="card">
+          <!-- Security Settings -->
+          <div class="form-section-title">Security Settings</div>
+
           <div class="form-row">
-            <label>Mode</label>
+            <label>Security Mode</label>
             <select name="mode">
-              <option value="secure-default">secure-default</option>
-              <option value="balanced">balanced</option>
-              <option value="legacy-compatible">legacy-compatible</option>
+              <option value="secure-default">secure-default (SHA-256 + AES-256)</option>
+              <option value="balanced">balanced (SHA + AES-128)</option>
+              <option value="legacy-compatible">legacy-compatible (SHA + AES-128)</option>
+            </select>
+          </div>
+
+          <div class="form-row">
+            <label>Access Mode</label>
+            <select name="access_mode">
+              <option value="read-only" selected>Read-Only (monitoring)</option>
+              <option value="read-write">Read-Write (configuration)</option>
             </select>
           </div>
 
@@ -116,10 +127,8 @@
             <input type="text" name="device" value="Cisco IOS XE" />
           </div>
 
-          <div class="form-row">
-            <label>SNMP manager host</label>
-            <input type="text" name="host" placeholder="10.10.10.10" />
-          </div>
+          <!-- SNMP Credentials -->
+          <div class="form-section-title">SNMP Credentials</div>
 
           <div class="form-row">
             <label>Username</label>
@@ -141,11 +150,44 @@
             <input type="password" name="priv_password" value="SecurePass123" />
           </div>
 
+          <!-- Access Control -->
+          <div class="form-section-title">Access Control</div>
+
+          <div class="form-row">
+            <label>Use ACL (recommended)</label>
+            <select name="use_acl" id="snmp-use-acl">
+              <option value="false">No</option>
+              <option value="true">Yes</option>
+            </select>
+          </div>
+
+          <div class="form-row snmp-acl-field">
+            <label>Allowed hosts (comma-separated)</label>
+            <input type="text" name="acl_hosts" placeholder="192.168.1.10, 10.0.0.5" />
+          </div>
+
+          <!-- Network Settings -->
+          <div class="form-section-title">Network Settings</div>
+
+          <div class="form-row">
+            <label>SNMP manager host</label>
+            <input type="text" name="host" placeholder="10.10.10.10" />
+          </div>
+
+          <div class="form-row">
+            <label>Source interface (optional)</label>
+            <input type="text" name="source_interface" placeholder="Loopback0" />
+          </div>
+
+          <!-- Output -->
+          <div class="form-section-title">Output</div>
+
           <div class="form-row">
             <label>Output format</label>
             <select name="output_format">
-              <option value="cli">CLI</option>
-              <option value="oneline">oneline</option>
+              <option value="cli">CLI (multi-line)</option>
+              <option value="oneline">One-line</option>
+              <option value="template">YAML template</option>
             </select>
           </div>
 

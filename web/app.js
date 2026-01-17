@@ -262,27 +262,50 @@ if (applyProfileBtn && globalProfileSelect) {
 }
 
 // -----------------------------
-// SNMPv3 form
+// SNMPv3 form (v2 - with ACL support)
 // -----------------------------
 const snmpForm = document.getElementById("snmpv3-form");
 const snmpOutput = document.getElementById("snmpv3-output");
+const snmpUseAcl = document.getElementById("snmp-use-acl");
+
+// Toggle visibility of ACL fields
+function updateSnmpAclFieldsVisibility() {
+  const show = snmpUseAcl && snmpUseAcl.value === "true";
+  document.querySelectorAll(".snmp-acl-field").forEach((el) => {
+    if (show) el.classList.add("visible");
+    else el.classList.remove("visible");
+  });
+}
+
+if (snmpUseAcl) {
+  snmpUseAcl.addEventListener("change", updateSnmpAclFieldsVisibility);
+  updateSnmpAclFieldsVisibility(); // initial state
+}
 
 if (snmpForm && snmpOutput) {
   loadFormState("snmpv3-form", snmpForm);
+  // Re-apply visibility after loading state
+  updateSnmpAclFieldsVisibility();
 
   snmpForm.addEventListener("submit", async (e) => {
     e.preventDefault();
-    snmpOutput.value = "Generating SNMPv3 config...";
+    snmpOutput.value = "Generating SNMPv3 config (Cisco Best Practices)...";
 
     const formData = new FormData(snmpForm);
+    const useAcl = formData.get("use_acl") === "true";
+
     const payload = {
       mode: formData.get("mode"),
+      access_mode: formData.get("access_mode"),
       device: formData.get("device"),
       host: formData.get("host"),
       user: formData.get("user"),
       group: formData.get("group"),
       auth_password: formData.get("auth_password"),
       priv_password: formData.get("priv_password"),
+      use_acl: useAcl,
+      acl_hosts: useAcl ? formData.get("acl_hosts") || null : null,
+      source_interface: formData.get("source_interface") || null,
       output_format: formData.get("output_format"),
     };
 

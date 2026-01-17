@@ -1033,12 +1033,14 @@ textarea:focus {
 
 /* Conditional field visibility */
 .ntp-auth-field,
-.ntp-acl-field {
+.ntp-acl-field,
+.snmp-acl-field {
   display: none;
 }
 
 .ntp-auth-field.visible,
-.ntp-acl-field.visible {
+.ntp-acl-field.visible,
+.snmp-acl-field.visible {
   display: flex;
 }
 
