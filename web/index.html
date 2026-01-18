@@ -109,6 +109,8 @@
             <label>Security Mode</label>
             <select name="mode">
               <option value="secure-default">secure-default (SHA-256 + AES-256)</option>
+              <option value="sha2-384">SHA-2 384 + AES-256</option>
+              <option value="sha2-512">SHA-2 512 + AES-256</option>
               <option value="balanced">balanced (SHA + AES-128)</option>
               <option value="legacy-compatible">legacy-compatible (SHA + AES-128)</option>
             </select>
@@ -177,6 +179,19 @@
           <div class="form-row">
             <label>Source interface (optional)</label>
             <input type="text" name="source_interface" placeholder="Loopback0" />
+          </div>
+
+          <!-- System Information -->
+          <div class="form-section-title">System Information (optional)</div>
+
+          <div class="form-row">
+            <label>Contact</label>
+            <input type="text" name="contact" placeholder="NOC Team noc@company.com" />
+          </div>
+
+          <div class="form-row">
+            <label>Location</label>
+            <input type="text" name="location" placeholder="DC1 Rack A5" />
           </div>
 
           <!-- Output -->

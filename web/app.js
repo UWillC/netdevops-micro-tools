@@ -306,6 +306,8 @@ if (snmpForm && snmpOutput) {
       use_acl: useAcl,
       acl_hosts: useAcl ? formData.get("acl_hosts") || null : null,
       source_interface: formData.get("source_interface") || null,
+      contact: formData.get("contact") || null,
+      location: formData.get("location") || null,
       output_format: formData.get("output_format"),
     };
 
