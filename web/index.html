@@ -689,6 +689,34 @@
             <textarea name="aaa_config" id="golden-aaa-config" rows="3" placeholder="Manual config (used if 'Use saved config' is unchecked)"></textarea>
           </div>
 
+          <!-- Baseline Sections -->
+          <div class="form-section-title">Baseline Sections</div>
+
+          <!-- Banner -->
+          <div class="form-row baseline-section">
+            <label class="baseline-checkbox-label">
+              <input type="checkbox" name="include_banner" id="golden-include-banner" value="true" checked>
+              <span>Include Banner</span>
+            </label>
+            <textarea name="custom_banner" id="golden-custom-banner" rows="2" placeholder="Custom banner text (leave empty for default)"></textarea>
+          </div>
+
+          <!-- Logging -->
+          <div class="form-row baseline-section">
+            <label class="baseline-checkbox-label">
+              <input type="checkbox" name="include_logging" value="true" checked>
+              <span>Include Logging</span>
+            </label>
+          </div>
+
+          <!-- Security Baseline -->
+          <div class="form-row baseline-section">
+            <label class="baseline-checkbox-label">
+              <input type="checkbox" name="include_security" value="true" checked>
+              <span>Include Security Baseline</span>
+            </label>
+          </div>
+
           <div class="form-row">
             <label>Output format</label>
             <select name="output_format">

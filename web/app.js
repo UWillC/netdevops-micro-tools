@@ -566,6 +566,11 @@ if (goldenForm && goldenOutput) {
       snmpv3_payload: snmpv3Payload,
       ntp_payload: ntpPayload,
       aaa_payload: aaaPayload,
+      // Baseline sections (modular)
+      include_banner: formData.get("include_banner") === "true",
+      custom_banner: formData.get("custom_banner") || null,
+      include_logging: formData.get("include_logging") === "true",
+      include_security: formData.get("include_security") === "true",
       output_format: formData.get("output_format"),
     };
 

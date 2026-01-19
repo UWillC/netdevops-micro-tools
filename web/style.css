@@ -1276,3 +1276,29 @@ textarea:focus {
   background: rgba(239, 68, 68, 0.15);
   color: #ef4444;
 }
+
+/* Baseline sections */
+.baseline-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.baseline-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.baseline-checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.baseline-section textarea {
+  margin-left: 24px;
+  font-size: 0.8rem;
+}

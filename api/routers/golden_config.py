@@ -24,6 +24,11 @@ class GoldenConfigRequest(BaseModel):
     snmpv3_payload: Optional[Dict[str, Any]] = None
     ntp_payload: Optional[Dict[str, Any]] = None
     aaa_payload: Optional[Dict[str, Any]] = None
+    # Baseline sections (v2 - modular)
+    include_banner: bool = True
+    custom_banner: Optional[str] = None
+    include_logging: bool = True
+    include_security: bool = True
     output_format: str = "cli"   # cli | oneline | template
 
 
@@ -134,10 +139,12 @@ def generate_aaa_from_payload(payload: Dict[str, Any], output_format: str) -> st
 # --------------------------------------------------------------------
 # STATIC SECTIONS
 # --------------------------------------------------------------------
-def generate_banner():
-    return """banner login ^
-Unauthorized access to this device is prohibited.
-All activity is monitored.
+DEFAULT_BANNER_TEXT = "Unauthorized access to this device is prohibited.\nAll activity is monitored."
+
+def generate_banner(custom_text: str = None):
+    text = custom_text.strip() if custom_text else DEFAULT_BANNER_TEXT
+    return f"""banner login ^
+{text}
 ^
 """
 
@@ -234,16 +241,17 @@ golden_config:
 
   baseline:
     banner:
-      enabled: true
-      text: "Unauthorized access to this device is prohibited. All activity is monitored."
+      enabled: {str(req.include_banner).lower()}
+      text: "{req.custom_banner.strip() if req.custom_banner else DEFAULT_BANNER_TEXT}"
 
     logging:
-      enabled: true
+      enabled: {str(req.include_logging).lower()}
       buffer_size: 64000
       level: "warnings"
       timestamps: true
 
     security:
+      enabled: {str(req.include_security).lower()}
       http_server: false
       https_server: false
       ssh_version: 2
@@ -291,10 +299,13 @@ def assemble_golden(req: GoldenConfigRequest):
     elif req.aaa_config:
         sections.append(f"! AAA\n{req.aaa_config}")
 
-    # Built-in sections
-    sections.append("! Banner\n" + generate_banner())
-    sections.append("! Logging\n" + generate_logging())
-    sections.append("! Security\n" + generate_security_baseline(req.mode))
+    # Built-in sections (modular - check include flags)
+    if req.include_banner:
+        sections.append("! Banner\n" + generate_banner(req.custom_banner))
+    if req.include_logging:
+        sections.append("! Logging\n" + generate_logging())
+    if req.include_security:
+        sections.append("! Security\n" + generate_security_baseline(req.mode))
 
     final = "\n\n".join(sections)
 
