@@ -56,6 +56,10 @@ def generate_snmpv3_from_payload(payload: Dict[str, Any], output_format: str) ->
             source_interface=payload.get("source_interface"),
             contact=payload.get("contact"),
             location=payload.get("location"),
+            packetsize=payload.get("packetsize"),
+            traps=payload.get("traps"),
+            logging_enabled=payload.get("logging_enabled", False),
+            logging_level=payload.get("logging_level", "informational"),
         )
     else:
         cli = generate_snmpv3_cli(
@@ -71,6 +75,10 @@ def generate_snmpv3_from_payload(payload: Dict[str, Any], output_format: str) ->
             source_interface=payload.get("source_interface"),
             contact=payload.get("contact"),
             location=payload.get("location"),
+            packetsize=payload.get("packetsize"),
+            traps=payload.get("traps"),
+            logging_enabled=payload.get("logging_enabled", False),
+            logging_level=payload.get("logging_level", "informational"),
         )
         if output_format == "oneline":
             return generate_snmpv3_oneline(cli)
@@ -85,6 +93,7 @@ def generate_snmpv3_multi_from_payload(payload: Dict[str, Any], output_format: s
         hosts.append(SNMPv3Host(
             name=h.get("name", ""),
             ip_address=h.get("ip_address", ""),
+            user_name=h.get("user_name"),
             access_mode=h.get("access_mode", "read-only"),
             auth_algorithm=h.get("auth_algorithm", "sha-2 256"),
             priv_algorithm=h.get("priv_algorithm", "aes 256"),
@@ -99,6 +108,10 @@ def generate_snmpv3_multi_from_payload(payload: Dict[str, Any], output_format: s
         contact=payload.get("contact"),
         location=payload.get("location"),
         source_interface=payload.get("source_interface"),
+        packetsize=payload.get("packetsize"),
+        traps=payload.get("traps"),
+        logging_enabled=payload.get("logging_enabled", False),
+        logging_level=payload.get("logging_level", "informational"),
         output_format=output_format,
         hosts=hosts,
     )

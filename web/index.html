@@ -182,6 +182,50 @@
             <input type="text" name="source_interface" placeholder="Loopback0" />
           </div>
 
+          <div class="form-row">
+            <label>Packet size (optional)</label>
+            <input type="text" name="packetsize" placeholder="4096 (default: 1500)" />
+          </div>
+
+          <!-- SNMP Traps -->
+          <div class="form-section-title">SNMP Traps</div>
+
+          <div class="form-row checkbox-group">
+            <label>Specific traps (if none selected, all traps enabled)</label>
+            <div class="checkbox-row">
+              <label class="checkbox-label"><input type="checkbox" name="traps" value="syslog"> syslog</label>
+              <label class="checkbox-label"><input type="checkbox" name="traps" value="config"> config</label>
+              <label class="checkbox-label"><input type="checkbox" name="traps" value="envmon"> envmon</label>
+              <label class="checkbox-label"><input type="checkbox" name="traps" value="cpu"> cpu</label>
+              <label class="checkbox-label"><input type="checkbox" name="traps" value="power"> power</label>
+            </div>
+          </div>
+
+          <!-- Logging -->
+          <div class="form-section-title">Logging</div>
+
+          <div class="form-row">
+            <label>Enable Logging Section</label>
+            <select name="logging_enabled" id="snmp-logging-enabled">
+              <option value="false">No</option>
+              <option value="true">Yes</option>
+            </select>
+          </div>
+
+          <div class="form-row snmp-logging-field">
+            <label>Logging Level</label>
+            <select name="logging_level">
+              <option value="emergencies">emergencies</option>
+              <option value="alerts">alerts</option>
+              <option value="critical">critical</option>
+              <option value="errors">errors</option>
+              <option value="warnings">warnings</option>
+              <option value="notifications">notifications</option>
+              <option value="informational" selected>informational</option>
+              <option value="debugging">debugging</option>
+            </select>
+          </div>
+
           <!-- System Information -->
           <div class="form-section-title">System Information (optional)</div>
 
@@ -269,6 +313,50 @@
           <div class="form-row">
             <label>Source Interface</label>
             <input type="text" name="source_interface" placeholder="Loopback0" />
+          </div>
+
+          <div class="form-row">
+            <label>Packet Size</label>
+            <input type="text" name="packetsize" placeholder="4096 (default: 1500)" />
+          </div>
+
+          <!-- SNMP Traps -->
+          <div class="form-section-title">SNMP Traps</div>
+
+          <div class="form-row checkbox-group">
+            <label>Specific traps (if none selected, all traps enabled)</label>
+            <div class="checkbox-row">
+              <label class="checkbox-label"><input type="checkbox" name="traps" value="syslog"> syslog</label>
+              <label class="checkbox-label"><input type="checkbox" name="traps" value="config"> config</label>
+              <label class="checkbox-label"><input type="checkbox" name="traps" value="envmon"> envmon</label>
+              <label class="checkbox-label"><input type="checkbox" name="traps" value="cpu"> cpu</label>
+              <label class="checkbox-label"><input type="checkbox" name="traps" value="power"> power</label>
+            </div>
+          </div>
+
+          <!-- Logging -->
+          <div class="form-section-title">Logging</div>
+
+          <div class="form-row">
+            <label>Enable Logging Section</label>
+            <select name="logging_enabled" id="snmp-multi-logging-enabled">
+              <option value="false">No</option>
+              <option value="true">Yes</option>
+            </select>
+          </div>
+
+          <div class="form-row snmp-multi-logging-field">
+            <label>Logging Level</label>
+            <select name="logging_level">
+              <option value="emergencies">emergencies</option>
+              <option value="alerts">alerts</option>
+              <option value="critical">critical</option>
+              <option value="errors">errors</option>
+              <option value="warnings">warnings</option>
+              <option value="notifications">notifications</option>
+              <option value="informational" selected>informational</option>
+              <option value="debugging">debugging</option>
+            </select>
           </div>
 
           <!-- Hosts Section -->

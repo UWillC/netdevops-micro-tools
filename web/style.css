@@ -1034,14 +1034,59 @@ textarea:focus {
 /* Conditional field visibility */
 .ntp-auth-field,
 .ntp-acl-field,
-.snmp-acl-field {
+.snmp-acl-field,
+.snmp-logging-field,
+.snmp-multi-logging-field {
   display: none;
 }
 
 .ntp-auth-field.visible,
 .ntp-acl-field.visible,
-.snmp-acl-field.visible {
+.snmp-acl-field.visible,
+.snmp-logging-field.visible,
+.snmp-multi-logging-field.visible {
   display: flex;
+}
+
+/* Checkbox row for traps */
+.checkbox-group {
+  margin-bottom: 12px;
+}
+
+.checkbox-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.85rem;
+  color: var(--text);
+  cursor: pointer;
+  padding: 4px 10px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(55, 65, 81, 0.7);
+  border-radius: 6px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.checkbox-label:hover {
+  border-color: var(--accent);
+  background: rgba(15, 23, 42, 0.95);
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent);
+}
+
+.checkbox-label input[type="checkbox"]:checked + span {
+  color: #93c5fd;
 }
 
 /* ----------------------------- */

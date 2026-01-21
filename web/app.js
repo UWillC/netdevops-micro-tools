@@ -287,10 +287,27 @@ if (snmpUseAcl) {
   updateSnmpAclFieldsVisibility(); // initial state
 }
 
+// Toggle visibility of Logging Level field (Single SNMP)
+const snmpLoggingEnabled = document.getElementById("snmp-logging-enabled");
+
+function updateSnmpLoggingFieldsVisibility() {
+  const show = snmpLoggingEnabled && snmpLoggingEnabled.value === "true";
+  document.querySelectorAll(".snmp-logging-field").forEach((el) => {
+    if (show) el.classList.add("visible");
+    else el.classList.remove("visible");
+  });
+}
+
+if (snmpLoggingEnabled) {
+  snmpLoggingEnabled.addEventListener("change", updateSnmpLoggingFieldsVisibility);
+  updateSnmpLoggingFieldsVisibility(); // initial state
+}
+
 if (snmpForm && snmpOutput) {
   loadFormState("snmpv3-form", snmpForm);
   // Re-apply visibility after loading state
   updateSnmpAclFieldsVisibility();
+  updateSnmpLoggingFieldsVisibility();
 
   snmpForm.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -298,6 +315,17 @@ if (snmpForm && snmpOutput) {
 
     const formData = new FormData(snmpForm);
     const useAcl = formData.get("use_acl") === "true";
+
+    const packetsizeVal = formData.get("packetsize");
+
+    // Collect selected traps (checkboxes)
+    const selectedTraps = [];
+    snmpForm.querySelectorAll('input[name="traps"]:checked').forEach((cb) => {
+      selectedTraps.push(cb.value);
+    });
+
+    // Logging settings
+    const loggingEnabled = formData.get("logging_enabled") === "true";
 
     const payload = {
       mode: formData.get("mode"),
@@ -311,8 +339,12 @@ if (snmpForm && snmpOutput) {
       use_acl: useAcl,
       acl_hosts: useAcl ? formData.get("acl_hosts") || null : null,
       source_interface: formData.get("source_interface") || null,
+      packetsize: packetsizeVal ? parseInt(packetsizeVal, 10) : null,
       contact: formData.get("contact") || null,
       location: formData.get("location") || null,
+      traps: selectedTraps.length > 0 ? selectedTraps : null,
+      logging_enabled: loggingEnabled,
+      logging_level: loggingEnabled ? formData.get("logging_level") : "informational",
       output_format: formData.get("output_format"),
     };
 
@@ -1671,6 +1703,7 @@ function createSnmpHostCard(hostId, hostData = null) {
   const defaults = hostData || {
     name: "",
     ip_address: "",
+    user_name: "",
     access_mode: "read-only",
     auth_algorithm: "sha-2 256",
     priv_algorithm: "aes 256",
@@ -1686,12 +1719,16 @@ function createSnmpHostCard(hostId, hostData = null) {
     <div class="snmp-host-fields">
       <div class="snmp-host-row">
         <div class="snmp-host-field">
-          <label>Name (remark)</label>
+          <label>Name (remark/group)</label>
           <input type="text" name="host_${hostId}_name" value="${defaults.name}" placeholder="PRIME, WUG, SPLUNK..." />
         </div>
         <div class="snmp-host-field">
           <label>IP Address</label>
           <input type="text" name="host_${hostId}_ip" value="${defaults.ip_address}" placeholder="10.0.0.1" />
+        </div>
+        <div class="snmp-host-field">
+          <label>User Name</label>
+          <input type="text" name="host_${hostId}_user" value="${defaults.user_name}" placeholder="auto: {name}-user" />
         </div>
       </div>
       <div class="snmp-host-row">
@@ -1771,6 +1808,7 @@ function getSnmpMultiHosts() {
     const host = {
       name: getName("name"),
       ip_address: getName("ip"),
+      user_name: getName("user") || null,  // null = auto-generate as {name}-user
       access_mode: getName("access"),
       auth_algorithm: getName("auth_algo"),
       priv_algorithm: getName("priv_algo"),
@@ -1841,6 +1879,22 @@ function loadSnmpMultiState() {
   }
 }
 
+// Toggle visibility of Logging Level field (Multi SNMP)
+const snmpMultiLoggingEnabled = document.getElementById("snmp-multi-logging-enabled");
+
+function updateSnmpMultiLoggingFieldsVisibility() {
+  const show = snmpMultiLoggingEnabled && snmpMultiLoggingEnabled.value === "true";
+  document.querySelectorAll(".snmp-multi-logging-field").forEach((el) => {
+    if (show) el.classList.add("visible");
+    else el.classList.remove("visible");
+  });
+}
+
+if (snmpMultiLoggingEnabled) {
+  snmpMultiLoggingEnabled.addEventListener("change", updateSnmpMultiLoggingFieldsVisibility);
+  updateSnmpMultiLoggingFieldsVisibility(); // initial state
+}
+
 // Initialize
 if (snmpMultiHostsContainer) {
   loadSnmpMultiState();
@@ -1865,6 +1919,17 @@ if (snmpMultiForm && snmpMultiOutput) {
       return;
     }
 
+    const packetsizeVal = formData.get("packetsize");
+
+    // Collect selected traps (checkboxes)
+    const selectedTraps = [];
+    snmpMultiForm.querySelectorAll('input[name="traps"]:checked').forEach((cb) => {
+      selectedTraps.push(cb.value);
+    });
+
+    // Logging settings
+    const loggingEnabled = formData.get("logging_enabled") === "true";
+
     const payload = {
       acl_name: formData.get("acl_name") || "SNMP-POLLERS",
       view_name: formData.get("view_name") || "SECUREVIEW",
@@ -1872,6 +1937,10 @@ if (snmpMultiForm && snmpMultiOutput) {
       contact: formData.get("contact") || null,
       location: formData.get("location") || null,
       source_interface: formData.get("source_interface") || null,
+      packetsize: packetsizeVal ? parseInt(packetsizeVal, 10) : null,
+      traps: selectedTraps.length > 0 ? selectedTraps : null,
+      logging_enabled: loggingEnabled,
+      logging_level: loggingEnabled ? formData.get("logging_level") : "informational",
       output_format: formData.get("output_format") || "cli",
       hosts: hosts,
     };
