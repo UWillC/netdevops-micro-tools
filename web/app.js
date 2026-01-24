@@ -656,6 +656,47 @@ if (aaaForm && aaaOutput) {
 }
 
 // -----------------------------
+// iPerf3 form
+// -----------------------------
+const iperfForm = document.getElementById("iperf-form");
+const iperfOutput = document.getElementById("iperf-output");
+
+if (iperfForm && iperfOutput) {
+  loadFormState("iperf-form", iperfForm);
+
+  iperfForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    iperfOutput.value = "Generating iPerf3 commands...";
+
+    const formData = new FormData(iperfForm);
+
+    const payload = {
+      link_speed: formData.get("link_speed"),
+      test_type: formData.get("test_type"),
+      direction: formData.get("direction"),
+      server_ip: formData.get("server_ip"),
+      port: parseInt(formData.get("port")) || 5201,
+      port_secondary: parseInt(formData.get("port_secondary")) || 5202,
+      duration: parseInt(formData.get("duration")) || 60,
+      interval: parseInt(formData.get("interval")) || 10,
+      parallel_streams: parseInt(formData.get("parallel_streams")) || 4,
+      target_bandwidth: formData.get("target_bandwidth") || null,
+      json_output: formData.get("json_output") === "true",
+      output_format: formData.get("output_format"),
+    };
+
+    saveFormState("iperf-form", iperfForm);
+
+    try {
+      const data = await postJSON("/generate/iperf", payload);
+      iperfOutput.value = data.config || "";
+    } catch (err) {
+      iperfOutput.value = `Error: ${err.message}`;
+    }
+  });
+}
+
+// -----------------------------
 // Golden Config form
 // -----------------------------
 const goldenForm = document.getElementById("golden-form");

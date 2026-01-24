@@ -27,6 +27,7 @@
         <button class="tab-button" data-tab="aaa">AAA / TACACS+</button>
         <button class="tab-button" data-tab="golden">Golden Config</button>
         <button class="tab-button" data-tab="cve">CVE Analyzer</button>
+        <button class="tab-button" data-tab="iperf">iPerf3</button>
         <button class="tab-button" data-tab="profiles">Profiles</button>
       </nav>
     </aside>
@@ -1069,6 +1070,135 @@
             <p class="summary-muted">
               Run an analysis to see severity breakdown and recommended upgrade target.
             </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- IPERF3 TAB -->
+      <section id="tab-iperf" class="tab-content">
+        <h2>iPerf3 Command Generator</h2>
+
+        <div class="generator-layout">
+          <form id="iperf-form" class="card">
+            <!-- Test Configuration -->
+            <div class="form-section-title">Test Configuration</div>
+
+            <div class="form-row">
+              <label>Link Speed</label>
+              <select name="link_speed">
+                <option value="100m">100 Mbps</option>
+                <option value="1g" selected>1 Gbps</option>
+                <option value="10g">10 Gbps</option>
+              </select>
+            </div>
+
+            <div class="form-row">
+              <label>Test Type</label>
+              <select name="test_type">
+                <option value="tcp">TCP (throughput, retransmits)</option>
+                <option value="udp">UDP (jitter, packet loss)</option>
+                <option value="both" selected>Both (full assessment)</option>
+              </select>
+            </div>
+
+            <div class="form-row">
+              <label>Direction</label>
+              <select name="direction">
+                <option value="upload" selected>Upload (client → server)</option>
+                <option value="download">Download (server → client)</option>
+                <option value="bidirectional">Bidirectional</option>
+              </select>
+            </div>
+
+            <!-- Server Settings -->
+            <div class="form-section-title">Server Settings</div>
+
+            <div class="form-row">
+              <label>Server IP</label>
+              <input type="text" name="server_ip" placeholder="10.0.0.100" required />
+            </div>
+
+            <div class="form-row">
+              <label>Port (TCP or primary)</label>
+              <input type="text" name="port" value="5201" />
+            </div>
+
+            <div class="form-row">
+              <label>Port Secondary (UDP for "Both")</label>
+              <input type="text" name="port_secondary" value="5202" />
+            </div>
+
+            <!-- Test Parameters -->
+            <div class="form-section-title">Test Parameters</div>
+
+            <div class="form-row">
+              <label>Duration (seconds)</label>
+              <select name="duration">
+                <option value="60">1 minute</option>
+                <option value="300">5 minutes</option>
+                <option value="1800">30 minutes</option>
+                <option value="3600">1 hour</option>
+                <option value="5400" selected>90 minutes</option>
+              </select>
+            </div>
+
+            <div class="form-row">
+              <label>Reporting Interval (seconds)</label>
+              <select name="interval">
+                <option value="1">1 second</option>
+                <option value="5">5 seconds</option>
+                <option value="10">10 seconds</option>
+                <option value="30" selected>30 seconds</option>
+                <option value="60">60 seconds</option>
+              </select>
+            </div>
+
+            <div class="form-row">
+              <label>TCP Parallel Streams</label>
+              <select name="parallel_streams">
+                <option value="1">1 stream</option>
+                <option value="2">2 streams</option>
+                <option value="4" selected>4 streams (recommended)</option>
+                <option value="8">8 streams</option>
+              </select>
+            </div>
+
+            <div class="form-row">
+              <label>UDP Target Bandwidth (optional)</label>
+              <input type="text" name="target_bandwidth" placeholder="Auto (90% of link)" />
+            </div>
+
+            <!-- Output Options -->
+            <div class="form-section-title">Output</div>
+
+            <div class="form-row">
+              <label>JSON Output</label>
+              <select name="json_output">
+                <option value="true" selected>Yes (recommended for analysis)</option>
+                <option value="false">No (human-readable)</option>
+              </select>
+            </div>
+
+            <div class="form-row">
+              <label>Output Format</label>
+              <select name="output_format">
+                <option value="cli" selected>Commands (copy-paste)</option>
+                <option value="script">Bash Script</option>
+              </select>
+            </div>
+
+            <button type="submit" class="btn-primary">Generate iPerf3 Commands</button>
+          </form>
+
+          <div class="output-card">
+            <div class="output-header">
+              <span>Generated iPerf3 Commands</span>
+              <div class="output-actions">
+                <button class="btn-secondary" data-copy-target="iperf-output">Copy</button>
+                <button class="btn-secondary" data-download-target="iperf-output" data-filename="iperf3_commands.txt">Download</button>
+              </div>
+            </div>
+            <textarea id="iperf-output" class="output-text" readonly></textarea>
           </div>
         </div>
       </section>

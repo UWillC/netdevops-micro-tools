@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.routers import snmpv3, ntp, golden_config, aaa, cve, profiles
+from api.routers import snmpv3, ntp, golden_config, aaa, cve, profiles, iperf
 from models.meta import MetaInfo
 import datetime
 
@@ -36,6 +36,7 @@ app.include_router(golden_config.router, prefix="/generate", tags=["Golden Confi
 app.include_router(aaa.router, prefix="/generate", tags=["AAA / TACACS+"])
 app.include_router(cve.router, prefix="/analyze", tags=["CVE Analyzer"])
 app.include_router(profiles.router, tags=["Profiles"])
+app.include_router(iperf.router, prefix="/generate", tags=["iPerf3"])
 
 
 @app.get("/")
