@@ -1766,6 +1766,8 @@ initHintsPanel("snmpv3-hints-panel", "snmpv3-hints-toggle");
 initHintsPanel("ntp-hints-panel", "ntp-hints-toggle");
 initHintsPanel("aaa-hints-panel", "aaa-hints-toggle");
 initHintsPanel("golden-hints-panel", "golden-hints-toggle");
+initHintsPanel("iperf-hints-panel", "iperf-hints-toggle");
+initHintsPanel("subnet-hints-panel", "subnet-hints-toggle");
 
 // Click-to-copy for hints code blocks
 document.querySelectorAll(".hints-code").forEach((codeEl) => {
@@ -2168,6 +2170,213 @@ if (snmpMultiForm && snmpMultiOutput) {
       }
     } catch (err) {
       snmpMultiOutput.value = `Error: ${err.message}`;
+    }
+  });
+}
+
+// -----------------------------
+// Subnet Calculator
+// -----------------------------
+const subnetForm = document.getElementById("subnet-form");
+const subnetOutput = document.getElementById("subnet-output");
+const subnetAddress = document.getElementById("subnet-address");
+const subnetNetmask = document.getElementById("subnet-netmask");
+const subnetSplitSelect = document.getElementById("subnet-split-select");
+const subnetAdvancedToggle = document.getElementById("subnet-advanced-toggle");
+const subnetAdvancedSection = document.getElementById("subnet-advanced-section");
+const subnetSupernetModal = document.getElementById("subnet-supernet-modal");
+const subnetSupernetInput = document.getElementById("subnet-supernet-input");
+
+// Toggle advanced section
+if (subnetAdvancedToggle && subnetAdvancedSection) {
+  subnetAdvancedToggle.addEventListener("click", () => {
+    const isHidden = subnetAdvancedSection.style.display === "none";
+    subnetAdvancedSection.style.display = isHidden ? "block" : "none";
+    subnetAdvancedToggle.textContent = isHidden ? "Advanced Options ▲" : "Advanced Options ▼";
+  });
+}
+
+// Format subnet info results
+function formatSubnetInfo(data, splitData = null) {
+  const info = data.subnet_info;
+  let result = `
+IP Subnet Calculator
+====================
+
+Input: ${data.input}
+
+Network Information
+-------------------
+Network Address:    ${info.network}
+Broadcast Address:  ${info.broadcast}
+CIDR Notation:      ${info.cidr}
+Netmask:            ${info.netmask}
+Wildcard Mask:      ${info.wildcard}
+
+Host Range
+----------
+First Usable Host:  ${info.first_host}
+Last Usable Host:   ${info.last_host}
+Total Addresses:    ${info.total_addresses.toLocaleString()}
+Usable Hosts:       ${info.usable_hosts.toLocaleString()}
+
+Additional Info
+---------------
+Network Class:      ${info.network_class}
+Private Network:    ${info.is_private ? "Yes" : "No"}
+
+Binary Netmask
+--------------
+${info.netmask_binary}
+`;
+
+  // Add split results if available
+  if (splitData) {
+    result += `
+
+Subnet Split (/${splitData.new_prefix})
+${"=".repeat(20)}
+Total Subnets:      ${splitData.total_subnets}
+Hosts per Subnet:   ${splitData.hosts_per_subnet}
+
+`;
+    splitData.subnets.forEach((s) => {
+      result += `#${s.index.toString().padStart(2, "0")} | ${s.cidr.padEnd(18)} | ${s.first_host} - ${s.last_host}\n`;
+    });
+
+    if (splitData.truncated) {
+      result += `\n... (showing first 64 of ${splitData.total_subnets} subnets)`;
+    }
+  }
+
+  return result.trim();
+}
+
+// Format supernet results
+function formatSupernet(data) {
+  let result = `
+Supernet / Aggregation
+======================
+
+Input Networks: ${data.input_count}
+`;
+
+  data.input_networks.forEach((n) => {
+    result += `  - ${n}\n`;
+  });
+
+  result += `
+Result: ${data.result_count} network(s)
+`;
+
+  data.result_networks.forEach((n) => {
+    result += `  → ${n.cidr} (${n.usable_hosts.toLocaleString()} usable hosts)\n`;
+  });
+
+  result += `
+${data.aggregation_possible ? "✓ Networks were successfully aggregated" : "✗ Networks could not be aggregated (not contiguous)"}
+`;
+
+  return result.trim();
+}
+
+// Main form submit
+if (subnetForm && subnetOutput) {
+  subnetForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    let address = subnetAddress ? subnetAddress.value.trim() : "";
+    let netmask = subnetNetmask ? subnetNetmask.value.trim() : "/24";
+
+    if (!address) {
+      subnetOutput.value = "Error: Please enter an IP address";
+      return;
+    }
+
+    // Normalize netmask
+    if (netmask && !netmask.startsWith("/") && !netmask.includes(".")) {
+      netmask = "/" + netmask;
+    }
+
+    // Combine address and netmask
+    let ipCidr = address;
+    if (!address.includes("/")) {
+      if (netmask.startsWith("/")) {
+        ipCidr = address + netmask;
+      } else {
+        // Convert dotted decimal to CIDR - let backend handle it
+        try {
+          const convertData = await postJSON("/tools/subnet/convert", { value: netmask });
+          ipCidr = address + "/" + convertData.prefix;
+        } catch (err) {
+          subnetOutput.value = `Error: Invalid netmask "${netmask}"`;
+          return;
+        }
+      }
+    }
+
+    subnetOutput.value = "Calculating...";
+
+    try {
+      // Get main subnet info
+      const data = await postJSON("/tools/subnet/info", { ip_cidr: ipCidr });
+
+      // Check if split is requested
+      let splitData = null;
+      if (subnetSplitSelect && subnetSplitSelect.value) {
+        const newPrefix = parseInt(subnetSplitSelect.value, 10);
+        if (newPrefix > data.subnet_info.prefix_length) {
+          splitData = await postJSON("/tools/subnet/split", { ip_cidr: ipCidr, new_prefix: newPrefix });
+        }
+      }
+
+      subnetOutput.value = formatSubnetInfo(data, splitData);
+    } catch (err) {
+      subnetOutput.value = `Error: ${err.message}`;
+    }
+  });
+}
+
+// Supernet tool toggle
+const subnetSupernetBtn = document.getElementById("subnet-supernet-btn");
+const subnetSupernetCloseBtn = document.getElementById("subnet-supernet-close-btn");
+const subnetSupernetCalcBtn = document.getElementById("subnet-supernet-calc-btn");
+
+if (subnetSupernetBtn && subnetSupernetModal) {
+  subnetSupernetBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    subnetSupernetModal.style.display = "block";
+  });
+}
+
+if (subnetSupernetCloseBtn && subnetSupernetModal) {
+  subnetSupernetCloseBtn.addEventListener("click", () => {
+    subnetSupernetModal.style.display = "none";
+  });
+}
+
+if (subnetSupernetCalcBtn && subnetSupernetInput && subnetOutput) {
+  subnetSupernetCalcBtn.addEventListener("click", async () => {
+    const input = subnetSupernetInput.value.trim();
+    if (!input) {
+      subnetOutput.value = "Error: Please enter at least 2 networks (one per line)";
+      return;
+    }
+
+    const networks = input.split("\n").map((n) => n.trim()).filter((n) => n.length > 0);
+
+    if (networks.length < 2) {
+      subnetOutput.value = "Error: Please enter at least 2 networks for aggregation";
+      return;
+    }
+
+    subnetOutput.value = "Calculating supernet...";
+
+    try {
+      const data = await postJSON("/tools/subnet/supernet", { networks: networks });
+      subnetOutput.value = formatSupernet(data);
+    } catch (err) {
+      subnetOutput.value = `Error: ${err.message}`;
     }
   });
 }

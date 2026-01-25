@@ -973,10 +973,15 @@ textarea:focus {
 /* ----------------------------- */
 .generator-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+  grid-template-columns: 1fr 1.3fr;
   gap: 12px;
   margin-top: 12px;
   align-items: stretch;
+}
+
+/* Prevent grid blowout from long content */
+.generator-layout > * {
+  min-width: 0;
 }
 
 /* Output card fills height of form */

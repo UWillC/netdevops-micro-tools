@@ -28,6 +28,7 @@
         <button class="tab-button" data-tab="golden">Golden Config</button>
         <button class="tab-button" data-tab="cve">CVE Analyzer</button>
         <button class="tab-button" data-tab="iperf">iPerf3</button>
+        <button class="tab-button" data-tab="subnet">Subnet Calc</button>
         <button class="tab-button" data-tab="profiles">Profiles</button>
       </nav>
     </aside>
@@ -1078,8 +1079,57 @@
       <section id="tab-iperf" class="tab-content">
         <h2>iPerf3 Command Generator</h2>
 
+        <!-- Collapsible hints panel -->
+        <div class="hints-panel card" id="iperf-hints-panel">
+          <div class="hints-header" id="iperf-hints-toggle">
+            <div class="hints-title">
+              <span class="hints-icon">💡</span>
+              Quick Reference — iPerf3 Server & Client Commands
+            </div>
+            <span class="hints-arrow">▼</span>
+          </div>
+          <div class="hints-content" id="iperf-hints-content">
+            <div class="hints-grid">
+              <div class="hints-section">
+                <div class="hints-section-title">Server Commands</div>
+                <code class="hints-code">iperf3 -s</code>
+                <code class="hints-code">iperf3 -s -D</code>
+                <code class="hints-code">iperf3 -s -p 5201</code>
+              </div>
+              <div class="hints-section">
+                <div class="hints-section-title">Client Basic</div>
+                <code class="hints-code">iperf3 -c &lt;server_ip&gt;</code>
+                <code class="hints-code">iperf3 -c &lt;ip&gt; -t 30</code>
+                <code class="hints-code">iperf3 -c &lt;ip&gt; -i 1 -t 60</code>
+              </div>
+              <div class="hints-section">
+                <div class="hints-section-title">Parallel Streams</div>
+                <code class="hints-code">iperf3 -c &lt;ip&gt; -P 4</code>
+                <code class="hints-code">iperf3 -c &lt;ip&gt; -P 8 -w 32M</code>
+              </div>
+              <div class="hints-section">
+                <div class="hints-section-title">UDP Testing</div>
+                <code class="hints-code">iperf3 -c &lt;ip&gt; -u</code>
+                <code class="hints-code">iperf3 -c &lt;ip&gt; -u -b 100M</code>
+                <code class="hints-code">iperf3 -c &lt;ip&gt; -u -b 1G</code>
+              </div>
+              <div class="hints-section">
+                <div class="hints-section-title">Reverse (Download)</div>
+                <code class="hints-code">iperf3 -c &lt;ip&gt; -R</code>
+                <code class="hints-code">iperf3 -c &lt;ip&gt; -R -t 30</code>
+              </div>
+              <div class="hints-section">
+                <div class="hints-section-title">Output Options</div>
+                <code class="hints-code">iperf3 -c &lt;ip&gt; -J</code>
+                <code class="hints-code">iperf3 -c &lt;ip&gt; --logfile out.txt</code>
+                <code class="hints-code">iperf3 -c &lt;ip&gt; -f m</code>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="generator-layout">
-          <form id="iperf-form" class="card">
+        <form id="iperf-form" class="card">
             <!-- Test Configuration -->
             <div class="form-section-title">Test Configuration</div>
 
@@ -1188,9 +1238,9 @@
             </div>
 
             <button type="submit" class="btn-primary">Generate iPerf3 Commands</button>
-          </form>
+        </form>
 
-          <div class="output-card">
+        <div class="output-card">
             <div class="output-header">
               <span>Generated iPerf3 Commands</span>
               <div class="output-actions">
@@ -1199,6 +1249,133 @@
               </div>
             </div>
             <textarea id="iperf-output" class="output-text" readonly></textarea>
+        </div>
+        </div>
+      </section>
+
+      <!-- SUBNET CALCULATOR TAB -->
+      <section id="tab-subnet" class="tab-content">
+        <h2>IP Subnet Calculator</h2>
+
+        <!-- Collapsible hints panel -->
+        <div class="hints-panel card" id="subnet-hints-panel">
+          <div class="hints-header" id="subnet-hints-toggle">
+            <div class="hints-title">
+              <span class="hints-icon">💡</span>
+              Quick Reference — CIDR & Subnetting Cheat Sheet
+            </div>
+            <span class="hints-arrow">▼</span>
+          </div>
+          <div class="hints-content" id="subnet-hints-content">
+            <div class="hints-grid">
+              <div class="hints-section">
+                <div class="hints-section-title">Network Classes</div>
+                <code class="hints-code">Class A: /8 (255.0.0.0)</code>
+                <code class="hints-code">Class B: /16 (255.255.0.0)</code>
+                <code class="hints-code">Class C: /24 (255.255.255.0)</code>
+              </div>
+              <div class="hints-section">
+                <div class="hints-section-title">Private Ranges (RFC1918)</div>
+                <code class="hints-code">10.0.0.0/8</code>
+                <code class="hints-code">172.16.0.0/12</code>
+                <code class="hints-code">192.168.0.0/16</code>
+              </div>
+              <div class="hints-section">
+                <div class="hints-section-title">Common Subnets</div>
+                <code class="hints-code">/24 = 254 hosts</code>
+                <code class="hints-code">/25 = 126 hosts</code>
+                <code class="hints-code">/26 = 62 hosts</code>
+                <code class="hints-code">/27 = 30 hosts</code>
+              </div>
+              <div class="hints-section">
+                <div class="hints-section-title">Small Networks</div>
+                <code class="hints-code">/28 = 14 hosts</code>
+                <code class="hints-code">/29 = 6 hosts</code>
+                <code class="hints-code">/30 = 2 hosts (P2P)</code>
+                <code class="hints-code">/31 = 2 hosts (RFC3021)</code>
+              </div>
+              <div class="hints-section">
+                <div class="hints-section-title">Wildcard Masks</div>
+                <code class="hints-code">/24 → 0.0.0.255</code>
+                <code class="hints-code">/16 → 0.0.255.255</code>
+                <code class="hints-code">/8 → 0.255.255.255</code>
+              </div>
+              <div class="hints-section">
+                <div class="hints-section-title">Special Addresses</div>
+                <code class="hints-code">127.0.0.1 (loopback)</code>
+                <code class="hints-code">0.0.0.0 (default route)</code>
+                <code class="hints-code">255.255.255.255 (broadcast)</code>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="generator-layout">
+        <form id="subnet-form" class="card">
+            <!-- Main Calculator -->
+            <div class="form-section-title">Calculate Subnet</div>
+
+            <div class="form-row">
+              <label>IP Address</label>
+              <input type="text" id="subnet-address" name="address" placeholder="192.168.1.0 or 10.0.0.50" />
+            </div>
+
+            <div class="form-row">
+              <label>Netmask (CIDR or dotted)</label>
+              <input type="text" id="subnet-netmask" name="netmask" placeholder="/24 or 255.255.255.0" value="/24" />
+            </div>
+
+            <button type="submit" class="btn-primary">Calculate</button>
+
+            <!-- Advanced Options (collapsible) -->
+            <div class="form-section-title" style="margin-top: 1.5rem; cursor: pointer;" id="subnet-advanced-toggle">
+              Advanced Options ▼
+            </div>
+
+            <div id="subnet-advanced-section" style="display: none;">
+              <div class="form-row">
+                <label>Split into smaller subnets</label>
+                <select id="subnet-split-select" name="split_prefix">
+                  <option value="">— Don't split —</option>
+                  <option value="25">/25 (2 subnets)</option>
+                  <option value="26">/26 (4 subnets)</option>
+                  <option value="27">/27 (8 subnets)</option>
+                  <option value="28">/28 (16 subnets)</option>
+                  <option value="29">/29 (32 subnets)</option>
+                  <option value="30">/30 (64 subnets)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Quick Tools -->
+            <div class="form-section-title" style="margin-top: 1.5rem;">Quick Tools</div>
+
+            <div class="form-row">
+              <button type="button" id="subnet-supernet-btn" class="btn-secondary">Supernet / Aggregate Tool</button>
+            </div>
+        </form>
+
+        <div class="output-card">
+            <div class="output-header">
+              <span>Results</span>
+              <div class="output-actions">
+                <button class="btn-secondary" data-copy-target="subnet-output">Copy</button>
+              </div>
+            </div>
+            <textarea id="subnet-output" class="output-text" readonly placeholder="Enter an IP address and netmask, then click Calculate"></textarea>
+        </div>
+        </div>
+
+        <!-- Supernet Modal/Section (hidden by default) -->
+        <div id="subnet-supernet-modal" class="card" style="display: none; margin-top: 1rem;">
+          <div class="form-section-title">Supernet / Aggregate Networks</div>
+          <div class="form-row">
+            <label>Networks (one per line)</label>
+            <textarea id="subnet-supernet-input" rows="5" placeholder="192.168.0.0/24&#10;192.168.1.0/24&#10;192.168.2.0/24&#10;192.168.3.0/24"></textarea>
+          </div>
+          <div class="form-row" style="gap: 0.5rem;">
+            <button type="button" id="subnet-supernet-calc-btn" class="btn-primary">Calculate Supernet</button>
+            <button type="button" id="subnet-supernet-close-btn" class="btn-secondary">Close</button>
           </div>
         </div>
       </section>
