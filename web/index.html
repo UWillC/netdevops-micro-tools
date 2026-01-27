@@ -29,6 +29,7 @@
         <button class="tab-button" data-tab="cve">CVE Analyzer</button>
         <button class="tab-button" data-tab="iperf">iPerf3</button>
         <button class="tab-button" data-tab="subnet">Subnet Calc</button>
+        <button class="tab-button" data-tab="mtu">MTU Calc</button>
         <button class="tab-button" data-tab="profiles">Profiles</button>
       </nav>
     </aside>
@@ -1377,6 +1378,114 @@
             <button type="button" id="subnet-supernet-calc-btn" class="btn-primary">Calculate Supernet</button>
             <button type="button" id="subnet-supernet-close-btn" class="btn-secondary">Close</button>
           </div>
+        </div>
+      </section>
+
+      <!-- MTU CALCULATOR TAB -->
+      <section id="tab-mtu" class="tab-content">
+        <h2>MTU Calculator</h2>
+
+        <!-- Collapsible hints panel -->
+        <div class="hints-panel card" id="mtu-hints-panel">
+          <div class="hints-header" id="mtu-hints-toggle">
+            <div class="hints-title">
+              <span class="hints-icon">💡</span>
+              Quick Reference — Tunnel Overhead & MTU Values
+            </div>
+            <span class="hints-arrow">▼</span>
+          </div>
+          <div class="hints-content" id="mtu-hints-content">
+            <div class="hints-grid">
+              <div class="hints-section">
+                <div class="hints-section-title">Common Overhead</div>
+                <code class="hints-code">GRE: 24 bytes</code>
+                <code class="hints-code">IPSec (tunnel): 73 bytes</code>
+                <code class="hints-code">VXLAN: 50 bytes</code>
+                <code class="hints-code">GRE over IPSec: 97 bytes</code>
+              </div>
+              <div class="hints-section">
+                <div class="hints-section-title">Effective MTU (1500)</div>
+                <code class="hints-code">GRE: 1476</code>
+                <code class="hints-code">IPSec: 1427</code>
+                <code class="hints-code">VXLAN: 1450</code>
+                <code class="hints-code">GRE/IPSec: 1403</code>
+              </div>
+              <div class="hints-section">
+                <div class="hints-section-title">TCP MSS Formula</div>
+                <code class="hints-code">MSS = MTU - 40</code>
+                <code class="hints-code">40 = IP(20) + TCP(20)</code>
+                <code class="hints-code">ip tcp adjust-mss [value]</code>
+              </div>
+              <div class="hints-section">
+                <div class="hints-section-title">Cisco Commands</div>
+                <code class="hints-code">ip mtu [value]</code>
+                <code class="hints-code">ip tcp adjust-mss [value]</code>
+                <code class="hints-code">tunnel path-mtu-discovery</code>
+              </div>
+              <div class="hints-section">
+                <div class="hints-section-title">Minimum MTU</div>
+                <code class="hints-code">IPv4: 576 bytes</code>
+                <code class="hints-code">IPv6: 1280 bytes</code>
+                <code class="hints-code">Jumbo: 9000 bytes</code>
+              </div>
+              <div class="hints-section">
+                <div class="hints-section-title">Troubleshooting</div>
+                <code class="hints-code">ping -f -s [size] [ip]</code>
+                <code class="hints-code">show interface tunnel X</code>
+                <code class="hints-code">debug ip icmp</code>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="generator-layout">
+        <form id="mtu-form" class="card">
+            <!-- MTU Settings -->
+            <div class="form-section-title">MTU Settings</div>
+
+            <div class="form-row">
+              <label>Interface MTU (bytes)</label>
+              <input type="text" id="mtu-interface" value="1500" placeholder="1500">
+            </div>
+
+            <div class="form-row">
+              <label>Tunnel Type</label>
+              <select id="mtu-tunnel-type">
+                <option value="none">No Tunnel (baseline)</option>
+                <option value="gre" selected>GRE</option>
+                <option value="ipsec_tunnel">IPSec (Tunnel Mode)</option>
+                <option value="ipsec_transport">IPSec (Transport Mode)</option>
+                <option value="vxlan">VXLAN</option>
+                <option value="gre_over_ipsec">GRE over IPSec</option>
+                <option value="mpls">MPLS</option>
+                <option value="lisp">LISP</option>
+              </select>
+            </div>
+
+            <div class="form-row" id="mtu-mpls-row" style="display: none;">
+              <label>MPLS Labels</label>
+              <input type="text" id="mtu-mpls-labels" value="1" placeholder="1-8">
+            </div>
+
+            <div class="form-row">
+              <label class="checkbox-label">
+                <input type="checkbox" id="mtu-include-mss" checked>
+                Include TCP MSS recommendation
+              </label>
+            </div>
+
+            <button type="submit" class="btn-primary">Calculate MTU</button>
+        </form>
+
+        <div class="output-card">
+            <div class="output-header">
+              <span>Results</span>
+              <div class="output-actions">
+                <button class="btn-secondary" data-copy-target="mtu-output">Copy</button>
+              </div>
+            </div>
+            <textarea id="mtu-output" class="output-text" readonly placeholder="Select tunnel type and click Calculate"></textarea>
+        </div>
         </div>
       </section>
 

@@ -2380,3 +2380,91 @@ if (subnetSupernetCalcBtn && subnetSupernetInput && subnetOutput) {
     }
   });
 }
+
+// =============================================
+// MTU CALCULATOR
+// =============================================
+
+const mtuForm = document.getElementById("mtu-form");
+const mtuOutput = document.getElementById("mtu-output");
+const mtuInterfaceMtu = document.getElementById("mtu-interface");
+const mtuTunnelType = document.getElementById("mtu-tunnel-type");
+const mtuMplsLabels = document.getElementById("mtu-mpls-labels");
+const mtuMplsRow = document.getElementById("mtu-mpls-row");
+const mtuIncludeMss = document.getElementById("mtu-include-mss");
+
+// Show/hide MPLS labels field based on tunnel type
+if (mtuTunnelType && mtuMplsRow) {
+  mtuTunnelType.addEventListener("change", () => {
+    mtuMplsRow.style.display = mtuTunnelType.value === "mpls" ? "flex" : "none";
+  });
+}
+
+// Format MTU result
+function formatMtuResult(data) {
+  let result = `MTU Calculation Results
+=======================
+
+Interface MTU:    ${data.interface_mtu} bytes
+Tunnel Type:      ${data.tunnel_type}
+Overhead:         ${data.overhead_bytes} bytes
+  └─ ${data.overhead_breakdown}
+
+Effective MTU:    ${data.effective_mtu} bytes`;
+
+  if (data.tcp_mss) {
+    result += `
+TCP MSS:          ${data.tcp_mss} bytes`;
+  }
+
+  if (data.warnings && data.warnings.length > 0) {
+    result += `
+
+⚠️  Warnings
+`;
+    data.warnings.forEach((w) => {
+      result += `  • ${w}\n`;
+    });
+  }
+
+  if (data.recommendations && data.recommendations.length > 0) {
+    result += `
+📋 Recommendations
+`;
+    data.recommendations.forEach((r) => {
+      result += `  • ${r}\n`;
+    });
+  }
+
+  return result.trim();
+}
+
+// MTU form submit handler
+if (mtuForm && mtuOutput) {
+  mtuForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const interfaceMtu = parseInt(mtuInterfaceMtu?.value || "1500", 10);
+    const tunnelType = mtuTunnelType?.value || "gre";
+    const mplsLabels = parseInt(mtuMplsLabels?.value || "1", 10);
+    const includeMss = mtuIncludeMss?.checked ?? true;
+
+    mtuOutput.value = "Calculating...";
+
+    try {
+      const data = await postJSON("/tools/mtu/calculate", {
+        interface_mtu: interfaceMtu,
+        tunnel_type: tunnelType,
+        mpls_labels: mplsLabels,
+        include_tcp_mss: includeMss,
+      });
+
+      mtuOutput.value = formatMtuResult(data);
+    } catch (err) {
+      mtuOutput.value = `Error: ${err.message}`;
+    }
+  });
+}
+
+// Initialize MTU hints panel
+initHintsPanel("mtu-hints-panel", "mtu-hints-toggle");

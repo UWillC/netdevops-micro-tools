@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.routers import snmpv3, ntp, golden_config, aaa, cve, profiles, iperf, subnet
+from api.routers import snmpv3, ntp, golden_config, aaa, cve, profiles, iperf, subnet, mtu
 from models.meta import MetaInfo
 import datetime
 
@@ -38,6 +38,7 @@ app.include_router(cve.router, prefix="/analyze", tags=["CVE Analyzer"])
 app.include_router(profiles.router, tags=["Profiles"])
 app.include_router(iperf.router, prefix="/generate", tags=["iPerf3"])
 app.include_router(subnet.router, prefix="/tools", tags=["IP Subnet Calculator"])
+app.include_router(mtu.router, prefix="/tools", tags=["MTU Calculator"])
 
 
 @app.get("/")
@@ -56,5 +57,5 @@ def meta_version():
     return MetaInfo(
         version="0.4.0",
         build_time=datetime.datetime.utcnow().isoformat() + "Z",
-        feature_flags=["cve_engine_v3", "nvd_enrichment", "nvd_cache", "web_ui_v2", "profiles_v2", "profiles_cve", "security_score", "subnet_calc"]
+        feature_flags=["cve_engine_v3", "nvd_enrichment", "nvd_cache", "web_ui_v2", "profiles_v2", "profiles_cve", "security_score", "subnet_calc", "mtu_calc"]
     )
