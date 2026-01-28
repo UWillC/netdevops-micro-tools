@@ -1806,6 +1806,55 @@ document.querySelectorAll(".hints-code").forEach((codeEl) => {
 });
 
 // -----------------------------
+// Command Tooltips (hover)
+// -----------------------------
+(function() {
+  // Create tooltip element
+  const tooltip = document.createElement("div");
+  tooltip.className = "command-tooltip";
+  document.body.appendChild(tooltip);
+
+  // Add hover listeners to hints-code elements with data-tooltip
+  document.querySelectorAll(".hints-code[data-tooltip]").forEach((codeEl) => {
+    codeEl.addEventListener("mouseenter", (e) => {
+      const text = codeEl.dataset.tooltip;
+      if (!text) return;
+
+      tooltip.textContent = text;
+
+      // Get element position
+      const rect = codeEl.getBoundingClientRect();
+      const tooltipHeight = 120; // Approximate height
+
+      // Position above or below based on available space
+      let top;
+      if (rect.top > tooltipHeight + 20) {
+        // Show above
+        top = rect.top - tooltipHeight - 10;
+      } else {
+        // Show below
+        top = rect.bottom + 10;
+      }
+
+      // Keep within viewport horizontally
+      let left = rect.left;
+      const tooltipWidth = 320;
+      if (left + tooltipWidth > window.innerWidth - 20) {
+        left = window.innerWidth - tooltipWidth - 20;
+      }
+
+      tooltip.style.top = top + "px";
+      tooltip.style.left = left + "px";
+      tooltip.classList.add("visible");
+    });
+
+    codeEl.addEventListener("mouseleave", () => {
+      tooltip.classList.remove("visible");
+    });
+  });
+})();
+
+// -----------------------------
 // Golden Config: Go to generator buttons
 // -----------------------------
 document.querySelectorAll(".golden-goto-btn").forEach((btn) => {

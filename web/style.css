@@ -1224,6 +1224,33 @@ textarea:focus {
 }
 
 /* ----------------------------- */
+/* Hints Code Tooltips           */
+/* ----------------------------- */
+.command-tooltip {
+  position: fixed;
+  min-width: 280px;
+  max-width: 400px;
+  padding: 10px 12px;
+  background: var(--card);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  font-family: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: var(--text);
+  white-space: pre-wrap;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.command-tooltip.visible {
+  opacity: 1;
+}
+
+/* ----------------------------- */
 /* Golden Config Section Links   */
 /* ----------------------------- */
 .golden-config-section {

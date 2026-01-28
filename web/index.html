@@ -68,37 +68,97 @@
             <div class="hints-grid">
               <div class="hints-section">
                 <div class="hints-section-title">Check SNMP Status</div>
-                <code class="hints-code">show snmp</code>
-                <code class="hints-code">show snmp engineID</code>
-                <code class="hints-code">show snmp group</code>
-                <code class="hints-code">show snmp user</code>
+                <code class="hints-code" data-tooltip="Shows SNMP agent status and packet statistics
+Example:
+Chassis: ABCD1234
+0 SNMP packets input, 0 errors
+0 SNMP packets output">show snmp</code>
+                <code class="hints-code" data-tooltip="Displays the SNMP engine ID (unique device identifier)
+Example:
+Local SNMP engineID: 80000009030000C1B2A3F4D5
+Remote Engine ID: None">show snmp engineID</code>
+                <code class="hints-code" data-tooltip="Shows configured SNMPv3 groups and security levels
+Example:
+groupname: ADMIN   security model: v3 priv
+readview: ALL      writeview: ALL
+notifyview: ALL">show snmp group</code>
+                <code class="hints-code" data-tooltip="Shows SNMPv3 users with auth/priv protocols
+Example:
+User name: monitoring
+Engine ID: 80000009030000C1B2A3
+Auth: SHA256, Priv: AES256">show snmp user</code>
               </div>
               <div class="hints-section">
                 <div class="hints-section-title">Check SNMP Views</div>
-                <code class="hints-code">show snmp view</code>
-                <code class="hints-code">show snmp mib</code>
+                <code class="hints-code" data-tooltip="Shows SNMP MIB views (access restrictions)
+Example:
+view ALL     included  1 (iso)
+view RESTRICTED  included  1.3.6.1.2
+view RESTRICTED  excluded  1.3.6.1.2.1.1">show snmp view</code>
+                <code class="hints-code" data-tooltip="Shows loaded SNMP MIB modules
+Example:
+SNMP-FRAMEWORK-MIB
+SNMP-TARGET-MIB
+IF-MIB">show snmp mib</code>
               </div>
               <div class="hints-section">
                 <div class="hints-section-title">Check Running Config</div>
-                <code class="hints-code">show running-config | section snmp</code>
-                <code class="hints-code">show running-config | include snmp</code>
+                <code class="hints-code" data-tooltip="Shows full SNMP configuration section
+Example:
+snmp-server group ADMIN v3 priv
+snmp-server user monitor ADMIN v3 auth...
+snmp-server host 10.0.0.1 version 3 priv">show running-config | section snmp</code>
+                <code class="hints-code" data-tooltip="Shows lines containing 'snmp' keyword
+Example:
+snmp-server community public RO
+snmp-server location DataCenter-1
+snmp-server contact admin@example.com">show running-config | include snmp</code>
               </div>
               <div class="hints-section">
                 <div class="hints-section-title">Check SNMP Host</div>
-                <code class="hints-code">show snmp host</code>
-                <code class="hints-code">show snmp sessions</code>
+                <code class="hints-code" data-tooltip="Shows configured SNMP notification hosts
+Example:
+Host: 10.0.0.1, Port: 162, Ver: 3
+  User: trapuser, Security: priv
+  Traps enabled: snmp linkup linkdown">show snmp host</code>
+                <code class="hints-code" data-tooltip="Shows active SNMP sessions (queries in progress)
+Example:
+No active SNMP sessions
+(or shows list of active polling hosts)">show snmp sessions</code>
               </div>
               <div class="hints-section">
                 <div class="hints-section-title">Check Statistics</div>
-                <code class="hints-code">show snmp statistics</code>
-                <code class="hints-code">show snmp contact</code>
-                <code class="hints-code">show snmp location</code>
+                <code class="hints-code" data-tooltip="Shows SNMP packet counters and errors
+Example:
+12345 SNMP packets input, 0 errors
+  GetRequest: 10234
+  SetRequest: 45
+12300 SNMP packets output">show snmp statistics</code>
+                <code class="hints-code" data-tooltip="Shows configured SNMP contact person
+Example:
+Contact: admin@example.com
+(empty if not configured)">show snmp contact</code>
+                <code class="hints-code" data-tooltip="Shows configured SNMP location string
+Example:
+Location: DataCenter-1, Rack A5
+(empty if not configured)">show snmp location</code>
               </div>
               <div class="hints-section">
                 <div class="hints-section-title">Troubleshooting</div>
-                <code class="hints-code">debug snmp packets</code>
-                <code class="hints-code">debug snmp requests</code>
-                <code class="hints-code">undebug all</code>
+                <code class="hints-code" data-tooltip="⚠️ DEBUG: Shows real-time SNMP packets
+Use with caution on production devices!
+Example:
+SNMP: Packet received via UDP from 10.0.0.1
+SNMP: Get request, reqid 12345">debug snmp packets</code>
+                <code class="hints-code" data-tooltip="⚠️ DEBUG: Shows SNMP request processing
+Use with caution on production devices!
+Example:
+SNMP: GetRequest for 1.3.6.1.2.1.1.1.0
+SNMP: Response sent to 10.0.0.1">debug snmp requests</code>
+                <code class="hints-code" data-tooltip="Disables ALL active debugging
+Always run after troubleshooting!
+Example:
+All possible debugging has been turned off">undebug all</code>
               </div>
             </div>
           </div>
@@ -417,38 +477,101 @@
             <div class="hints-grid">
               <div class="hints-section">
                 <div class="hints-section-title">Check NTP Status</div>
-                <code class="hints-code">show ntp status</code>
-                <code class="hints-code">show ntp associations</code>
-                <code class="hints-code">show ntp associations detail</code>
+                <code class="hints-code" data-tooltip="Shows NTP synchronization status
+Example:
+Clock is synchronized, stratum 3
+reference is 10.0.0.1
+clock offset is 0.5 msec">show ntp status</code>
+                <code class="hints-code" data-tooltip="Shows NTP server associations and status
+Example:
+*~10.0.0.1    .GPS.    1  64  377  0.5
++~10.0.0.2    .GPS.    1  64  377  1.2
+* = synced, + = candidate">show ntp associations</code>
+                <code class="hints-code" data-tooltip="Shows detailed NTP peer information
+Example:
+10.0.0.1 configured, authenticated
+our mode: client, peer mode: server
+stratum: 2, precision: -18
+reach: 377, delay: 1.2 ms">show ntp associations detail</code>
               </div>
               <div class="hints-section">
                 <div class="hints-section-title">Check Clock</div>
-                <code class="hints-code">show clock</code>
-                <code class="hints-code">show clock detail</code>
-                <code class="hints-code">show calendar</code>
+                <code class="hints-code" data-tooltip="Shows current system time
+Example:
+*18:30:45.123 EST Tue Jan 27 2026
+* = time is authoritative (NTP synced)">show clock</code>
+                <code class="hints-code" data-tooltip="Shows clock with source information
+Example:
+*18:30:45.123 EST Tue Jan 27 2026
+Time source is NTP
+Summer time starts 03:00:00 EST Sun Mar">show clock detail</code>
+                <code class="hints-code" data-tooltip="Shows hardware calendar (battery-backed)
+Example:
+18:30:45 Jan 27 2026
+(used during boot before NTP sync)">show calendar</code>
               </div>
               <div class="hints-section">
                 <div class="hints-section-title">Check Running Config</div>
-                <code class="hints-code">show running-config | section ntp</code>
-                <code class="hints-code">show running-config | include ntp</code>
-                <code class="hints-code">show running-config | section clock</code>
+                <code class="hints-code" data-tooltip="Shows full NTP configuration section
+Example:
+ntp authentication-key 1 md5 [hash]
+ntp trusted-key 1
+ntp server 10.0.0.1 key 1 prefer">show running-config | section ntp</code>
+                <code class="hints-code" data-tooltip="Shows lines containing 'ntp' keyword
+Example:
+ntp server 10.0.0.1
+ntp server 10.0.0.2
+ntp source Loopback0">show running-config | include ntp</code>
+                <code class="hints-code" data-tooltip="Shows clock/timezone configuration
+Example:
+clock timezone EST -5 0
+clock summer-time EDT recurring">show running-config | section clock</code>
               </div>
               <div class="hints-section">
                 <div class="hints-section-title">Check Authentication</div>
-                <code class="hints-code">show ntp authentication-keys</code>
-                <code class="hints-code">show ntp trusted-keys</code>
-                <code class="hints-code">show ntp authentication-status</code>
+                <code class="hints-code" data-tooltip="Shows configured NTP authentication keys
+Example:
+Authentication key 1
+  Type: MD5, Length: 8
+  (key value hidden for security)">show ntp authentication-keys</code>
+                <code class="hints-code" data-tooltip="Shows which keys are trusted for NTP
+Example:
+Trusted Keys: 1, 2
+(only these keys can authenticate NTP)">show ntp trusted-keys</code>
+                <code class="hints-code" data-tooltip="Shows if NTP authentication is enabled
+Example:
+NTP authentication is enabled
+(all NTP peers must use valid keys)">show ntp authentication-status</code>
               </div>
               <div class="hints-section">
                 <div class="hints-section-title">Check Access Control</div>
-                <code class="hints-code">show access-lists</code>
-                <code class="hints-code">show ntp access-groups</code>
+                <code class="hints-code" data-tooltip="Shows all configured access lists
+Example:
+Standard IP access list NTP-SERVERS
+  10 permit 10.0.0.1
+  20 permit 10.0.0.2">show access-lists</code>
+                <code class="hints-code" data-tooltip="Shows NTP access control groups
+Example:
+peer access-group: NTP-PEERS
+serve access-group: NTP-SERVERS
+(controls who can sync with this device)">show ntp access-groups</code>
               </div>
               <div class="hints-section">
                 <div class="hints-section-title">Troubleshooting</div>
-                <code class="hints-code">debug ntp events</code>
-                <code class="hints-code">debug ntp packets</code>
-                <code class="hints-code">undebug all</code>
+                <code class="hints-code" data-tooltip="⚠️ DEBUG: Shows NTP state changes
+Use with caution on production devices!
+Example:
+NTP: peer 10.0.0.1 reachable
+NTP: clock synchronized to 10.0.0.1">debug ntp events</code>
+                <code class="hints-code" data-tooltip="⚠️ DEBUG: Shows NTP packet details
+Use with caution on production devices!
+Example:
+NTP: rcv packet from 10.0.0.1
+NTP: xmt packet to 10.0.0.1">debug ntp packets</code>
+                <code class="hints-code" data-tooltip="Disables ALL active debugging
+Always run after troubleshooting!
+Example:
+All possible debugging has been turned off">undebug all</code>
               </div>
             </div>
           </div>
@@ -642,40 +765,116 @@
             <div class="hints-grid">
               <div class="hints-section">
                 <div class="hints-section-title">Check AAA Status</div>
-                <code class="hints-code">show aaa servers</code>
-                <code class="hints-code">show aaa sessions</code>
-                <code class="hints-code">show aaa user all</code>
+                <code class="hints-code" data-tooltip="Shows AAA server status and statistics
+Example:
+TACACS+ Server: 10.0.0.1/49
+  Status: ALIVE
+  Requests: 1234, Timeouts: 0">show aaa servers</code>
+                <code class="hints-code" data-tooltip="Shows active AAA sessions
+Example:
+Total sessions: 3
+Session Id: 1, User: admin, Service: shell
+  Started: 18:00:00, Authen: PASS">show aaa sessions</code>
+                <code class="hints-code" data-tooltip="Shows all AAA user information
+Example:
+Unique ID: 5, User: admin
+  Session: shell, Service: login
+  Authen-method: TACACS+, Priv: 15">show aaa user all</code>
               </div>
               <div class="hints-section">
                 <div class="hints-section-title">Check TACACS+</div>
-                <code class="hints-code">show tacacs</code>
-                <code class="hints-code">show tacacs private</code>
-                <code class="hints-code">test aaa group tacacs+ [user] [pass] legacy</code>
+                <code class="hints-code" data-tooltip="Shows TACACS+ server configuration
+Example:
+Tacacs+ Server: 10.0.0.1/49
+  Socket opens: 123
+  Total packets sent: 456
+  Errors: 0">show tacacs</code>
+                <code class="hints-code" data-tooltip="Shows TACACS+ detailed/private info
+Example:
+Server: 10.0.0.1, Port: 49
+  Key: <hidden>
+  Timeout: 5 sec, Retries: 2">show tacacs private</code>
+                <code class="hints-code" data-tooltip="Tests AAA authentication manually
+Replace [user] and [pass] with credentials
+Example:
+User successfully authenticated
+USER ATTRIBUTES: priv-lvl=15">test aaa group tacacs+ [user] [pass] legacy</code>
               </div>
               <div class="hints-section">
                 <div class="hints-section-title">Check Running Config</div>
-                <code class="hints-code">show running-config | section aaa</code>
-                <code class="hints-code">show running-config | section tacacs</code>
-                <code class="hints-code">show running-config | include aaa</code>
+                <code class="hints-code" data-tooltip="Shows full AAA configuration section
+Example:
+aaa new-model
+aaa authentication login default group tacacs+
+aaa authorization exec default group tacacs+">show running-config | section aaa</code>
+                <code class="hints-code" data-tooltip="Shows TACACS+ server configuration
+Example:
+tacacs server ISE-1
+  address ipv4 10.0.0.1
+  key 7 [encrypted-key]
+  timeout 5">show running-config | section tacacs</code>
+                <code class="hints-code" data-tooltip="Shows lines containing 'aaa' keyword
+Example:
+aaa new-model
+aaa authentication login default...
+aaa authorization config-commands">show running-config | include aaa</code>
               </div>
               <div class="hints-section">
                 <div class="hints-section-title">Check Authentication</div>
-                <code class="hints-code">show aaa method-lists authentication</code>
-                <code class="hints-code">show aaa method-lists authorization</code>
-                <code class="hints-code">show aaa method-lists accounting</code>
+                <code class="hints-code" data-tooltip="Shows authentication method lists
+Example:
+authen queue=AAA_ML_AUTHEN_LOGIN
+  name=default, valid
+  methods: group tacacs+ local">show aaa method-lists authentication</code>
+                <code class="hints-code" data-tooltip="Shows authorization method lists
+Example:
+author queue=AAA_ML_AUTHOR_EXEC
+  name=default, valid
+  methods: group tacacs+ local">show aaa method-lists authorization</code>
+                <code class="hints-code" data-tooltip="Shows accounting method lists
+Example:
+acct queue=AAA_ML_ACCT_EXEC
+  name=default, valid
+  methods: group tacacs+">show aaa method-lists accounting</code>
               </div>
               <div class="hints-section">
                 <div class="hints-section-title">Check Local Users</div>
-                <code class="hints-code">show running-config | include username</code>
-                <code class="hints-code">show users</code>
-                <code class="hints-code">show privilege</code>
+                <code class="hints-code" data-tooltip="Shows local user accounts
+Example:
+username admin privilege 15 secret 9 $9$...
+username backup privilege 1 secret 9 $9$...
+(fallback accounts for TACACS+ failure)">show running-config | include username</code>
+                <code class="hints-code" data-tooltip="Shows currently logged-in users
+Example:
+Line    User    Host(s)    Idle
+* 0 con 0  admin   idle   00:00:00
+  2 vty 0  netops  10.1.1.5  00:05:23">show users</code>
+                <code class="hints-code" data-tooltip="Shows current privilege level (1-15)
+Example:
+Current privilege level is 15
+(15 = full admin, 1 = user exec only)">show privilege</code>
               </div>
               <div class="hints-section">
                 <div class="hints-section-title">Troubleshooting</div>
-                <code class="hints-code">debug aaa authentication</code>
-                <code class="hints-code">debug aaa authorization</code>
-                <code class="hints-code">debug tacacs</code>
-                <code class="hints-code">undebug all</code>
+                <code class="hints-code" data-tooltip="⚠️ DEBUG: Shows AAA authentication flow
+Use with caution on production devices!
+Example:
+AAA/AUTHEN: create_user user='admin'
+AAA/AUTHEN: Method=tacacs+ (PASS)">debug aaa authentication</code>
+                <code class="hints-code" data-tooltip="⚠️ DEBUG: Shows AAA authorization flow
+Use with caution on production devices!
+Example:
+AAA/AUTHOR: Start, user='admin'
+AAA/AUTHOR: Processing request, priv=15">debug aaa authorization</code>
+                <code class="hints-code" data-tooltip="⚠️ DEBUG: Shows TACACS+ packet details
+Use with caution on production devices!
+Example:
+TPLUS: Sending Auth packet to 10.0.0.1
+TPLUS: Received Auth response PASS">debug tacacs</code>
+                <code class="hints-code" data-tooltip="Disables ALL active debugging
+Always run after troubleshooting!
+Example:
+All possible debugging has been turned off">undebug all</code>
               </div>
             </div>
           </div>
@@ -861,38 +1060,114 @@
             <div class="hints-grid">
               <div class="hints-section">
                 <div class="hints-section-title">Check Device Info</div>
-                <code class="hints-code">show version</code>
-                <code class="hints-code">show inventory</code>
-                <code class="hints-code">show platform</code>
+                <code class="hints-code" data-tooltip="Shows IOS version, uptime, hardware
+Example:
+Cisco IOS XE 17.09.04a
+Uptime: 45 days, 3 hours
+Model: C9300-48P">show version</code>
+                <code class="hints-code" data-tooltip="Shows hardware inventory (modules, SFPs)
+Example:
+NAME: 'Chassis', DESCR: 'Catalyst 9300'
+PID: C9300-48P, SN: FCW2145L0AB
+SFP modules and their serial numbers">show inventory</code>
+                <code class="hints-code" data-tooltip="Shows platform-specific details
+Example:
+Chassis type: C9300-48P
+Slot 1: C9300-NM-8X installed
+Includes power supply and fan status">show platform</code>
               </div>
               <div class="hints-section">
                 <div class="hints-section-title">Check Security Settings</div>
-                <code class="hints-code">show running-config | section line</code>
-                <code class="hints-code">show running-config | section service</code>
-                <code class="hints-code">show running-config | include password</code>
+                <code class="hints-code" data-tooltip="Shows line configuration (console, vty)
+Example:
+line con 0
+ exec-timeout 10 0
+line vty 0 15
+ transport input ssh">show running-config | section line</code>
+                <code class="hints-code" data-tooltip="Shows service settings
+Example:
+service password-encryption
+service timestamps log datetime
+no service finger
+no service pad">show running-config | section service</code>
+                <code class="hints-code" data-tooltip="Shows password-related config
+Example:
+enable secret 9 $9$xxx
+username admin secret 9 $9$xxx
+⚠️ Don't share this output!">show running-config | include password</code>
               </div>
               <div class="hints-section">
                 <div class="hints-section-title">Check Logging</div>
-                <code class="hints-code">show logging</code>
-                <code class="hints-code">show running-config | section logging</code>
-                <code class="hints-code">show archive log config all</code>
+                <code class="hints-code" data-tooltip="Shows logging buffer and settings
+Example:
+Syslog logging: enabled
+  Buffer: 64000 bytes
+  Trap level: informational (6)
+Recent log messages listed below">show logging</code>
+                <code class="hints-code" data-tooltip="Shows logging configuration
+Example:
+logging buffered 64000 informational
+logging host 10.0.0.1
+logging source-interface Loopback0">show running-config | section logging</code>
+                <code class="hints-code" data-tooltip="Shows configuration change history
+Example:
+idx  time          user
+1    Jan 27 18:00  admin
+Command: interface Gi1/0/1
+Requires: archive log config">show archive log config all</code>
               </div>
               <div class="hints-section">
                 <div class="hints-section-title">Check Interfaces</div>
-                <code class="hints-code">show ip interface brief</code>
-                <code class="hints-code">show interfaces status</code>
-                <code class="hints-code">show running-config | section interface</code>
+                <code class="hints-code" data-tooltip="Quick interface status overview
+Example:
+Interface         IP-Address   Status Protocol
+Gi1/0/1           10.0.0.1     up     up
+Vlan1             unassigned   down   down">show ip interface brief</code>
+                <code class="hints-code" data-tooltip="Shows physical interface status
+Example:
+Port    Name      Status   Vlan  Speed  Type
+Gi1/0/1 Uplink    connected trunk 1000  1000BASE-T
+Gi1/0/2           notconnect 1   auto  10/100/1000">show interfaces status</code>
+                <code class="hints-code" data-tooltip="Shows all interface configurations
+Example:
+interface GigabitEthernet1/0/1
+ description Uplink to Core
+ switchport mode trunk
+ spanning-tree portfast trunk">show running-config | section interface</code>
               </div>
               <div class="hints-section">
                 <div class="hints-section-title">Check Banner</div>
-                <code class="hints-code">show running-config | section banner</code>
-                <code class="hints-code">show running-config | include banner</code>
+                <code class="hints-code" data-tooltip="Shows banner configuration
+Example:
+banner motd ^
+*** AUTHORIZED ACCESS ONLY ***
+^
+banner login ^
+Login required. All access logged.
+^">show running-config | section banner</code>
+                <code class="hints-code" data-tooltip="Shows lines containing 'banner'
+Example:
+banner motd ^C
+banner login ^C
+banner exec ^C
+Quick check if banners configured">show running-config | include banner</code>
               </div>
               <div class="hints-section">
                 <div class="hints-section-title">Full Config Review</div>
-                <code class="hints-code">show running-config</code>
-                <code class="hints-code">show startup-config</code>
-                <code class="hints-code">show archive config differences</code>
+                <code class="hints-code" data-tooltip="Shows complete active configuration
+⚠️ Contains sensitive data (secrets)
+Always review before sharing
+Use 'show run | exclude secret' for safe">show running-config</code>
+                <code class="hints-code" data-tooltip="Shows saved configuration (NVRAM)
+Compare with running-config
+If different: 'copy run start' needed
+Should match running-config">show startup-config</code>
+                <code class="hints-code" data-tooltip="Shows diff between configs
+Example:
++interface Gi1/0/1
++ description Changed
+-interface Gi1/0/1
+Requires: archive config">show archive config differences</code>
               </div>
             </div>
           </div>
@@ -1093,37 +1368,69 @@
             <div class="hints-grid">
               <div class="hints-section">
                 <div class="hints-section-title">Server Commands</div>
-                <code class="hints-code">iperf3 -s</code>
-                <code class="hints-code">iperf3 -s -D</code>
-                <code class="hints-code">iperf3 -s -p 5201</code>
+                <code class="hints-code" data-tooltip="-s = Server mode
+Listens on port 5201 (default)
+Waits for client connections">iperf3 -s</code>
+                <code class="hints-code" data-tooltip="-D = Daemon mode (background)
+Server runs in background
+Use 'killall iperf3' to stop">iperf3 -s -D</code>
+                <code class="hints-code" data-tooltip="-p = Custom port
+Default is 5201
+Useful when firewall blocks default">iperf3 -s -p 5201</code>
               </div>
               <div class="hints-section">
                 <div class="hints-section-title">Client Basic</div>
-                <code class="hints-code">iperf3 -c &lt;server_ip&gt;</code>
-                <code class="hints-code">iperf3 -c &lt;ip&gt; -t 30</code>
-                <code class="hints-code">iperf3 -c &lt;ip&gt; -i 1 -t 60</code>
+                <code class="hints-code" data-tooltip="-c = Client mode
+Connects to server IP
+Default: 10 sec TCP test">iperf3 -c &lt;server_ip&gt;</code>
+                <code class="hints-code" data-tooltip="-t = Test duration (seconds)
+30 seconds gives more stable results
+Default is 10 seconds">iperf3 -c &lt;ip&gt; -t 30</code>
+                <code class="hints-code" data-tooltip="-i = Report interval (seconds)
+-t = Total duration
+Shows progress every 1 sec for 60 sec">iperf3 -c &lt;ip&gt; -i 1 -t 60</code>
               </div>
               <div class="hints-section">
                 <div class="hints-section-title">Parallel Streams</div>
-                <code class="hints-code">iperf3 -c &lt;ip&gt; -P 4</code>
-                <code class="hints-code">iperf3 -c &lt;ip&gt; -P 8 -w 32M</code>
+                <code class="hints-code" data-tooltip="-P = Parallel streams
+4 streams can saturate 1G links
+Helps overcome single-thread limits">iperf3 -c &lt;ip&gt; -P 4</code>
+                <code class="hints-code" data-tooltip="-P 8 = 8 parallel streams
+-w 32M = 32MB window size
+For 10G+ links or high latency">iperf3 -c &lt;ip&gt; -P 8 -w 32M</code>
               </div>
               <div class="hints-section">
                 <div class="hints-section-title">UDP Testing</div>
-                <code class="hints-code">iperf3 -c &lt;ip&gt; -u</code>
-                <code class="hints-code">iperf3 -c &lt;ip&gt; -u -b 100M</code>
-                <code class="hints-code">iperf3 -c &lt;ip&gt; -u -b 1G</code>
+                <code class="hints-code" data-tooltip="-u = UDP mode (not TCP)
+Shows jitter and packet loss
+Default bandwidth: 1 Mbps">iperf3 -c &lt;ip&gt; -u</code>
+                <code class="hints-code" data-tooltip="-b = Target bandwidth
+100M = 100 Mbps UDP
+Shows packet loss at this rate">iperf3 -c &lt;ip&gt; -u -b 100M</code>
+                <code class="hints-code" data-tooltip="-b 1G = 1 Gbps UDP target
+⚠️ High CPU usage
+Good for stress testing">iperf3 -c &lt;ip&gt; -u -b 1G</code>
               </div>
               <div class="hints-section">
                 <div class="hints-section-title">Reverse (Download)</div>
-                <code class="hints-code">iperf3 -c &lt;ip&gt; -R</code>
-                <code class="hints-code">iperf3 -c &lt;ip&gt; -R -t 30</code>
+                <code class="hints-code" data-tooltip="-R = Reverse mode
+Server sends, client receives
+Tests download speed">iperf3 -c &lt;ip&gt; -R</code>
+                <code class="hints-code" data-tooltip="-R = Download test
+-t 30 = 30 seconds
+Useful for asymmetric links">iperf3 -c &lt;ip&gt; -R -t 30</code>
               </div>
               <div class="hints-section">
                 <div class="hints-section-title">Output Options</div>
-                <code class="hints-code">iperf3 -c &lt;ip&gt; -J</code>
-                <code class="hints-code">iperf3 -c &lt;ip&gt; --logfile out.txt</code>
-                <code class="hints-code">iperf3 -c &lt;ip&gt; -f m</code>
+                <code class="hints-code" data-tooltip="-J = JSON output
+Machine-readable format
+Good for scripting/automation">iperf3 -c &lt;ip&gt; -J</code>
+                <code class="hints-code" data-tooltip="--logfile = Save to file
+Appends results to out.txt
+Useful for long-term tests">iperf3 -c &lt;ip&gt; --logfile out.txt</code>
+                <code class="hints-code" data-tooltip="-f m = Format in Mbits/sec
+Other options: k, g, K, M, G
+K/M/G = bytes, k/m/g = bits">iperf3 -c &lt;ip&gt; -f m</code>
               </div>
             </div>
           </div>
@@ -1271,41 +1578,101 @@
             <div class="hints-grid">
               <div class="hints-section">
                 <div class="hints-section-title">Network Classes</div>
-                <code class="hints-code">Class A: /8 (255.0.0.0)</code>
-                <code class="hints-code">Class B: /16 (255.255.0.0)</code>
-                <code class="hints-code">Class C: /24 (255.255.255.0)</code>
+                <code class="hints-code" data-tooltip="Class A networks (legacy)
+Range: 1.0.0.0 - 126.255.255.255
+16.7 million hosts per network
+First octet: 1-126">Class A: /8 (255.0.0.0)</code>
+                <code class="hints-code" data-tooltip="Class B networks (legacy)
+Range: 128.0.0.0 - 191.255.255.255
+65,534 hosts per network
+First octet: 128-191">Class B: /16 (255.255.0.0)</code>
+                <code class="hints-code" data-tooltip="Class C networks (legacy)
+Range: 192.0.0.0 - 223.255.255.255
+254 hosts per network
+First octet: 192-223">Class C: /24 (255.255.255.0)</code>
               </div>
               <div class="hints-section">
                 <div class="hints-section-title">Private Ranges (RFC1918)</div>
-                <code class="hints-code">10.0.0.0/8</code>
-                <code class="hints-code">172.16.0.0/12</code>
-                <code class="hints-code">192.168.0.0/16</code>
+                <code class="hints-code" data-tooltip="Class A private range
+10.0.0.0 - 10.255.255.255
+16.7 million addresses
+Common in large enterprises">10.0.0.0/8</code>
+                <code class="hints-code" data-tooltip="Class B private range
+172.16.0.0 - 172.31.255.255
+1 million addresses
+Often used for internal services">172.16.0.0/12</code>
+                <code class="hints-code" data-tooltip="Class C private range
+192.168.0.0 - 192.168.255.255
+65,534 addresses
+Common in home/small office">192.168.0.0/16</code>
               </div>
               <div class="hints-section">
                 <div class="hints-section-title">Common Subnets</div>
-                <code class="hints-code">/24 = 254 hosts</code>
-                <code class="hints-code">/25 = 126 hosts</code>
-                <code class="hints-code">/26 = 62 hosts</code>
-                <code class="hints-code">/27 = 30 hosts</code>
+                <code class="hints-code" data-tooltip="Standard LAN subnet
+256 addresses (254 usable)
+Netmask: 255.255.255.0
+Most common for office LANs">/24 = 254 hosts</code>
+                <code class="hints-code" data-tooltip="Half of /24
+128 addresses (126 usable)
+Netmask: 255.255.255.128
+Good for medium departments">/25 = 126 hosts</code>
+                <code class="hints-code" data-tooltip="Quarter of /24
+64 addresses (62 usable)
+Netmask: 255.255.255.192
+Good for small teams/VLANs">/26 = 62 hosts</code>
+                <code class="hints-code" data-tooltip="1/8 of /24
+32 addresses (30 usable)
+Netmask: 255.255.255.224
+Good for server farms">/27 = 30 hosts</code>
               </div>
               <div class="hints-section">
                 <div class="hints-section-title">Small Networks</div>
-                <code class="hints-code">/28 = 14 hosts</code>
-                <code class="hints-code">/29 = 6 hosts</code>
-                <code class="hints-code">/30 = 2 hosts (P2P)</code>
-                <code class="hints-code">/31 = 2 hosts (RFC3021)</code>
+                <code class="hints-code" data-tooltip="16 addresses (14 usable)
+Netmask: 255.255.255.240
+Good for small server groups
+Wildcard: 0.0.0.15">/28 = 14 hosts</code>
+                <code class="hints-code" data-tooltip="8 addresses (6 usable)
+Netmask: 255.255.255.248
+Good for DMZ segments
+Wildcard: 0.0.0.7">/29 = 6 hosts</code>
+                <code class="hints-code" data-tooltip="4 addresses (2 usable)
+Netmask: 255.255.255.252
+Standard point-to-point links
+Router-to-router connections">/30 = 2 hosts (P2P)</code>
+                <code class="hints-code" data-tooltip="2 addresses (both usable!)
+Netmask: 255.255.255.254
+RFC3021 point-to-point
+No network/broadcast waste">/31 = 2 hosts (RFC3021)</code>
               </div>
               <div class="hints-section">
                 <div class="hints-section-title">Wildcard Masks</div>
-                <code class="hints-code">/24 → 0.0.0.255</code>
-                <code class="hints-code">/16 → 0.0.255.255</code>
-                <code class="hints-code">/8 → 0.255.255.255</code>
+                <code class="hints-code" data-tooltip="Inverse of subnet mask
+Used in Cisco ACLs and OSPF
+255.255.255.255 - 255.255.255.0
+= 0.0.0.255">/24 → 0.0.0.255</code>
+                <code class="hints-code" data-tooltip="Inverse of subnet mask
+255.255.255.255 - 255.255.0.0
+= 0.0.255.255
+Matches entire Class B">/16 → 0.0.255.255</code>
+                <code class="hints-code" data-tooltip="Inverse of subnet mask
+255.255.255.255 - 255.0.0.0
+= 0.255.255.255
+Matches entire Class A">/8 → 0.255.255.255</code>
               </div>
               <div class="hints-section">
                 <div class="hints-section-title">Special Addresses</div>
-                <code class="hints-code">127.0.0.1 (loopback)</code>
-                <code class="hints-code">0.0.0.0 (default route)</code>
-                <code class="hints-code">255.255.255.255 (broadcast)</code>
+                <code class="hints-code" data-tooltip="Loopback address
+Always refers to 'this host'
+Used for local testing
+Never leaves the device">127.0.0.1 (loopback)</code>
+                <code class="hints-code" data-tooltip="Default route / any address
+In routing: matches all destinations
+In binding: listen on all interfaces
+'0.0.0.0/0' = internet">0.0.0.0 (default route)</code>
+                <code class="hints-code" data-tooltip="Limited broadcast
+Sent to all hosts on local network
+Never routed across subnets
+Used by DHCP discover">255.255.255.255 (broadcast)</code>
               </div>
             </div>
           </div>
@@ -1398,41 +1765,96 @@
             <div class="hints-grid">
               <div class="hints-section">
                 <div class="hints-section-title">Common Overhead</div>
-                <code class="hints-code">GRE: 24 bytes</code>
-                <code class="hints-code">IPSec (tunnel): 73 bytes</code>
-                <code class="hints-code">VXLAN: 50 bytes</code>
-                <code class="hints-code">GRE over IPSec: 97 bytes</code>
+                <code class="hints-code" data-tooltip="GRE overhead breakdown:
+20 bytes = new outer IP header
+4 bytes = GRE header
+Total: 24 bytes added per packet">GRE: 24 bytes</code>
+                <code class="hints-code" data-tooltip="IPSec tunnel mode (worst case):
+20B IP + 8B ESP + 16B IV (AES)
++ 2B trailer + 12B auth + ~15B padding
+Varies by encryption algorithm">IPSec (tunnel): 73 bytes</code>
+                <code class="hints-code" data-tooltip="VXLAN overhead breakdown:
+20B outer IP + 8B UDP
++ 8B VXLAN header + 14B inner Ethernet
+Used in data center overlays">VXLAN: 50 bytes</code>
+                <code class="hints-code" data-tooltip="GRE + IPSec combined:
+24B GRE + 73B IPSec = 97B total
+Common in secure site-to-site VPNs
+Consider jumbo frames">GRE over IPSec: 97 bytes</code>
               </div>
               <div class="hints-section">
                 <div class="hints-section-title">Effective MTU (1500)</div>
-                <code class="hints-code">GRE: 1476</code>
-                <code class="hints-code">IPSec: 1427</code>
-                <code class="hints-code">VXLAN: 1450</code>
-                <code class="hints-code">GRE/IPSec: 1403</code>
+                <code class="hints-code" data-tooltip="1500 - 24 = 1476 bytes
+Standard GRE tunnel
+TCP MSS: 1436 bytes">GRE: 1476</code>
+                <code class="hints-code" data-tooltip="1500 - 73 = 1427 bytes
+IPSec tunnel mode
+TCP MSS: 1387 bytes">IPSec: 1427</code>
+                <code class="hints-code" data-tooltip="1500 - 50 = 1450 bytes
+VXLAN overlay
+TCP MSS: 1410 bytes">VXLAN: 1450</code>
+                <code class="hints-code" data-tooltip="1500 - 97 = 1403 bytes
+GRE over IPSec
+TCP MSS: 1363 bytes">GRE/IPSec: 1403</code>
               </div>
               <div class="hints-section">
                 <div class="hints-section-title">TCP MSS Formula</div>
-                <code class="hints-code">MSS = MTU - 40</code>
-                <code class="hints-code">40 = IP(20) + TCP(20)</code>
-                <code class="hints-code">ip tcp adjust-mss [value]</code>
+                <code class="hints-code" data-tooltip="Maximum Segment Size formula
+MSS = MTU - IP header - TCP header
+Example: 1500 - 40 = 1460 MSS">MSS = MTU - 40</code>
+                <code class="hints-code" data-tooltip="40 bytes TCP/IP overhead:
+20 bytes = IPv4 header
+20 bytes = TCP header
+(IPv6 uses 40B header = 60B total)">40 = IP(20) + TCP(20)</code>
+                <code class="hints-code" data-tooltip="Cisco interface command
+Sets TCP MSS for SYN packets
+Prevents fragmentation issues
+Apply on tunnel interface">ip tcp adjust-mss [value]</code>
               </div>
               <div class="hints-section">
                 <div class="hints-section-title">Cisco Commands</div>
-                <code class="hints-code">ip mtu [value]</code>
-                <code class="hints-code">ip tcp adjust-mss [value]</code>
-                <code class="hints-code">tunnel path-mtu-discovery</code>
+                <code class="hints-code" data-tooltip="Sets interface MTU size
+Applied under interface config
+Example: ip mtu 1400
+Does not affect Layer 2 MTU">ip mtu [value]</code>
+                <code class="hints-code" data-tooltip="Adjusts TCP MSS in SYN packets
+Prevents fragmentation for TCP
+Set to effective_mtu - 40
+Critical for tunnel interfaces">ip tcp adjust-mss [value]</code>
+                <code class="hints-code" data-tooltip="Enables Path MTU Discovery
+Router sends ICMP 'too big' msgs
+Requires ICMP type 3 code 4
+Apply under tunnel interface">tunnel path-mtu-discovery</code>
               </div>
               <div class="hints-section">
                 <div class="hints-section-title">Minimum MTU</div>
-                <code class="hints-code">IPv4: 576 bytes</code>
-                <code class="hints-code">IPv6: 1280 bytes</code>
-                <code class="hints-code">Jumbo: 9000 bytes</code>
+                <code class="hints-code" data-tooltip="IPv4 minimum MTU (RFC 791)
+All IPv4 hosts must accept 576B
+Fragments if path MTU < packet
+Don't go below this!">IPv4: 576 bytes</code>
+                <code class="hints-code" data-tooltip="IPv6 minimum MTU (RFC 8200)
+All IPv6 links must support 1280B
+No fragmentation by routers
+Source must fragment if needed">IPv6: 1280 bytes</code>
+                <code class="hints-code" data-tooltip="Jumbo frames (non-standard)
+Supported on most modern gear
+Reduces CPU overhead
+Requires end-to-end support">Jumbo: 9000 bytes</code>
               </div>
               <div class="hints-section">
                 <div class="hints-section-title">Troubleshooting</div>
-                <code class="hints-code">ping -f -s [size] [ip]</code>
-                <code class="hints-code">show interface tunnel X</code>
-                <code class="hints-code">debug ip icmp</code>
+                <code class="hints-code" data-tooltip="Find max MTU without fragmentation
+-f = Don't Fragment flag
+-s = packet size (add 28 for headers)
+Binary search to find max size">ping -f -s [size] [ip]</code>
+                <code class="hints-code" data-tooltip="Shows tunnel interface details
+Check: MTU, ip mtu, adjust-mss
+Verify tunnel source/destination
+Look for packet drops">show interface tunnel X</code>
+                <code class="hints-code" data-tooltip="⚠️ DEBUG: Shows ICMP messages
+Look for 'fragmentation needed'
+Helps identify MTU black holes
+Use with caution on production!">debug ip icmp</code>
               </div>
             </div>
           </div>
