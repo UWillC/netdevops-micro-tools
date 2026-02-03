@@ -1774,7 +1774,7 @@ if (scoreExportPdfBtn) {
     scoreExportPdfBtn.textContent = "Generating...";
 
     try {
-      const res = await fetch(`${API_BASE_URL}/export/security-report`);
+      const res = await fetch(`${API_BASE_URL}/export/security-report?format=pdf`);
       if (!res.ok) {
         throw new Error(`Export failed (${res.status})`);
       }
@@ -1804,6 +1804,42 @@ if (scoreExportPdfBtn) {
     } finally {
       scoreExportPdfBtn.disabled = false;
       scoreExportPdfBtn.textContent = "Export PDF";
+    }
+  });
+}
+
+// v0.4.5: Export JSON button
+const scoreExportJsonBtn = document.getElementById("score-export-json");
+if (scoreExportJsonBtn) {
+  scoreExportJsonBtn.addEventListener("click", async () => {
+    scoreExportJsonBtn.disabled = true;
+    scoreExportJsonBtn.textContent = "Generating...";
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/export/security-report?format=json`);
+      if (!res.ok) {
+        throw new Error(`Export failed (${res.status})`);
+      }
+
+      const data = await res.json();
+      const jsonStr = JSON.stringify(data, null, 2);
+      const blob = new Blob([jsonStr], { type: "application/json" });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-");
+      a.download = `security-report-${timestamp}.json`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
+
+      showToast("Export JSON", "Security report downloaded successfully!");
+    } catch (err) {
+      showToast("Export JSON", `Error: ${err.message}`, true);
+    } finally {
+      scoreExportJsonBtn.disabled = false;
+      scoreExportJsonBtn.textContent = "Export JSON";
     }
   });
 }

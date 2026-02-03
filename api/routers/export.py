@@ -1,13 +1,14 @@
 """
-Export router - PDF report generation
-v0.4.2
+Export router - PDF and JSON report generation
+v0.4.5
 """
 
-from fastapi import APIRouter
-from fastapi.responses import Response
+from fastapi import APIRouter, Query
+from fastapi.responses import Response, JSONResponse
 from fpdf import FPDF
 from datetime import datetime
 from services.profile_service import ProfileService
+from typing import Optional
 
 router = APIRouter()
 svc = ProfileService()
@@ -127,13 +128,16 @@ class SecurityReportPDF(FPDF):
 
 
 @router.get("/export/security-report")
-def export_security_report():
+def export_security_report(format: Optional[str] = Query("pdf", description="Output format: pdf or json")):
     """
-    Generate PDF security report for all profiles.
+    Generate security report for all profiles.
 
-    Returns a downloadable PDF file with:
-    - Executive summary with aggregated scores
-    - Per-profile breakdown with CVE details
+    Query params:
+    - format: "pdf" (default) or "json"
+
+    Returns:
+    - PDF: downloadable file with executive summary and per-profile CVE details
+    - JSON: raw data for programmatic access
     """
     # Get security scores data
     scores_data = svc.calculate_all_security_scores()
@@ -141,13 +145,17 @@ def export_security_report():
     # Convert Pydantic model to dict
     data = scores_data.model_dump()
 
-    # Create PDF
+    # Add timestamp
+    data['timestamp'] = datetime.utcnow().isoformat()
+
+    # JSON format - return raw data
+    if format == "json":
+        return JSONResponse(content=data)
+
+    # PDF format (default)
     pdf = SecurityReportPDF()
     pdf.alias_nb_pages()
     pdf.add_page()
-
-    # Add timestamp
-    data['timestamp'] = datetime.utcnow().isoformat()
 
     # Add summary
     pdf.add_summary_section(data)
