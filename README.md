@@ -9,6 +9,8 @@
 
 🚀 **Live:** https://netdevops-micro-tools.onrender.com
 
+📧 **Pricing & Updates:** https://netdevops.thebackroom.ai/
+
 ![Demo](demo/netdevops-demo.gif)
 
 A **micro-SaaS backend + Web UI** for generating **secure Cisco IOS / IOS XE configurations**,
