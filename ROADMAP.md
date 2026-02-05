@@ -1,8 +1,8 @@
 # ROADMAP — NetDevOps Micro-Tools
 
-Current version: **v0.4.3** (LIVE)
+Current version: **v0.4.6** (LIVE)
 Live URL: https://netdevops-micro-tools.onrender.com
-Last updated: 2026-02-01
+Last updated: 2026-02-05
 
 ---
 
@@ -55,6 +55,21 @@ Last updated: 2026-02-01
 - [x] AAA v2.1 (SSH prerequisites, local fallback)
 - [x] Golden Config v2 (modular baseline)
 - [x] Verification Tooltips (~120 educational hints)
+
+### v0.4.4 — iPerf3 Multi-platform Scripts (Feb 2026)
+- [x] Bash script output (.sh)
+- [x] PowerShell script output (.ps1)
+- [x] Python script output (.py)
+- [x] Frontend dropdown with 4 output formats
+
+### v0.4.5 — JSON Export (Feb 2026)
+- [x] JSON format for security report (`?format=json`)
+- [x] "Export JSON" button in Security Scores widget
+
+### v0.4.6 — Markdown Export (Feb 2026)
+- [x] Markdown format for security report (`?format=md`)
+- [x] "Export MD" button in Security Scores widget
+- [x] 3 export formats: PDF, JSON, Markdown
 
 ---
 
