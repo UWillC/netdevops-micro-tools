@@ -4,6 +4,41 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.4.6] – 2026-02-04
+
+### Added
+
+- **Markdown Export** — security report as downloadable `.md` file:
+  - New format option `GET /export/security-report?format=md`.
+  - Formatted tables, headers, CVE breakdown.
+  - Frontend: "Export MD" button in Security Scores widget.
+
+---
+
+## [v0.4.5] – 2026-02-03
+
+### Added
+
+- **JSON Export** — security report as raw JSON:
+  - New format option `GET /export/security-report?format=json`.
+  - Returns full data structure for programmatic access.
+  - Frontend: "Export JSON" button in Security Scores widget.
+
+---
+
+## [v0.4.4] – 2026-02-02
+
+### Added
+
+- **iPerf3 Multi-platform Scripts** — output format selection:
+  - Bash script (`.sh`) — Linux/macOS ready.
+  - PowerShell script (`.ps1`) — Windows native.
+  - Python script (`.py`) — cross-platform.
+  - Frontend: dropdown with 4 output formats (Commands / Bash / PowerShell / Python).
+  - Dynamic download filename based on selected format.
+
+---
+
 ## [v0.4.3] – 2026-01-31
 
 ### Added
