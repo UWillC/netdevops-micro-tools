@@ -27,6 +27,7 @@
         <button class="tab-button" data-tab="aaa">AAA / TACACS+</button>
         <button class="tab-button" data-tab="golden">Golden Config</button>
         <button class="tab-button" data-tab="cve">CVE Analyzer</button>
+        <button class="tab-button" data-tab="mitigation">CVE Mitigation</button>
         <button class="tab-button" data-tab="iperf">iPerf3</button>
         <button class="tab-button" data-tab="subnet">Subnet Calc</button>
         <button class="tab-button" data-tab="mtu">MTU Calc</button>
@@ -1350,6 +1351,114 @@ Requires: archive config">show archive config differences</code>
             </p>
           </div>
         </div>
+      </section>
+
+      <!-- CVE MITIGATION TAB -->
+      <section id="tab-mitigation" class="tab-content">
+        <h2>CVE Mitigation Advisor <span class="version-badge">v1.0 - NEW</span></h2>
+
+        <div class="card">
+          <p class="form-description">
+            Get actionable mitigation commands for known CVEs. Enter a CVE ID to receive workaround steps,
+            ACL configurations, upgrade recommendations, and verification commands.
+          </p>
+
+          <form id="mitigation-form">
+            <div class="form-row">
+              <label for="mitigation-cve-id">CVE ID</label>
+              <input type="text" id="mitigation-cve-id" name="cve_id" placeholder="CVE-2023-20198" required />
+            </div>
+
+            <div class="form-row">
+              <button type="submit" class="btn-primary">Get Mitigation</button>
+              <button type="button" class="btn-secondary" id="mitigation-list-btn">Show Available CVEs</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Available CVEs list -->
+        <div class="card" id="mitigation-available" style="display: none;">
+          <h3>Available CVE Mitigations</h3>
+          <div id="mitigation-cve-list" class="mitigation-cve-list"></div>
+        </div>
+
+        <!-- Mitigation result -->
+        <div id="mitigation-result" style="display: none;">
+
+          <!-- Risk Summary -->
+          <div class="card mitigation-risk-card">
+            <h3>Risk Summary</h3>
+            <p id="mitigation-risk-summary"></p>
+            <p><strong>Attack Vector:</strong> <span id="mitigation-attack-vector"></span></p>
+          </div>
+
+          <!-- Workaround Steps -->
+          <div class="card">
+            <h3>Workaround Steps</h3>
+            <div id="mitigation-workarounds"></div>
+          </div>
+
+          <!-- ACL Mitigation -->
+          <div class="card" id="mitigation-acl-section" style="display: none;">
+            <h3>ACL Mitigation</h3>
+            <p id="mitigation-acl-description"></p>
+            <div class="output-card">
+              <div class="output-header">
+                <span>ACL Configuration</span>
+                <button class="btn-secondary" data-copy-target="mitigation-acl-output">Copy</button>
+              </div>
+              <textarea id="mitigation-acl-output" class="output-text" readonly></textarea>
+            </div>
+          </div>
+
+          <!-- Recommended Fix -->
+          <div class="card">
+            <h3>Recommended Fix</h3>
+            <p><strong>Upgrade to:</strong> <span id="mitigation-recommended-fix"></span></p>
+            <p id="mitigation-upgrade-path"></p>
+          </div>
+
+          <!-- Detection & Verification -->
+          <div class="card">
+            <h3>Detection</h3>
+            <p id="mitigation-detection-desc"></p>
+            <div class="output-card">
+              <div class="output-header">
+                <span>Detection Commands</span>
+                <button class="btn-secondary" data-copy-target="mitigation-detection-cmds">Copy</button>
+              </div>
+              <textarea id="mitigation-detection-cmds" class="output-text" readonly></textarea>
+            </div>
+            <p><strong>Vulnerable if:</strong> <span id="mitigation-vulnerable-if"></span></p>
+          </div>
+
+          <div class="card">
+            <h3>Verification</h3>
+            <p id="mitigation-verification-desc"></p>
+            <div class="output-card">
+              <div class="output-header">
+                <span>Verification Commands</span>
+                <button class="btn-secondary" data-copy-target="mitigation-verification-cmds">Copy</button>
+              </div>
+              <textarea id="mitigation-verification-cmds" class="output-text" readonly></textarea>
+            </div>
+            <p><strong>Expected output:</strong> <span id="mitigation-expected-output"></span></p>
+          </div>
+
+          <!-- References -->
+          <div class="card">
+            <h3>References</h3>
+            <ul id="mitigation-references"></ul>
+          </div>
+
+        </div>
+
+        <!-- Not found message -->
+        <div class="card" id="mitigation-not-found" style="display: none;">
+          <h3>Mitigation Not Found</h3>
+          <p id="mitigation-not-found-msg"></p>
+        </div>
+
       </section>
 
       <!-- IPERF3 TAB -->

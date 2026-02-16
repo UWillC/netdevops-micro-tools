@@ -1532,3 +1532,102 @@ textarea:focus {
   outline: none;
   border-color: var(--accent);
 }
+
+/* ----------------------------- */
+/* v0.5.0: CVE Mitigation Advisor */
+/* ----------------------------- */
+
+.form-description {
+  color: var(--muted);
+  font-size: 0.88rem;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+.mitigation-cve-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.cve-list-item {
+  padding: 6px 12px;
+  font-size: 0.82rem;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cve-list-item:hover {
+  border-color: var(--accent);
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.mitigation-risk-card {
+  border-left: 4px solid #ef4444;
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.mitigation-step {
+  margin-bottom: 16px;
+  padding: 12px;
+  background: rgba(2, 6, 23, 0.4);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.mitigation-step h4 {
+  margin: 0 0 8px 0;
+  font-size: 0.92rem;
+  color: var(--accent);
+}
+
+.mitigation-step .step-notes {
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin-bottom: 10px;
+  padding: 6px 10px;
+  background: rgba(99, 102, 241, 0.08);
+  border-radius: 4px;
+  border-left: 2px solid var(--accent);
+}
+
+.mitigation-step .output-card {
+  margin-top: 8px;
+}
+
+.mitigation-step .output-text {
+  min-height: 80px;
+  font-size: 0.82rem;
+}
+
+#mitigation-result h3 {
+  margin-top: 0;
+  font-size: 1rem;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+}
+
+#mitigation-references {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+#mitigation-references li {
+  margin-bottom: 8px;
+}
+
+#mitigation-references a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+#mitigation-references a:hover {
+  text-decoration: underline;
+}

@@ -2723,3 +2723,195 @@ if (configParserForm && configParserOutput) {
 
 // Initialize Config Parser hints panel
 initHintsPanel("config-parser-hints-panel", "config-parser-hints-toggle");
+
+// =====================
+// CVE MITIGATION ADVISOR
+// =====================
+
+const mitigationForm = document.getElementById("mitigation-form");
+const mitigationCveIdInput = document.getElementById("mitigation-cve-id");
+const mitigationListBtn = document.getElementById("mitigation-list-btn");
+const mitigationAvailable = document.getElementById("mitigation-available");
+const mitigationCveList = document.getElementById("mitigation-cve-list");
+const mitigationResult = document.getElementById("mitigation-result");
+const mitigationNotFound = document.getElementById("mitigation-not-found");
+
+// Helper to set text content safely
+function setText(id, text) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = text || "";
+}
+
+// Helper to set textarea value
+function setTextarea(id, lines) {
+  const el = document.getElementById(id);
+  if (el) el.value = Array.isArray(lines) ? lines.join("\n") : (lines || "");
+}
+
+// Render workaround steps
+function renderWorkarounds(steps) {
+  const container = document.getElementById("mitigation-workarounds");
+  if (!container) return;
+
+  container.innerHTML = "";
+
+  steps.forEach((step) => {
+    const stepDiv = document.createElement("div");
+    stepDiv.className = "mitigation-step card";
+    stepDiv.innerHTML = `
+      <h4>Step ${step.order}: ${step.description}</h4>
+      ${step.platform_notes ? `<p class="step-notes"><em>${step.platform_notes}</em></p>` : ""}
+      <div class="output-card">
+        <div class="output-header">
+          <span>Commands</span>
+          <button class="btn-secondary copy-step-btn">Copy</button>
+        </div>
+        <textarea class="output-text step-commands" readonly>${step.commands.join("\n")}</textarea>
+      </div>
+    `;
+
+    // Add copy handler
+    const copyBtn = stepDiv.querySelector(".copy-step-btn");
+    const textarea = stepDiv.querySelector(".step-commands");
+    if (copyBtn && textarea) {
+      copyBtn.addEventListener("click", () => {
+        navigator.clipboard.writeText(textarea.value);
+        copyBtn.textContent = "Copied!";
+        setTimeout(() => (copyBtn.textContent = "Copy"), 1500);
+      });
+    }
+
+    container.appendChild(stepDiv);
+  });
+}
+
+// Render references
+function renderReferences(mitigation) {
+  const container = document.getElementById("mitigation-references");
+  if (!container) return;
+
+  container.innerHTML = "";
+
+  const refs = [];
+  if (mitigation.cisco_psirt) refs.push({ label: "Cisco PSIRT Advisory", url: mitigation.cisco_psirt });
+  if (mitigation.cisa_alert) refs.push({ label: "CISA Alert", url: mitigation.cisa_alert });
+  if (mitigation.field_notice) refs.push({ label: "Field Notice", url: mitigation.field_notice });
+
+  refs.forEach((ref) => {
+    const li = document.createElement("li");
+    li.innerHTML = `<a href="${ref.url}" target="_blank" rel="noopener">${ref.label}</a>`;
+    container.appendChild(li);
+  });
+
+  if (refs.length === 0) {
+    container.innerHTML = "<li>No external references available</li>";
+  }
+}
+
+// Display mitigation result
+function displayMitigation(data) {
+  mitigationResult.style.display = "block";
+  mitigationNotFound.style.display = "none";
+  mitigationAvailable.style.display = "none";
+
+  const m = data.mitigation;
+
+  // Risk summary
+  setText("mitigation-risk-summary", m.risk_summary);
+  setText("mitigation-attack-vector", m.attack_vector);
+
+  // Workarounds
+  renderWorkarounds(m.workaround_steps || []);
+
+  // ACL mitigation
+  const aclSection = document.getElementById("mitigation-acl-section");
+  if (m.acl_mitigation) {
+    aclSection.style.display = "block";
+    setText("mitigation-acl-description", m.acl_mitigation.description);
+    setTextarea("mitigation-acl-output", m.acl_mitigation.commands);
+  } else {
+    aclSection.style.display = "none";
+  }
+
+  // Recommended fix
+  setText("mitigation-recommended-fix", m.recommended_fix);
+  setText("mitigation-upgrade-path", m.upgrade_path || "");
+
+  // Detection
+  setText("mitigation-detection-desc", m.detection?.description || "");
+  setTextarea("mitigation-detection-cmds", m.detection?.commands || []);
+  setText("mitigation-vulnerable-if", m.detection?.vulnerable_if || "");
+
+  // Verification
+  setText("mitigation-verification-desc", m.verification?.description || "");
+  setTextarea("mitigation-verification-cmds", m.verification?.commands || []);
+  setText("mitigation-expected-output", m.verification?.expected_output || "");
+
+  // References
+  renderReferences(m);
+}
+
+// Fetch and display mitigation
+async function fetchMitigation(cveId) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/mitigate/cve/${encodeURIComponent(cveId)}`);
+    const data = await response.json();
+
+    if (data.found) {
+      displayMitigation(data);
+    } else {
+      mitigationResult.style.display = "none";
+      mitigationNotFound.style.display = "block";
+      mitigationAvailable.style.display = "none";
+      document.getElementById("mitigation-not-found-msg").textContent =
+        data.message || `No mitigation data available for ${cveId}.`;
+    }
+  } catch (err) {
+    mitigationResult.style.display = "none";
+    mitigationNotFound.style.display = "block";
+    document.getElementById("mitigation-not-found-msg").textContent = `Error: ${err.message}`;
+  }
+}
+
+// Fetch available CVEs list
+async function fetchMitigationList() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/mitigate/list`);
+    const cves = await response.json();
+
+    mitigationCveList.innerHTML = "";
+    cves.forEach((cveId) => {
+      const btn = document.createElement("button");
+      btn.className = "btn-secondary cve-list-item";
+      btn.textContent = cveId;
+      btn.addEventListener("click", () => {
+        mitigationCveIdInput.value = cveId;
+        fetchMitigation(cveId);
+      });
+      mitigationCveList.appendChild(btn);
+    });
+
+    mitigationAvailable.style.display = "block";
+    mitigationResult.style.display = "none";
+    mitigationNotFound.style.display = "none";
+  } catch (err) {
+    mitigationCveList.innerHTML = `<p>Error loading CVE list: ${err.message}</p>`;
+    mitigationAvailable.style.display = "block";
+  }
+}
+
+// Form submit handler
+if (mitigationForm) {
+  mitigationForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const cveId = mitigationCveIdInput?.value?.trim();
+    if (cveId) {
+      await fetchMitigation(cveId);
+    }
+  });
+}
+
+// List button handler
+if (mitigationListBtn) {
+  mitigationListBtn.addEventListener("click", fetchMitigationList);
+}
