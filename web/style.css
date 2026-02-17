@@ -1631,3 +1631,86 @@ textarea:focus {
 #mitigation-references a:hover {
   text-decoration: underline;
 }
+
+/* ----------------------------- */
+/* v0.5.1: Timezone Converter */
+/* ----------------------------- */
+
+.tz-results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.tz-result-card {
+  background: rgba(2, 6, 23, 0.5);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  text-align: center;
+}
+
+.tz-result-label {
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.tz-result-time {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--text);
+  font-family: monospace;
+}
+
+.tz-result-offset {
+  font-size: 0.78rem;
+  color: var(--accent);
+  margin-top: 4px;
+}
+
+.tz-generated-at {
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+
+.inline-selects {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.inline-selects > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.inline-selects label {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.inline-selects select {
+  padding: 6px 10px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+#tz-batch-input {
+  font-family: monospace;
+  font-size: 0.85rem;
+}
+
+.error {
+  color: #f87171;
+  padding: 10px;
+  background: rgba(248, 113, 113, 0.1);
+  border-radius: 6px;
+}

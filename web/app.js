@@ -2915,3 +2915,165 @@ if (mitigationForm) {
 if (mitigationListBtn) {
   mitigationListBtn.addEventListener("click", fetchMitigationList);
 }
+
+// =====================
+// TIMEZONE CONVERTER
+// =====================
+
+const tzForm = document.getElementById("timezone-form");
+const tzTimestampInput = document.getElementById("tz-timestamp");
+const tzFromSelect = document.getElementById("tz-from");
+const tzResults = document.getElementById("tz-results");
+const tzResultsGrid = document.getElementById("tz-results-grid");
+const tzNowBtn = document.getElementById("tz-now-btn");
+const tzNowResults = document.getElementById("tz-now-results");
+const tzNowGrid = document.getElementById("tz-now-grid");
+const tzGeneratedAt = document.getElementById("tz-generated-at");
+const tzBatchForm = document.getElementById("tz-batch-form");
+const tzBatchInput = document.getElementById("tz-batch-input");
+const tzBatchFrom = document.getElementById("tz-batch-from");
+const tzBatchTo = document.getElementById("tz-batch-to");
+const tzBatchOutput = document.getElementById("tz-batch-output");
+const tzBatchOutputCard = document.getElementById("tz-batch-output-card");
+
+// All target timezones for conversion
+const TARGET_TIMEZONES = [
+  "UTC",
+  "America/New_York",
+  "America/Los_Angeles",
+  "Europe/Warsaw",
+  "Europe/London",
+  "Asia/Tokyo",
+  "Asia/Singapore",
+  "Australia/Sydney"
+];
+
+// Render timezone result card
+function renderTzResult(result) {
+  const div = document.createElement("div");
+  div.className = "tz-result-card";
+  div.innerHTML = `
+    <div class="tz-result-label">${result.label}</div>
+    <div class="tz-result-time">${result.datetime_formatted}</div>
+    <div class="tz-result-offset">${result.offset}</div>
+  `;
+  return div;
+}
+
+// Convert single timestamp
+async function convertTimestamp(timestamp, fromTz) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/tools/timezone/convert`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        timestamp: timestamp,
+        from_timezone: fromTz,
+        to_timezones: TARGET_TIMEZONES
+      })
+    });
+
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.detail || "Conversion failed");
+    }
+
+    const data = await response.json();
+
+    tzResultsGrid.innerHTML = "";
+    data.results.forEach((result) => {
+      tzResultsGrid.appendChild(renderTzResult(result));
+    });
+
+    tzResults.style.display = "block";
+    tzNowResults.style.display = "none";
+  } catch (err) {
+    tzResultsGrid.innerHTML = `<p class="error">Error: ${err.message}</p>`;
+    tzResults.style.display = "block";
+  }
+}
+
+// Get current time in all zones
+async function fetchCurrentTime() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/tools/timezone/now`);
+    const data = await response.json();
+
+    tzGeneratedAt.textContent = `Generated at: ${data.generated_at_utc}`;
+
+    tzNowGrid.innerHTML = "";
+    data.timezones.forEach((result) => {
+      tzNowGrid.appendChild(renderTzResult(result));
+    });
+
+    tzNowResults.style.display = "block";
+    tzResults.style.display = "none";
+  } catch (err) {
+    tzNowGrid.innerHTML = `<p class="error">Error: ${err.message}</p>`;
+    tzNowResults.style.display = "block";
+  }
+}
+
+// Batch convert
+async function batchConvert(timestamps, fromTz, toTz) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/tools/timezone/batch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        timestamps: timestamps,
+        from_timezone: fromTz,
+        to_timezone: toTz
+      })
+    });
+
+    const results = await response.json();
+
+    let output = `# Batch conversion: ${fromTz} → ${toTz}\n`;
+    output += "# Original → Converted\n\n";
+
+    results.forEach((r) => {
+      if (r.success) {
+        output += `${r.original} → ${r.converted}\n`;
+      } else {
+        output += `${r.original} → ERROR: ${r.error}\n`;
+      }
+    });
+
+    tzBatchOutput.value = output;
+    tzBatchOutputCard.style.display = "block";
+  } catch (err) {
+    tzBatchOutput.value = `Error: ${err.message}`;
+    tzBatchOutputCard.style.display = "block";
+  }
+}
+
+// Form handlers
+if (tzForm) {
+  tzForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const timestamp = tzTimestampInput?.value?.trim();
+    const fromTz = tzFromSelect?.value || "UTC";
+    if (timestamp) {
+      await convertTimestamp(timestamp, fromTz);
+    }
+  });
+}
+
+if (tzNowBtn) {
+  tzNowBtn.addEventListener("click", fetchCurrentTime);
+}
+
+if (tzBatchForm) {
+  tzBatchForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const input = tzBatchInput?.value?.trim();
+    if (!input) return;
+
+    const timestamps = input.split("\n").map((l) => l.trim()).filter((l) => l);
+    const fromTz = tzBatchFrom?.value || "UTC";
+    const toTz = tzBatchTo?.value || "America/New_York";
+
+    await batchConvert(timestamps, fromTz, toTz);
+  });
+}

@@ -31,6 +31,7 @@
         <button class="tab-button" data-tab="iperf">iPerf3</button>
         <button class="tab-button" data-tab="subnet">Subnet Calc</button>
         <button class="tab-button" data-tab="mtu">MTU Calc</button>
+        <button class="tab-button" data-tab="timezone">Timezone</button>
         <button class="tab-button" data-tab="config-parser">Config Parser</button>
         <button class="tab-button" data-tab="profiles">Profiles</button>
       </nav>
@@ -2021,6 +2022,104 @@ Use with caution on production!">debug ip icmp</code>
             <textarea id="mtu-output" class="output-text" readonly placeholder="Select tunnel type and click Calculate"></textarea>
         </div>
         </div>
+      </section>
+
+      <!-- TIMEZONE CONVERTER TAB -->
+      <section id="tab-timezone" class="tab-content">
+        <h2>Timezone Converter <span class="version-badge">v1.0 - NEW</span></h2>
+
+        <div class="card">
+          <p class="form-description">
+            Convert timestamps between timezones for log correlation. Essential when troubleshooting
+            across multiple sites with different time configurations (ZULU, EST, CET, etc.).
+          </p>
+
+          <form id="timezone-form">
+            <div class="form-row">
+              <label for="tz-timestamp">Timestamp</label>
+              <input type="text" id="tz-timestamp" name="timestamp" placeholder="2026-02-17T14:30:00Z or Feb 17 14:30:00" required />
+            </div>
+
+            <div class="form-row">
+              <label for="tz-from">Source Timezone</label>
+              <select id="tz-from" name="from_timezone">
+                <option value="UTC" selected>UTC / ZULU / GMT</option>
+                <option value="America/New_York">EST/EDT (New York)</option>
+                <option value="America/Chicago">CST/CDT (Chicago)</option>
+                <option value="America/Denver">MST/MDT (Denver)</option>
+                <option value="America/Los_Angeles">PST/PDT (Los Angeles)</option>
+                <option value="Europe/London">GMT/BST (London)</option>
+                <option value="Europe/Warsaw">CET/CEST (Warsaw)</option>
+                <option value="Europe/Berlin">CET/CEST (Berlin)</option>
+                <option value="Asia/Tokyo">JST (Tokyo)</option>
+                <option value="Asia/Singapore">SGT (Singapore)</option>
+                <option value="Asia/Dubai">GST (Dubai)</option>
+                <option value="Australia/Sydney">AEST/AEDT (Sydney)</option>
+              </select>
+            </div>
+
+            <div class="form-row">
+              <button type="submit" class="btn-primary">Convert</button>
+              <button type="button" class="btn-secondary" id="tz-now-btn">Show Current Time (All Zones)</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Results -->
+        <div class="card" id="tz-results" style="display: none;">
+          <h3>Conversion Results</h3>
+          <div class="tz-results-grid" id="tz-results-grid"></div>
+        </div>
+
+        <!-- Current time in all zones -->
+        <div class="card" id="tz-now-results" style="display: none;">
+          <h3>Current Time — All Timezones</h3>
+          <p class="tz-generated-at" id="tz-generated-at"></p>
+          <div class="tz-results-grid" id="tz-now-grid"></div>
+        </div>
+
+        <!-- Batch convert -->
+        <div class="card">
+          <h3>Batch Convert (Multiple Timestamps)</h3>
+          <p class="form-description">
+            Paste multiple timestamps (one per line) to convert them all at once.
+          </p>
+          <form id="tz-batch-form">
+            <div class="form-row">
+              <label for="tz-batch-input">Timestamps (one per line)</label>
+              <textarea id="tz-batch-input" rows="5" placeholder="Feb 17 14:30:00&#10;Feb 17 15:45:00&#10;Feb 17 16:00:00"></textarea>
+            </div>
+            <div class="form-row inline-selects">
+              <div>
+                <label for="tz-batch-from">From</label>
+                <select id="tz-batch-from">
+                  <option value="UTC" selected>UTC</option>
+                  <option value="America/New_York">EST</option>
+                  <option value="Europe/Warsaw">CET</option>
+                  <option value="Asia/Tokyo">JST</option>
+                </select>
+              </div>
+              <div>
+                <label for="tz-batch-to">To</label>
+                <select id="tz-batch-to">
+                  <option value="America/New_York">EST</option>
+                  <option value="UTC">UTC</option>
+                  <option value="Europe/Warsaw">CET</option>
+                  <option value="Asia/Tokyo">JST</option>
+                </select>
+              </div>
+              <button type="submit" class="btn-primary">Batch Convert</button>
+            </div>
+          </form>
+          <div class="output-card" id="tz-batch-output-card" style="display: none;">
+            <div class="output-header">
+              <span>Batch Results</span>
+              <button class="btn-secondary" data-copy-target="tz-batch-output">Copy</button>
+            </div>
+            <textarea id="tz-batch-output" class="output-text" readonly></textarea>
+          </div>
+        </div>
+
       </section>
 
       <!-- CONFIG PARSER TAB -->
