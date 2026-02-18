@@ -2026,7 +2026,7 @@ Use with caution on production!">debug ip icmp</code>
 
       <!-- TIMEZONE CONVERTER TAB -->
       <section id="tab-timezone" class="tab-content">
-        <h2>Timezone Converter <span class="version-badge">v1.0 - NEW</span></h2>
+        <h2>Timezone Converter <span class="version-badge">v1.1 + NATO DTG</span></h2>
 
         <div class="card">
           <p class="form-description">
@@ -2076,6 +2076,36 @@ Use with caution on production!">debug ip icmp</code>
           <h3>Current Time — All Timezones</h3>
           <p class="tz-generated-at" id="tz-generated-at"></p>
           <div class="tz-results-grid" id="tz-now-grid"></div>
+        </div>
+
+        <!-- NATO DTG Format -->
+        <div class="card">
+          <h3>NATO DTG Format <span class="version-badge">NEW</span></h3>
+          <p class="form-description">
+            Convert NATO Date-Time Group (DTG) format used in military communications.
+            Format: <code>DDHHMMZ</code> (e.g., <code>181430Z</code>) or <code>DDHHMMZMmmYY</code> (e.g., <code>181430ZFeb26</code>)
+          </p>
+          <form id="dtg-form">
+            <div class="form-row">
+              <label for="dtg-input">NATO DTG</label>
+              <input type="text" id="dtg-input" name="dtg" placeholder="181430Z or 181430ZFeb26 or 18143000ZFeb26" required />
+            </div>
+            <div class="form-row">
+              <button type="submit" class="btn-primary">Convert DTG</button>
+              <button type="button" class="btn-secondary" id="dtg-now-btn">Current DTG (All Zones)</button>
+            </div>
+          </form>
+          <div class="dtg-reference" style="margin-top: 1rem; font-size: 0.85rem; color: var(--text-muted);">
+            <strong>Military Timezone Letters:</strong>
+            Z=Zulu(UTC), A=Alpha(+1), B=Bravo(+2), R=Romeo(-5/EST), S=Sierra(-6/CST), T=Tango(-7/MST), U=Uniform(-8/PST)
+          </div>
+        </div>
+
+        <!-- DTG Results -->
+        <div class="card" id="dtg-results" style="display: none;">
+          <h3>DTG Conversion Results</h3>
+          <p class="tz-generated-at" id="dtg-parsed-utc"></p>
+          <div class="tz-results-grid" id="dtg-results-grid"></div>
         </div>
 
         <!-- Batch convert -->

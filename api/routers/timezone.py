@@ -6,11 +6,28 @@ Convert timestamps between timezones - essential for log correlation.
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo, available_timezones
 import re
 
 router = APIRouter(prefix="/tools/timezone", tags=["Timezone Converter"])
+
+# NATO Military Timezone Letters (phonetic alphabet)
+# https://en.wikipedia.org/wiki/List_of_military_time_zones
+MILITARY_TIMEZONES = {
+    "A": ("Alpha", +1), "B": ("Bravo", +2), "C": ("Charlie", +3),
+    "D": ("Delta", +4), "E": ("Echo", +5), "F": ("Foxtrot", +6),
+    "G": ("Golf", +7), "H": ("Hotel", +8), "I": ("India", +9),
+    "K": ("Kilo", +10), "L": ("Lima", +11), "M": ("Mike", +12),
+    "N": ("November", -1), "O": ("Oscar", -2), "P": ("Papa", -3),
+    "Q": ("Quebec", -4), "R": ("Romeo", -5), "S": ("Sierra", -6),
+    "T": ("Tango", -7), "U": ("Uniform", -8), "V": ("Victor", -9),
+    "W": ("Whiskey", -10), "X": ("X-ray", -11), "Y": ("Yankee", -12),
+    "Z": ("Zulu", 0),  # UTC
+}
+
+# Reverse mapping: offset to letter
+OFFSET_TO_MILITARY = {v[1]: k for k, v in MILITARY_TIMEZONES.items()}
 
 # Common network-relevant timezones
 COMMON_TIMEZONES = [
@@ -75,6 +92,133 @@ class NowResponse(BaseModel):
     """Current time in multiple timezones."""
     generated_at_utc: str
     timezones: List[TimezoneResult]
+
+
+class DTGResult(BaseModel):
+    """NATO Date-Time Group result."""
+    timezone: str
+    label: str
+    military_letter: str
+    military_name: str
+    dtg_short: str       # 181430Z
+    dtg_full: str        # 181430ZFeb26
+    dtg_seconds: str     # 18143000ZFeb26
+    datetime_iso: str
+    datetime_formatted: str
+
+
+class DTGConvertRequest(BaseModel):
+    """Request to convert NATO DTG."""
+    dtg: str = Field(..., description="NATO DTG format (e.g., 051100Z, 181430ZFeb26)")
+
+
+class DTGConvertResponse(BaseModel):
+    """Response with parsed NATO DTG."""
+    original_input: str
+    parsed_utc: str
+    dtg_zulu: str
+    results: List[DTGResult]
+
+
+class DTGNowResponse(BaseModel):
+    """Current time in NATO DTG format."""
+    generated_at_utc: str
+    dtg_zulu: str
+    dtg_zulu_full: str
+    timezones: List[DTGResult]
+
+
+def parse_dtg(dtg_str: str) -> datetime:
+    """
+    Parse NATO Date-Time Group format.
+
+    Formats supported:
+    - DDHHMMZ (e.g., 051100Z) - day, hour, minute, timezone letter
+    - DDHHMMZMmmYY (e.g., 181430ZFeb26) - with month and year
+    - DDHHMMSSZMmmYY (e.g., 05135639ZFeb26) - with seconds
+    """
+    dtg = dtg_str.strip().upper()
+
+    # Pattern: DD HH MM [SS] Letter [Mmm YY]
+    # Examples: 051100Z, 181430ZFEB26, 05135639ZFEB26
+
+    # Try pattern with seconds and date: DDHHMMSSL + MmmYY
+    match = re.match(r'^(\d{2})(\d{2})(\d{2})(\d{2})([A-Z])([A-Z]{3})(\d{2})$', dtg)
+    if match:
+        day, hour, minute, second, tz_letter, month_str, year_short = match.groups()
+        month_map = {'JAN': 1, 'FEB': 2, 'MAR': 3, 'APR': 4, 'MAY': 5, 'JUN': 6,
+                     'JUL': 7, 'AUG': 8, 'SEP': 9, 'OCT': 10, 'NOV': 11, 'DEC': 12}
+        month = month_map.get(month_str)
+        if not month:
+            raise ValueError(f"Invalid month in DTG: {month_str}")
+        year = 2000 + int(year_short)
+        dt = datetime(year, month, int(day), int(hour), int(minute), int(second))
+        return apply_military_offset(dt, tz_letter)
+
+    # Try pattern with date but no seconds: DDHHMML + MmmYY
+    match = re.match(r'^(\d{2})(\d{2})(\d{2})([A-Z])([A-Z]{3})(\d{2})$', dtg)
+    if match:
+        day, hour, minute, tz_letter, month_str, year_short = match.groups()
+        month_map = {'JAN': 1, 'FEB': 2, 'MAR': 3, 'APR': 4, 'MAY': 5, 'JUN': 6,
+                     'JUL': 7, 'AUG': 8, 'SEP': 9, 'OCT': 10, 'NOV': 11, 'DEC': 12}
+        month = month_map.get(month_str)
+        if not month:
+            raise ValueError(f"Invalid month in DTG: {month_str}")
+        year = 2000 + int(year_short)
+        dt = datetime(year, month, int(day), int(hour), int(minute))
+        return apply_military_offset(dt, tz_letter)
+
+    # Try simple pattern: DDHHMML (no date - use current month/year)
+    match = re.match(r'^(\d{2})(\d{2})(\d{2})([A-Z])$', dtg)
+    if match:
+        day, hour, minute, tz_letter = match.groups()
+        now = datetime.now()
+        dt = datetime(now.year, now.month, int(day), int(hour), int(minute))
+        return apply_military_offset(dt, tz_letter)
+
+    raise ValueError(f"Could not parse DTG: {dtg_str}")
+
+
+def apply_military_offset(dt: datetime, tz_letter: str) -> datetime:
+    """Apply military timezone offset to convert to UTC."""
+    if tz_letter not in MILITARY_TIMEZONES:
+        raise ValueError(f"Invalid military timezone letter: {tz_letter}")
+
+    _, offset_hours = MILITARY_TIMEZONES[tz_letter]
+    # Subtract offset to get UTC (if letter is +1, we subtract 1 hour to get UTC)
+    dt_utc = dt - timedelta(hours=offset_hours)
+    return dt_utc.replace(tzinfo=ZoneInfo("UTC"))
+
+
+def format_dtg(dt: datetime, include_date: bool = True, include_seconds: bool = False) -> tuple:
+    """
+    Format datetime to NATO DTG format.
+
+    Returns tuple of (dtg_short, dtg_full, dtg_seconds, military_letter, military_name)
+    """
+    # Get offset in hours
+    offset = dt.utcoffset()
+    if offset is None:
+        offset_hours = 0
+    else:
+        offset_hours = int(offset.total_seconds() / 3600)
+
+    # Find military letter for this offset
+    military_letter = OFFSET_TO_MILITARY.get(offset_hours, "Z")
+    military_name = MILITARY_TIMEZONES.get(military_letter, ("Zulu", 0))[0]
+
+    # Format components
+    day = dt.strftime("%d")
+    time_hhmm = dt.strftime("%H%M")
+    time_hhmmss = dt.strftime("%H%M%S")
+    month = dt.strftime("%b")
+    year = dt.strftime("%y")
+
+    dtg_short = f"{day}{time_hhmm}{military_letter}"
+    dtg_full = f"{day}{time_hhmm}{military_letter}{month}{year}"
+    dtg_seconds = f"{day}{time_hhmmss}{military_letter}{month}{year}"
+
+    return dtg_short, dtg_full, dtg_seconds, military_letter, military_name
 
 
 def parse_timestamp(timestamp_str: str, tz: ZoneInfo) -> datetime:
@@ -258,5 +402,91 @@ async def get_current_time() -> NowResponse:
 
     return NowResponse(
         generated_at_utc=now_utc.isoformat(),
+        timezones=results
+    )
+
+
+@router.post(
+    "/dtg/convert",
+    response_model=DTGConvertResponse,
+    summary="Convert NATO DTG to timezones",
+    description="Parse NATO Date-Time Group and convert to multiple timezones"
+)
+async def convert_dtg(request: DTGConvertRequest) -> DTGConvertResponse:
+    """
+    Convert NATO Date-Time Group format to multiple timezones.
+
+    Supported DTG formats:
+    - 051100Z (day, time, Zulu)
+    - 181430ZFeb26 (with month and year)
+    - 05135639ZFeb26 (with seconds)
+    """
+    try:
+        dt_utc = parse_dtg(request.dtg)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Format Zulu DTG
+    dtg_short, dtg_full, _, _, _ = format_dtg(dt_utc)
+
+    results = []
+    for tz_info in COMMON_TIMEZONES:
+        tz = ZoneInfo(tz_info["id"])
+        dt_local = dt_utc.astimezone(tz)
+        dtg_s, dtg_f, dtg_sec, mil_letter, mil_name = format_dtg(dt_local)
+
+        results.append(DTGResult(
+            timezone=tz_info["id"],
+            label=tz_info["label"],
+            military_letter=mil_letter,
+            military_name=mil_name,
+            dtg_short=dtg_s,
+            dtg_full=dtg_f,
+            dtg_seconds=dtg_sec,
+            datetime_iso=dt_local.isoformat(),
+            datetime_formatted=dt_local.strftime("%Y-%m-%d %H:%M:%S %Z")
+        ))
+
+    return DTGConvertResponse(
+        original_input=request.dtg,
+        parsed_utc=dt_utc.isoformat(),
+        dtg_zulu=dtg_full,
+        results=results
+    )
+
+
+@router.get(
+    "/dtg/now",
+    response_model=DTGNowResponse,
+    summary="Current time in NATO DTG format",
+    description="Get current time as NATO Date-Time Group in all common timezones"
+)
+async def get_dtg_now() -> DTGNowResponse:
+    """Get current time in NATO DTG format for all common timezones."""
+    now_utc = datetime.now(ZoneInfo("UTC"))
+    dtg_short, dtg_full, _, _, _ = format_dtg(now_utc)
+
+    results = []
+    for tz_info in COMMON_TIMEZONES:
+        tz = ZoneInfo(tz_info["id"])
+        dt_local = now_utc.astimezone(tz)
+        dtg_s, dtg_f, dtg_sec, mil_letter, mil_name = format_dtg(dt_local)
+
+        results.append(DTGResult(
+            timezone=tz_info["id"],
+            label=tz_info["label"],
+            military_letter=mil_letter,
+            military_name=mil_name,
+            dtg_short=dtg_s,
+            dtg_full=dtg_f,
+            dtg_seconds=dtg_sec,
+            datetime_iso=dt_local.isoformat(),
+            datetime_formatted=dt_local.strftime("%Y-%m-%d %H:%M:%S %Z")
+        ))
+
+    return DTGNowResponse(
+        generated_at_utc=now_utc.isoformat(),
+        dtg_zulu=dtg_short,
+        dtg_zulu_full=dtg_full,
         timezones=results
     )

@@ -3077,3 +3077,92 @@ if (tzBatchForm) {
     await batchConvert(timestamps, fromTz, toTz);
   });
 }
+
+// =====================
+// NATO DTG FORMAT
+// =====================
+
+const dtgForm = document.getElementById("dtg-form");
+const dtgInput = document.getElementById("dtg-input");
+const dtgNowBtn = document.getElementById("dtg-now-btn");
+const dtgResults = document.getElementById("dtg-results");
+const dtgResultsGrid = document.getElementById("dtg-results-grid");
+const dtgParsedUtc = document.getElementById("dtg-parsed-utc");
+
+// Render DTG result card
+function renderDtgResult(result) {
+  const div = document.createElement("div");
+  div.className = "tz-result-card dtg-result-card";
+  div.innerHTML = `
+    <div class="tz-result-label">${result.label}</div>
+    <div class="dtg-military">${result.military_letter} (${result.military_name})</div>
+    <div class="dtg-time">${result.dtg_full}</div>
+    <div class="tz-result-time">${result.datetime_formatted}</div>
+  `;
+  return div;
+}
+
+// Convert DTG
+async function convertDtg(dtg) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/tools/timezone/dtg/convert`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dtg: dtg })
+    });
+
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.detail || "DTG conversion failed");
+    }
+
+    const data = await response.json();
+
+    dtgParsedUtc.textContent = `Parsed UTC: ${data.parsed_utc} | Zulu DTG: ${data.dtg_zulu}`;
+
+    dtgResultsGrid.innerHTML = "";
+    data.results.forEach((result) => {
+      dtgResultsGrid.appendChild(renderDtgResult(result));
+    });
+
+    dtgResults.style.display = "block";
+  } catch (err) {
+    dtgResultsGrid.innerHTML = `<p class="error">Error: ${err.message}</p>`;
+    dtgResults.style.display = "block";
+  }
+}
+
+// Get current DTG in all zones
+async function fetchCurrentDtg() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/tools/timezone/dtg/now`);
+    const data = await response.json();
+
+    dtgParsedUtc.textContent = `Current Zulu: ${data.dtg_zulu_full} (${data.generated_at_utc})`;
+
+    dtgResultsGrid.innerHTML = "";
+    data.timezones.forEach((result) => {
+      dtgResultsGrid.appendChild(renderDtgResult(result));
+    });
+
+    dtgResults.style.display = "block";
+  } catch (err) {
+    dtgResultsGrid.innerHTML = `<p class="error">Error: ${err.message}</p>`;
+    dtgResults.style.display = "block";
+  }
+}
+
+// DTG form handlers
+if (dtgForm) {
+  dtgForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const dtg = dtgInput?.value?.trim();
+    if (dtg) {
+      await convertDtg(dtg);
+    }
+  });
+}
+
+if (dtgNowBtn) {
+  dtgNowBtn.addEventListener("click", fetchCurrentDtg);
+}
