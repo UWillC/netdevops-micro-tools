@@ -3082,12 +3082,133 @@ if (tzBatchForm) {
 // NATO DTG FORMAT
 // =====================
 
+// Elements - Picker form
+const dtgPickerForm = document.getElementById("dtg-picker-form");
+const dtgMonth = document.getElementById("dtg-month");
+const dtgDay = document.getElementById("dtg-day");
+const dtgYear = document.getElementById("dtg-year");
+const dtgHour = document.getElementById("dtg-hour");
+const dtgMinute = document.getElementById("dtg-minute");
+const dtgSecond = document.getElementById("dtg-second");
+const dtgTzLetter = document.getElementById("dtg-tz-letter");
+const dtgPreviewValue = document.getElementById("dtg-preview-value");
+const dtgNowBtn = document.getElementById("dtg-now-btn");
+const dtgClearBtn = document.getElementById("dtg-clear-btn");
+
+// Elements - Manual form
 const dtgForm = document.getElementById("dtg-form");
 const dtgInput = document.getElementById("dtg-input");
-const dtgNowBtn = document.getElementById("dtg-now-btn");
+
+// Elements - Results
 const dtgResults = document.getElementById("dtg-results");
 const dtgResultsGrid = document.getElementById("dtg-results-grid");
 const dtgParsedUtc = document.getElementById("dtg-parsed-utc");
+
+// Month names for DTG format
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+// Populate dropdown with range
+function populateSelect(select, start, end, padZero = true) {
+  if (!select) return;
+  select.innerHTML = "";
+  for (let i = start; i <= end; i++) {
+    const opt = document.createElement("option");
+    opt.value = padZero ? String(i).padStart(2, "0") : String(i);
+    opt.textContent = padZero ? String(i).padStart(2, "0") : String(i);
+    select.appendChild(opt);
+  }
+}
+
+// Initialize DTG picker dropdowns
+function initDtgPicker() {
+  const now = new Date();
+
+  // Populate days (01-31)
+  populateSelect(dtgDay, 1, 31);
+
+  // Populate years (current year -1 to +5)
+  const currentYear = now.getFullYear();
+  if (dtgYear) {
+    dtgYear.innerHTML = "";
+    for (let y = currentYear - 1; y <= currentYear + 5; y++) {
+      const opt = document.createElement("option");
+      opt.value = String(y).slice(-2); // Last 2 digits
+      opt.textContent = String(y);
+      dtgYear.appendChild(opt);
+    }
+  }
+
+  // Populate hours (00-23)
+  populateSelect(dtgHour, 0, 23);
+
+  // Populate minutes (00-59)
+  populateSelect(dtgMinute, 0, 59);
+
+  // Populate seconds (00-59)
+  populateSelect(dtgSecond, 0, 59);
+
+  // Set to current time
+  setDtgPickerToNow();
+}
+
+// Set picker to current UTC time
+function setDtgPickerToNow() {
+  const now = new Date();
+  const utcMonth = now.getUTCMonth() + 1;
+  const utcDay = now.getUTCDate();
+  const utcYear = now.getUTCFullYear();
+  const utcHour = now.getUTCHours();
+  const utcMinute = now.getUTCMinutes();
+  const utcSecond = now.getUTCSeconds();
+
+  if (dtgMonth) dtgMonth.value = String(utcMonth).padStart(2, "0");
+  if (dtgDay) dtgDay.value = String(utcDay).padStart(2, "0");
+  if (dtgYear) dtgYear.value = String(utcYear).slice(-2);
+  if (dtgHour) dtgHour.value = String(utcHour).padStart(2, "0");
+  if (dtgMinute) dtgMinute.value = String(utcMinute).padStart(2, "0");
+  if (dtgSecond) dtgSecond.value = String(utcSecond).padStart(2, "0");
+  if (dtgTzLetter) dtgTzLetter.value = "Z";
+
+  updateDtgPreview();
+}
+
+// Clear picker to defaults
+function clearDtgPicker() {
+  if (dtgMonth) dtgMonth.value = "01";
+  if (dtgDay) dtgDay.value = "01";
+  if (dtgYear) dtgYear.value = String(new Date().getFullYear()).slice(-2);
+  if (dtgHour) dtgHour.value = "00";
+  if (dtgMinute) dtgMinute.value = "00";
+  if (dtgSecond) dtgSecond.value = "00";
+  if (dtgTzLetter) dtgTzLetter.value = "Z";
+
+  updateDtgPreview();
+}
+
+// Build DTG string from picker values
+function buildDtgFromPicker() {
+  const day = dtgDay?.value || "01";
+  const hour = dtgHour?.value || "00";
+  const minute = dtgMinute?.value || "00";
+  const second = dtgSecond?.value || "00";
+  const tzLetter = dtgTzLetter?.value || "Z";
+  const monthIdx = parseInt(dtgMonth?.value || "1", 10) - 1;
+  const monthName = MONTH_NAMES[monthIdx] || "Jan";
+  const year = dtgYear?.value || "26";
+
+  // Include seconds only if non-zero
+  if (second !== "00") {
+    return `${day}${hour}${minute}${second}${tzLetter}${monthName}${year}`;
+  }
+  return `${day}${hour}${minute}${tzLetter}${monthName}${year}`;
+}
+
+// Update DTG preview
+function updateDtgPreview() {
+  if (dtgPreviewValue) {
+    dtgPreviewValue.textContent = buildDtgFromPicker();
+  }
+}
 
 // Render DTG result card
 function renderDtgResult(result) {
@@ -3102,7 +3223,7 @@ function renderDtgResult(result) {
   return div;
 }
 
-// Convert DTG
+// Convert DTG via API
 async function convertDtg(dtg) {
   try {
     const response = await fetch(`${API_BASE_URL}/tools/timezone/dtg/convert`, {
@@ -3146,13 +3267,33 @@ async function fetchCurrentDtg() {
     });
 
     dtgResults.style.display = "block";
+
+    // Also update picker to current time
+    setDtgPickerToNow();
   } catch (err) {
     dtgResultsGrid.innerHTML = `<p class="error">Error: ${err.message}</p>`;
     dtgResults.style.display = "block";
   }
 }
 
-// DTG form handlers
+// Initialize picker on load
+initDtgPicker();
+
+// Add change listeners for live preview
+[dtgMonth, dtgDay, dtgYear, dtgHour, dtgMinute, dtgSecond, dtgTzLetter].forEach(el => {
+  if (el) el.addEventListener("change", updateDtgPreview);
+});
+
+// Picker form submit
+if (dtgPickerForm) {
+  dtgPickerForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const dtg = buildDtgFromPicker();
+    await convertDtg(dtg);
+  });
+}
+
+// Manual form submit (power users)
 if (dtgForm) {
   dtgForm.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -3163,6 +3304,15 @@ if (dtgForm) {
   });
 }
 
+// Now button
 if (dtgNowBtn) {
-  dtgNowBtn.addEventListener("click", fetchCurrentDtg);
+  dtgNowBtn.addEventListener("click", () => {
+    setDtgPickerToNow();
+    fetchCurrentDtg();
+  });
+}
+
+// Clear button
+if (dtgClearBtn) {
+  dtgClearBtn.addEventListener("click", clearDtgPicker);
 }

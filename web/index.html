@@ -2080,25 +2080,97 @@ Use with caution on production!">debug ip icmp</code>
 
         <!-- NATO DTG Format -->
         <div class="card">
-          <h3>NATO DTG Format <span class="version-badge">NEW</span></h3>
+          <h3>NATO DTG Format <span class="version-badge">v1.2</span></h3>
           <p class="form-description">
             Convert NATO Date-Time Group (DTG) format used in military communications.
-            Format: <code>DDHHMMZ</code> (e.g., <code>181430Z</code>) or <code>DDHHMMZMmmYY</code> (e.g., <code>181430ZFeb26</code>)
           </p>
-          <form id="dtg-form">
-            <div class="form-row">
-              <label for="dtg-input">NATO DTG</label>
-              <input type="text" id="dtg-input" name="dtg" placeholder="181430Z or 181430ZFeb26 or 18143000ZFeb26" required />
+
+          <!-- Date/Time Picker (Zoltan's request) -->
+          <form id="dtg-picker-form">
+            <div class="dtg-picker-grid">
+              <div class="dtg-picker-section">
+                <label>Date</label>
+                <div class="dtg-date-selects">
+                  <select id="dtg-month" title="Month">
+                    <option value="01">Jan</option>
+                    <option value="02">Feb</option>
+                    <option value="03">Mar</option>
+                    <option value="04">Apr</option>
+                    <option value="05">May</option>
+                    <option value="06">Jun</option>
+                    <option value="07">Jul</option>
+                    <option value="08">Aug</option>
+                    <option value="09">Sep</option>
+                    <option value="10">Oct</option>
+                    <option value="11">Nov</option>
+                    <option value="12">Dec</option>
+                  </select>
+                  <select id="dtg-day" title="Day"></select>
+                  <select id="dtg-year" title="Year"></select>
+                </div>
+              </div>
+              <div class="dtg-picker-section">
+                <label>Time</label>
+                <div class="dtg-time-selects">
+                  <select id="dtg-hour" title="Hour"></select>
+                  <span class="dtg-time-sep">:</span>
+                  <select id="dtg-minute" title="Minute"></select>
+                  <span class="dtg-time-sep">:</span>
+                  <select id="dtg-second" title="Second"></select>
+                </div>
+              </div>
+              <div class="dtg-picker-section">
+                <label>Timezone</label>
+                <select id="dtg-tz-letter" title="Military Timezone">
+                  <option value="Z">Z - Zulu (UTC)</option>
+                  <option value="A">A - Alpha (+1)</option>
+                  <option value="B">B - Bravo (+2)</option>
+                  <option value="C">C - Charlie (+3)</option>
+                  <option value="D">D - Delta (+4)</option>
+                  <option value="E">E - Echo (+5)</option>
+                  <option value="F">F - Foxtrot (+6)</option>
+                  <option value="G">G - Golf (+7)</option>
+                  <option value="H">H - Hotel (+8)</option>
+                  <option value="I">I - India (+9)</option>
+                  <option value="K">K - Kilo (+10)</option>
+                  <option value="L">L - Lima (+11)</option>
+                  <option value="M">M - Mike (+12)</option>
+                  <option value="N">N - November (-1)</option>
+                  <option value="O">O - Oscar (-2)</option>
+                  <option value="P">P - Papa (-3)</option>
+                  <option value="Q">Q - Quebec (-4)</option>
+                  <option value="R">R - Romeo (-5/EST)</option>
+                  <option value="S">S - Sierra (-6/CST)</option>
+                  <option value="T">T - Tango (-7/MST)</option>
+                  <option value="U">U - Uniform (-8/PST)</option>
+                  <option value="V">V - Victor (-9)</option>
+                  <option value="W">W - Whiskey (-10)</option>
+                  <option value="X">X - X-ray (-11)</option>
+                  <option value="Y">Y - Yankee (-12)</option>
+                </select>
+              </div>
             </div>
-            <div class="form-row">
-              <button type="submit" class="btn-primary">Convert DTG</button>
-              <button type="button" class="btn-secondary" id="dtg-now-btn">Current DTG (All Zones)</button>
+            <div class="dtg-preview" id="dtg-preview">
+              <span class="dtg-preview-label">DTG Preview:</span>
+              <span class="dtg-preview-value" id="dtg-preview-value">--</span>
+            </div>
+            <div class="form-row dtg-buttons">
+              <button type="submit" class="btn-primary">Convert</button>
+              <button type="button" class="btn-secondary" id="dtg-now-btn">Now</button>
+              <button type="button" class="btn-secondary" id="dtg-clear-btn">Clear</button>
             </div>
           </form>
-          <div class="dtg-reference" style="margin-top: 1rem; font-size: 0.85rem; color: var(--text-muted);">
-            <strong>Military Timezone Letters:</strong>
-            Z=Zulu(UTC), A=Alpha(+1), B=Bravo(+2), R=Romeo(-5/EST), S=Sierra(-6/CST), T=Tango(-7/MST), U=Uniform(-8/PST)
-          </div>
+
+          <!-- Manual input for power users -->
+          <details class="dtg-manual-toggle">
+            <summary>Manual DTG input (for pasting from logs)</summary>
+            <form id="dtg-form" class="dtg-manual-form">
+              <div class="form-row">
+                <input type="text" id="dtg-input" name="dtg" placeholder="181430Z or 181430ZFeb26" />
+                <button type="submit" class="btn-primary">Convert</button>
+              </div>
+            </form>
+          </details>
         </div>
 
         <!-- DTG Results -->

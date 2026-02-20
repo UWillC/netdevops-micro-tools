@@ -1749,3 +1749,116 @@ textarea:focus {
   border-radius: 4px;
   font-size: 0.85rem;
 }
+
+/* DTG Picker (v1.2 - Zoltan's request) */
+.dtg-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.dtg-picker-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dtg-picker-section label {
+  font-size: 0.82rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.dtg-date-selects,
+.dtg-time-selects {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dtg-date-selects select,
+.dtg-time-selects select,
+.dtg-picker-section > select {
+  padding: 8px 12px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 0.9rem;
+  cursor: pointer;
+  min-width: 70px;
+}
+
+.dtg-date-selects select:hover,
+.dtg-time-selects select:hover,
+.dtg-picker-section > select:hover {
+  border-color: var(--accent);
+}
+
+.dtg-time-sep {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+.dtg-preview {
+  background: rgba(2, 6, 23, 0.6);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dtg-preview-label {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.dtg-preview-value {
+  font-family: monospace;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.08em;
+}
+
+.dtg-buttons {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.dtg-manual-toggle {
+  margin-top: 16px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.dtg-manual-toggle summary {
+  font-size: 0.85rem;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 6px 0;
+}
+
+.dtg-manual-toggle summary:hover {
+  color: var(--text);
+}
+
+.dtg-manual-form {
+  margin-top: 10px;
+}
+
+.dtg-manual-form .form-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.dtg-manual-form input {
+  flex: 1;
+}
