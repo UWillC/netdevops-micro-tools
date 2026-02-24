@@ -11,7 +11,7 @@
 
 📧 **Pricing & Updates:** https://netdevops.thebackroom.ai/
 
-![Demo](demo/netdevops-demo.gif)
+![UI Screenshot](demo/ui-v3-home.png)
 
 A **micro-SaaS backend + Web UI** for generating **secure Cisco IOS / IOS XE configurations**,
 performing **security analysis** (CVE awareness), and **network calculations**.
@@ -75,6 +75,7 @@ NetDevOps Micro-Tools aims to solve this by providing:
 - TCP/UDP throughput tests
 - Link speeds: 100M / 1G / 10G
 - Directions: upload / download / bidirectional
+- Multi-platform output: Commands / Bash / PowerShell / Python
 - Hints panel with quick reference
 
 #### IP Subnet Calculator
@@ -88,6 +89,12 @@ NetDevOps Micro-Tools aims to solve this by providing:
 - Supports: GRE, IPSec, VXLAN, MPLS, LISP, GRE over IPSec
 - TCP MSS recommendations
 - Cisco config suggestions
+
+#### Timezone Converter
+- Convert timestamps across 12 common timezones
+- **NATO DTG format** (military date-time groups)
+- Date picker UI for easy selection
+- Batch conversion support
 
 #### Config Parser
 - Parse `show running-config` to structured JSON
@@ -106,37 +113,57 @@ python cli.py cve --platform "Cisco IOS XE" --version 17.3.1
 
 ---
 
-## 🔐 CVE Analyzer & Security Score
+## 🔐 Security Tools
 
-A lightweight CVE awareness engine focused on Cisco IOS XE with NVD enrichment.
+### CVE Analyzer & Security Score
+
+A lightweight CVE awareness engine focused on Cisco platforms with NVD enrichment.
 
 **Capabilities:**
 - Platform + software version matching
 - Severity classification (critical / high / medium / low)
 - Upgrade recommendations based on known fixed versions
 - **Security Score** (0-100) per device profile
-- **Export PDF** security reports
+- **Export** security reports (PDF, JSON, Markdown)
 - Real-time NVD API enrichment
 
 **Key features:**
 - **Profiles × CVE** — batch vulnerability checking across all device profiles
 - **Security Score** — numeric assessment with CVE breakdown and modifiers
-- **PDF Export** — downloadable security reports
+- **Multi-format Export** — PDF, JSON, and Markdown reports
 - **File-based cache** — NVD responses cached for 24h (eliminates rate limiting)
 
-**Data enrichment fields:**
-- CVSS score and vector
-- CWE classification
-- Published/modified dates
-- External references
+### 🛡️ CVE Mitigation Advisor ⭐ NEW
 
-**Web UI features:**
-- Text-based CVE report
-- Collapsible CVE cards with full metadata
-- Severity badges
-- Security posture summary panel (with Max CVSS)
+**The killer feature — zero competition in this space.**
 
-> ℹ️ Local CVE dataset includes real Cisco IOS XE vulnerabilities. Enable NVD enrichment for additional metadata.
+When a critical CVE drops, you need actionable commands NOW, not 10-page advisories.
+
+**19 CVEs in database** covering:
+- Cisco IOS-XE (including CVE-2023-20198, CVSS 10.0)
+- ASA/FTD firewalls
+- Nexus switches
+- WLC controllers
+- Small business routers (RV series)
+- UCS/IMC servers
+
+**For each CVE you get:**
+- Risk summary (1 sentence)
+- Attack vector explanation
+- **Workaround steps with copy-paste commands**
+- Detection commands
+- Verification commands
+- Links to Cisco PSIRT advisories
+
+**API Endpoints:**
+```
+GET /mitigate/cve/{id}      # Get mitigation for specific CVE
+GET /mitigate/list          # List all CVEs with mitigations
+GET /mitigate/critical      # Critical CVEs only
+GET /mitigate/tag/{tag}     # Filter by platform tag
+```
+
+> ℹ️ "From CVE to config in 30 seconds" — built for emergency response scenarios.
 
 ---
 
@@ -182,14 +209,18 @@ Profiles are stored on disk and can be persisted via Docker volumes.
 
 ---
 
-## 🖥 Web UI v2
+## 🖥 Web UI v3
 
-The Web UI provides a clean, distraction-free interface for daily use.
+The Web UI provides a clean, modern interface for daily use.
 
 **Highlights:**
-- Sidebar-based navigation
-- Dedicated views for each generator
-- CVE Analyzer with expandable CVE cards
+- **Grouped Sidebar** — tools organized by category (Config / Security / Network / Profiles)
+- **Collapsible Navigation** — expand/collapse groups with smooth animations
+- **Quick Access** — recent tools history (last 3 used)
+- **Home Page** — landing with all tools as cards
+- **Dark/Light Mode** — full theme support with persistence
+- **Category Colors** — visual distinction (blue/red/green/purple)
+- CVE Mitigation Advisor with actionable commands
 - Profiles management UI (Profiles v2)
 - Copy & download buttons for all outputs
 - Persistent form state using `localStorage`
@@ -208,6 +239,8 @@ netdevops-micro-tools/
 │       ├── aaa.py           # POST /generate/aaa
 │       ├── golden_config.py # POST /generate/golden-config
 │       ├── cve.py           # POST /analyze/cve, GET /analyze/cve/{id}
+│       ├── mitigation.py    # /mitigate/* endpoints (CVE Mitigation Advisor)
+│       ├── timezone.py      # /timezone/* endpoints
 │       └── profiles.py      # /profiles/* endpoints
 ├── services/                # Business logic layer
 │   ├── cve_engine.py        # CVE matching engine
@@ -287,21 +320,22 @@ are persisted across container restarts.
 
 ## 🛣 Roadmap (high level)
 
-**v0.4.3 (current):** ✅ LIVE
-- 12 production modules (generators, analyzers, calculators)
-- Cloud deployment on Render
-- CLI tool for power users
-- PDF security reports
-- Security Score (0-100)
+**v0.5.1 (current):** ✅ LIVE
+- 14 production modules (generators, analyzers, calculators)
+- **CVE Mitigation Advisor** — 19 CVEs with actionable workarounds
+- **UI/UX Redesign** — grouped sidebar, dark/light mode, quick access
+- Multi-format export (PDF, JSON, Markdown)
+- Timezone Converter with NATO DTG
+- Cloud deployment on custom domain
 
-**v0.5.0 (next):**
+**v0.6.0 (next):**
 - Authentication & multi-user mode
 - Stripe billing integration
 - User-scoped profiles and history
 
 **Future:**
-- CVE Mitigation Advisor (hardening recommendations)
-- Cisco PSIRT / Tenable integrations
+- Cisco PSIRT API integration
+- Tenable vulnerability scanner integration
 - Config drift detection
 - Compliance checking (CIS benchmarks)
 
