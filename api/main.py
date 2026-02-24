@@ -13,7 +13,7 @@ import os
 app = FastAPI(
     title="NetDevOps Micro-Tools API",
     description="Small tools. Real automation. AI-assisted. Backend for generating secure Cisco configurations.",
-    version="0.4.0",
+    version="0.5.1",
 )
 
 # CORS for local frontend (dev)

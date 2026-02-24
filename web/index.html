@@ -8,8 +8,15 @@
 </head>
 <body>
   <header class="header">
-    <div class="logo">NetDevOps Micro-Tools</div>
-    <div class="subtitle">Small tools. Real automation. AI-assisted.</div>
+    <div class="header-left">
+      <div class="logo">NetDevOps Micro-Tools</div>
+      <div class="subtitle">Small tools. Real automation. AI-assisted.</div>
+    </div>
+    <div class="header-right">
+      <button class="theme-toggle" id="theme-toggle" title="Toggle dark/light mode">
+        <span class="theme-icon" id="theme-icon">🌙</span>
+      </button>
+    </div>
   </header>
 
   <main class="layout">
@@ -18,27 +25,213 @@
     <aside class="sidebar card">
       <div class="sidebar-header">
         <div class="sidebar-title">Tools</div>
-        <div class="sidebar-subtitle">Generators & analysis</div>
+        <div class="sidebar-subtitle">Grouped by function</div>
       </div>
+      <!-- Home button -->
+      <button class="home-button active" id="home-button">
+        <span class="home-icon">🏠</span>
+        <span class="home-label">Home</span>
+      </button>
+
+      <!-- Quick Access (Last Used) -->
+      <div class="quick-access" id="quick-access">
+        <div class="quick-access-header">
+          <span class="quick-access-icon">⚡</span>
+          <span class="quick-access-label">Quick Access</span>
+        </div>
+        <div class="quick-access-items" id="quick-access-items">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
       <nav class="tab-nav">
-        <button class="tab-button active" data-tab="snmpv3">SNMPv3</button>
-        <button class="tab-button" data-tab="snmp-multi">SNMP Multi</button>
-        <button class="tab-button" data-tab="ntp">NTP</button>
-        <button class="tab-button" data-tab="aaa">AAA / TACACS+</button>
-        <button class="tab-button" data-tab="golden">Golden Config</button>
-        <button class="tab-button" data-tab="cve">CVE Analyzer</button>
-        <button class="tab-button" data-tab="mitigation">CVE Mitigation</button>
-        <button class="tab-button" data-tab="iperf">iPerf3</button>
-        <button class="tab-button" data-tab="subnet">Subnet Calc</button>
-        <button class="tab-button" data-tab="mtu">MTU Calc</button>
-        <button class="tab-button" data-tab="timezone">Timezone</button>
-        <button class="tab-button" data-tab="config-parser">Config Parser</button>
-        <button class="tab-button" data-tab="profiles">Profiles</button>
+
+        <!-- CONFIG GENERATORS -->
+        <div class="nav-group" data-category="config">
+          <button class="nav-group-header expanded" data-group="config">
+            <span class="nav-group-icon">⚙️</span>
+            <span class="nav-group-label">Config Generators</span>
+            <span class="nav-group-badge">5</span>
+            <span class="nav-group-arrow">▼</span>
+          </button>
+          <div class="nav-group-items" id="group-config">
+            <button class="tab-button" data-tab="snmpv3"><span class="tool-icon">📡</span> SNMPv3</button>
+            <button class="tab-button" data-tab="snmp-multi"><span class="tool-icon">📡</span> SNMP Multi-Host</button>
+            <button class="tab-button" data-tab="ntp"><span class="tool-icon">🕐</span> NTP</button>
+            <button class="tab-button" data-tab="aaa"><span class="tool-icon">🔐</span> AAA / TACACS+</button>
+            <button class="tab-button" data-tab="golden"><span class="tool-icon">✨</span> Golden Config</button>
+          </div>
+        </div>
+
+        <!-- SECURITY TOOLS -->
+        <div class="nav-group" data-category="security">
+          <button class="nav-group-header" data-group="security">
+            <span class="nav-group-icon">🛡️</span>
+            <span class="nav-group-label">Security Tools</span>
+            <span class="nav-group-badge">2</span>
+            <span class="nav-group-arrow">▶</span>
+          </button>
+          <div class="nav-group-items collapsed" id="group-security">
+            <button class="tab-button" data-tab="cve"><span class="tool-icon">🔍</span> CVE Analyzer</button>
+            <button class="tab-button" data-tab="mitigation"><span class="tool-icon">🚨</span> CVE Mitigation</button>
+          </div>
+        </div>
+
+        <!-- NETWORK TOOLS -->
+        <div class="nav-group" data-category="network">
+          <button class="nav-group-header" data-group="network">
+            <span class="nav-group-icon">🔧</span>
+            <span class="nav-group-label">Network Tools</span>
+            <span class="nav-group-badge">5</span>
+            <span class="nav-group-arrow">▶</span>
+          </button>
+          <div class="nav-group-items collapsed" id="group-network">
+            <button class="tab-button" data-tab="iperf"><span class="tool-icon">📊</span> iPerf3</button>
+            <button class="tab-button" data-tab="subnet"><span class="tool-icon">🧮</span> Subnet Calculator</button>
+            <button class="tab-button" data-tab="mtu"><span class="tool-icon">📏</span> MTU Calculator</button>
+            <button class="tab-button" data-tab="timezone"><span class="tool-icon">🌍</span> Timezone Converter</button>
+            <button class="tab-button" data-tab="config-parser"><span class="tool-icon">📄</span> Config Parser</button>
+          </div>
+        </div>
+
+        <!-- PROFILES -->
+        <div class="nav-group" data-category="profiles">
+          <button class="nav-group-header" data-group="profiles">
+            <span class="nav-group-icon">👤</span>
+            <span class="nav-group-label">Profiles</span>
+            <span class="nav-group-badge">1</span>
+            <span class="nav-group-arrow">▶</span>
+          </button>
+          <div class="nav-group-items collapsed" id="group-profiles">
+            <button class="tab-button" data-tab="profiles"><span class="tool-icon">💾</span> Device Profiles</button>
+          </div>
+        </div>
+
       </nav>
     </aside>
 
     <!-- Main panel -->
     <section class="container main-panel">
+
+      <!-- HOME TAB -->
+      <section id="tab-home" class="tab-content active">
+        <div class="home-hero">
+          <h1>NetDevOps Micro-Tools</h1>
+          <p class="home-tagline">Small tools. Real automation. Zero friction.</p>
+        </div>
+
+        <div class="home-grid">
+          <!-- Config Generators -->
+          <div class="home-category" data-category="config">
+            <div class="home-category-header">
+              <span class="home-category-icon">⚙️</span>
+              <h2>Config Generators</h2>
+            </div>
+            <div class="home-tools">
+              <button class="home-tool-card" data-tab="snmpv3">
+                <span class="tool-icon">📡</span>
+                <span class="tool-name">SNMPv3</span>
+                <span class="tool-desc">Secure SNMP configuration</span>
+              </button>
+              <button class="home-tool-card" data-tab="snmp-multi">
+                <span class="tool-icon">📡</span>
+                <span class="tool-name">SNMP Multi-Host</span>
+                <span class="tool-desc">Multiple monitoring hosts</span>
+              </button>
+              <button class="home-tool-card" data-tab="ntp">
+                <span class="tool-icon">🕐</span>
+                <span class="tool-name">NTP</span>
+                <span class="tool-desc">Time synchronization</span>
+              </button>
+              <button class="home-tool-card" data-tab="aaa">
+                <span class="tool-icon">🔐</span>
+                <span class="tool-name">AAA / TACACS+</span>
+                <span class="tool-desc">Authentication & authorization</span>
+              </button>
+              <button class="home-tool-card" data-tab="golden">
+                <span class="tool-icon">✨</span>
+                <span class="tool-name">Golden Config</span>
+                <span class="tool-desc">Baseline security template</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Security Tools -->
+          <div class="home-category" data-category="security">
+            <div class="home-category-header">
+              <span class="home-category-icon">🛡️</span>
+              <h2>Security Tools</h2>
+            </div>
+            <div class="home-tools">
+              <button class="home-tool-card" data-tab="cve">
+                <span class="tool-icon">🔍</span>
+                <span class="tool-name">CVE Analyzer</span>
+                <span class="tool-desc">Check device vulnerability</span>
+              </button>
+              <button class="home-tool-card featured" data-tab="mitigation">
+                <span class="tool-icon">🚨</span>
+                <span class="tool-name">CVE Mitigation</span>
+                <span class="tool-desc">Instant fix commands</span>
+                <span class="featured-badge">⭐ Featured</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Network Tools -->
+          <div class="home-category" data-category="network">
+            <div class="home-category-header">
+              <span class="home-category-icon">🔧</span>
+              <h2>Network Tools</h2>
+            </div>
+            <div class="home-tools">
+              <button class="home-tool-card" data-tab="iperf">
+                <span class="tool-icon">📊</span>
+                <span class="tool-name">iPerf3</span>
+                <span class="tool-desc">Bandwidth testing</span>
+              </button>
+              <button class="home-tool-card" data-tab="subnet">
+                <span class="tool-icon">🧮</span>
+                <span class="tool-name">Subnet Calculator</span>
+                <span class="tool-desc">IP address planning</span>
+              </button>
+              <button class="home-tool-card" data-tab="mtu">
+                <span class="tool-icon">📏</span>
+                <span class="tool-name">MTU Calculator</span>
+                <span class="tool-desc">Tunnel overhead</span>
+              </button>
+              <button class="home-tool-card" data-tab="timezone">
+                <span class="tool-icon">🌍</span>
+                <span class="tool-name">Timezone Converter</span>
+                <span class="tool-desc">NATO DTG support</span>
+              </button>
+              <button class="home-tool-card" data-tab="config-parser">
+                <span class="tool-icon">📄</span>
+                <span class="tool-name">Config Parser</span>
+                <span class="tool-desc">Show run → JSON</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Profiles -->
+          <div class="home-category" data-category="profiles">
+            <div class="home-category-header">
+              <span class="home-category-icon">👤</span>
+              <h2>Profiles</h2>
+            </div>
+            <div class="home-tools">
+              <button class="home-tool-card" data-tab="profiles">
+                <span class="tool-icon">💾</span>
+                <span class="tool-name">Device Profiles</span>
+                <span class="tool-desc">Save & load configurations</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="home-footer">
+          <p>Free. No login. Browser-based.</p>
+        </div>
+      </section>
 
       <!-- Top quick profiles (legacy presets) -->
       <div class="profile-bar card">
@@ -55,7 +248,7 @@
       </div>
 
       <!-- SNMPv3 TAB -->
-      <section id="tab-snmpv3" class="tab-content active">
+      <section id="tab-snmpv3" class="tab-content">
         <h2>SNMPv3 Config Generator <span class="version-badge">v2 - Cisco Best Practices</span></h2>
 
         <!-- Collapsible hints panel -->

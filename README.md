@@ -1,13 +1,13 @@
 # NetDevOps Micro-Tools
 
-![Version](https://img.shields.io/badge/version-0.4.3-blue)
+![Version](https://img.shields.io/badge/version-0.5.1-blue)
 ![Python](https://img.shields.io/badge/python-3.10+-green)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 ![Status](https://img.shields.io/badge/status-LIVE-brightgreen)
 
 **Small tools. Real automation. AI-assisted.**
 
-🚀 **Live:** https://netdevops-micro-tools.onrender.com
+🚀 **Live:** https://netdevops-tools.thebackroom.ai
 
 📧 **Pricing & Updates:** https://netdevops.thebackroom.ai/
 

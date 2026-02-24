@@ -12,6 +12,181 @@ const API_BASE_URL = (function() {
 })();
 
 // -----------------------------
+// Theme Toggle (Dark/Light Mode)
+// -----------------------------
+const THEME_KEY = "netdevops_theme";
+
+function getStoredTheme() {
+  return localStorage.getItem(THEME_KEY) || "dark";
+}
+
+function setTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  localStorage.setItem(THEME_KEY, theme);
+
+  const icon = document.getElementById("theme-icon");
+  if (icon) {
+    icon.textContent = theme === "dark" ? "🌙" : "☀️";
+  }
+}
+
+// Initialize theme
+setTheme(getStoredTheme());
+
+// Theme toggle button
+const themeToggle = document.getElementById("theme-toggle");
+if (themeToggle) {
+  themeToggle.addEventListener("click", () => {
+    const current = getStoredTheme();
+    setTheme(current === "dark" ? "light" : "dark");
+  });
+}
+
+// -----------------------------
+// Quick Access (Last Used Tools)
+// -----------------------------
+const QUICK_ACCESS_KEY = "netdevops_quick_access";
+const MAX_QUICK_ACCESS = 3;
+
+const toolIcons = {
+  "snmpv3": "📡",
+  "snmp-multi": "📡",
+  "ntp": "🕐",
+  "aaa": "🔐",
+  "golden": "✨",
+  "cve": "🔍",
+  "mitigation": "🚨",
+  "iperf": "📊",
+  "subnet": "🧮",
+  "mtu": "📏",
+  "timezone": "🌍",
+  "config-parser": "📄",
+  "profiles": "💾"
+};
+
+const toolNames = {
+  "snmpv3": "SNMPv3",
+  "snmp-multi": "SNMP Multi",
+  "ntp": "NTP",
+  "aaa": "AAA",
+  "golden": "Golden",
+  "cve": "CVE Analyzer",
+  "mitigation": "CVE Mitigation",
+  "iperf": "iPerf3",
+  "subnet": "Subnet",
+  "mtu": "MTU",
+  "timezone": "Timezone",
+  "config-parser": "Parser",
+  "profiles": "Profiles"
+};
+
+function getQuickAccess() {
+  try {
+    return JSON.parse(localStorage.getItem(QUICK_ACCESS_KEY)) || [];
+  } catch {
+    return [];
+  }
+}
+
+function addToQuickAccess(tab) {
+  let items = getQuickAccess();
+  items = items.filter(t => t !== tab);
+  items.unshift(tab);
+  items = items.slice(0, MAX_QUICK_ACCESS);
+  localStorage.setItem(QUICK_ACCESS_KEY, JSON.stringify(items));
+  renderQuickAccess();
+}
+
+function renderQuickAccess() {
+  const container = document.getElementById("quick-access-items");
+  const wrapper = document.getElementById("quick-access");
+  const items = getQuickAccess();
+
+  if (items.length === 0) {
+    wrapper.classList.add("hidden");
+    return;
+  }
+
+  wrapper.classList.remove("hidden");
+  container.innerHTML = items.map(tab => `
+    <button class="quick-access-btn" data-tab="${tab}">
+      <span class="tool-icon">${toolIcons[tab] || "🔹"}</span>
+      ${toolNames[tab] || tab}
+    </button>
+  `).join("");
+
+  // Add click handlers
+  container.querySelectorAll(".quick-access-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const tab = btn.dataset.tab;
+      const tabBtn = document.querySelector(`.tab-button[data-tab="${tab}"]`);
+      if (tabBtn) tabBtn.click();
+    });
+  });
+}
+
+// Initial render
+renderQuickAccess();
+
+// -----------------------------
+// Home Button
+// -----------------------------
+const homeButton = document.getElementById("home-button");
+const homeTab = document.getElementById("tab-home");
+
+homeButton.addEventListener("click", () => {
+  // Deactivate all tabs and buttons
+  document.querySelectorAll(".tab-button").forEach(b => b.classList.remove("active"));
+  document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+
+  // Collapse all nav groups
+  document.querySelectorAll(".nav-group-items").forEach(g => g.classList.add("collapsed"));
+  document.querySelectorAll(".nav-group-header").forEach(h => {
+    h.classList.remove("expanded");
+    const arrow = h.querySelector(".nav-group-arrow");
+    if (arrow) arrow.textContent = "▶";
+  });
+
+  // Activate home
+  homeButton.classList.add("active");
+  homeTab.classList.add("active");
+});
+
+// Home tool cards - navigate to tool
+document.querySelectorAll(".home-tool-card").forEach(card => {
+  card.addEventListener("click", () => {
+    const tab = card.dataset.tab;
+    const tabBtn = document.querySelector(`.tab-button[data-tab="${tab}"]`);
+    if (tabBtn) tabBtn.click();
+  });
+});
+
+// -----------------------------
+// Nav Group Toggle (collapsible sections)
+// -----------------------------
+const navGroupHeaders = document.querySelectorAll(".nav-group-header");
+
+navGroupHeaders.forEach((header) => {
+  header.addEventListener("click", () => {
+    const groupId = header.dataset.group;
+    const groupItems = document.getElementById(`group-${groupId}`);
+    const arrow = header.querySelector(".nav-group-arrow");
+
+    if (groupItems.classList.contains("collapsed")) {
+      // Expand
+      groupItems.classList.remove("collapsed");
+      header.classList.add("expanded");
+      arrow.textContent = "▼";
+    } else {
+      // Collapse
+      groupItems.classList.add("collapsed");
+      header.classList.remove("expanded");
+      arrow.textContent = "▶";
+    }
+  });
+});
+
+// -----------------------------
 // Tabs
 // -----------------------------
 const tabButtons = document.querySelectorAll(".tab-button");
@@ -21,12 +196,30 @@ tabButtons.forEach((btn) => {
   btn.addEventListener("click", () => {
     const tab = btn.dataset.tab;
 
+    // Deactivate home button
+    const homeBtn = document.getElementById("home-button");
+    if (homeBtn) homeBtn.classList.remove("active");
+
     tabButtons.forEach((b) => b.classList.remove("active"));
     tabContents.forEach((c) => c.classList.remove("active"));
 
     btn.classList.add("active");
     const section = document.getElementById(`tab-${tab}`);
     if (section) section.classList.add("active");
+
+    // Auto-expand the group containing this tab
+    const parentGroup = btn.closest(".nav-group-items");
+    if (parentGroup && parentGroup.classList.contains("collapsed")) {
+      const groupId = parentGroup.id.replace("group-", "");
+      const header = document.querySelector(`.nav-group-header[data-group="${groupId}"]`);
+      const arrow = header.querySelector(".nav-group-arrow");
+      parentGroup.classList.remove("collapsed");
+      header.classList.add("expanded");
+      arrow.textContent = "▼";
+    }
+
+    // Track in Quick Access
+    addToQuickAccess(tab);
 
     // Update Golden Config payload status when switching to that tab
     if (tab === "golden-config" && typeof updateGoldenPayloadStatus === "function") {

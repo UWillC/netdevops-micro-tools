@@ -4,6 +4,31 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.5.1] – 2026-02-23
+
+### Added
+
+- **UI/UX Redesign** — complete frontend overhaul:
+  - **Grouped Sidebar** — tools organized by category:
+    - Config Generators (SNMPv3, SNMP Multi-Host, NTP, AAA, Golden Config)
+    - Security Tools (CVE Mitigation Advisor, Security Score)
+    - Network Tools (iPerf3, Subnet Calculator, MTU Calculator, Timezone Converter, Config Parser)
+    - Profiles (Device Profiles)
+  - **Collapsible Navigation** — expand/collapse groups with smooth animations.
+  - **Category Colors** — visual distinction (blue/red/green/purple).
+  - **Icons & Badges** — tool count per category.
+  - **Quick Access** — recent tools history (last 3 used).
+  - **Home Page** — landing with all tools as cards.
+  - **Dark/Light Mode Toggle** — full theme support with localStorage persistence.
+  - **Hover Animations** — subtle feedback on interactive elements.
+
+### Changed
+
+- Sidebar layout from flat list to grouped hierarchy.
+- All hardcoded dark backgrounds replaced with CSS variables for theme support.
+
+---
+
 ## [v0.4.6] – 2026-02-04
 
 ### Added
@@ -68,8 +93,8 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - **Cloud Deployment** — product is now LIVE on Render!
-  - Live URL: https://netdevops-micro-tools.onrender.com
-  - API Docs: https://netdevops-micro-tools.onrender.com/docs
+  - Live URL: https://netdevops-tools.thebackroom.ai
+  - API Docs: https://netdevops-tools.thebackroom.ai/docs
 - Backend serves frontend files (`/`, `/style.css`, `/app.js`).
 - Auto-detect `API_BASE_URL` (file://, localhost, cloud).
 - `render.yaml` for one-click deployment.

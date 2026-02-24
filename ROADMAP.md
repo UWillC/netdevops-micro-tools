@@ -1,8 +1,8 @@
 # ROADMAP — NetDevOps Micro-Tools
 
-Current version: **v0.4.6** (LIVE)
-Live URL: https://netdevops-micro-tools.onrender.com
-Last updated: 2026-02-05
+Current version: **v0.5.1** (LIVE)
+Live URL: https://netdevops-tools.thebackroom.ai
+Last updated: 2026-02-23
 
 ---
 
@@ -36,7 +36,7 @@ Last updated: 2026-02-05
 - [x] Security Score widget in Web UI
 
 ### v0.4.1 — Cloud Deployment (Jan 2026)
-- [x] **LIVE on Render** — https://netdevops-micro-tools.onrender.com
+- [x] **LIVE on Render** — https://netdevops-tools.thebackroom.ai
 - [x] Backend serves frontend (single deployment)
 - [x] render.yaml for one-click deploy
 
@@ -70,6 +70,14 @@ Last updated: 2026-02-05
 - [x] Markdown format for security report (`?format=md`)
 - [x] "Export MD" button in Security Scores widget
 - [x] 3 export formats: PDF, JSON, Markdown
+
+### v0.5.1 — UI/UX Redesign (Feb 2026)
+- [x] Grouped sidebar (Config / Security / Network / Profiles)
+- [x] Collapsible navigation with animations
+- [x] Category colors and icons
+- [x] Quick Access (recent tools history)
+- [x] Home page with tool cards
+- [x] Dark/Light mode toggle
 
 ---
 

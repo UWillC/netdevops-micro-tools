@@ -11,7 +11,7 @@ Usage:
     netdevops cve CVE-2023-20198
 
 Environment:
-    NETDEVOPS_API_URL - API base URL (default: https://netdevops-micro-tools.onrender.com)
+    NETDEVOPS_API_URL - API base URL (default: https://netdevops-tools.thebackroom.ai)
 """
 
 import click
@@ -21,7 +21,7 @@ import os
 import sys
 
 # Default API URL (can be overridden with env var)
-DEFAULT_API_URL = "https://netdevops-micro-tools.onrender.com"
+DEFAULT_API_URL = "https://netdevops-tools.thebackroom.ai"
 API_URL = os.environ.get("NETDEVOPS_API_URL", DEFAULT_API_URL)
 
 
