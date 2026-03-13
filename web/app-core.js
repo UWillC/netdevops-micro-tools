@@ -61,6 +61,9 @@ const toolIcons = {
   "mtu": "📏",
   "timezone": "🌍",
   "config-parser": "📄",
+  "config-explainer": "💬",
+  "ip-path-tracer": "🔀",
+  "port-auditor": "🔌",
   "profiles": "💾"
 };
 
@@ -77,6 +80,9 @@ const toolNames = {
   "mtu": "MTU",
   "timezone": "Timezone",
   "config-parser": "Parser",
+  "config-explainer": "Explainer",
+  "ip-path-tracer": "Path Tracer",
+  "port-auditor": "Port Auditor",
   "profiles": "Profiles"
 };
 
