@@ -229,16 +229,31 @@ class CiscoAdvisoryProvider(CVEProvider):
     def _load_credentials(self) -> Optional[Dict[str, str]]:
         if self._credentials:
             return self._credentials
-        if not os.path.exists(CISCO_CREDENTIALS_PATH):
-            print(f"[WARN] Cisco PSIRT credentials not found at {CISCO_CREDENTIALS_PATH}")
-            return None
-        try:
-            with open(CISCO_CREDENTIALS_PATH, "r") as f:
-                self._credentials = json.load(f)
+
+        # Try file first
+        if os.path.exists(CISCO_CREDENTIALS_PATH):
+            try:
+                with open(CISCO_CREDENTIALS_PATH, "r") as f:
+                    self._credentials = json.load(f)
+                return self._credentials
+            except Exception as e:
+                print(f"[ERROR] Failed to read Cisco PSIRT credentials: {e}")
+
+        # Fallback: environment variables (for cloud deployment)
+        client_id = os.getenv("CISCO_CLIENT_ID")
+        client_secret = os.getenv("CISCO_CLIENT_SECRET")
+        if client_id and client_secret:
+            self._credentials = {
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "token_url": "https://id.cisco.com/oauth2/default/v1/token",
+                "api_base": "https://apix.cisco.com/security/advisories/v2",
+            }
+            print("[INFO] Cisco PSIRT credentials loaded from environment variables")
             return self._credentials
-        except Exception as e:
-            print(f"[ERROR] Failed to read Cisco PSIRT credentials: {e}")
-            return None
+
+        print(f"[WARN] Cisco PSIRT credentials not found (file or env)")
+        return None
 
     def _get_token(self) -> Optional[str]:
         if self._token and time.time() < self._token_expires:

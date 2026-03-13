@@ -179,20 +179,38 @@ def check_cve(cve_id: str):
 def get_critical_feed():
     """
     Returns latest critical/high CVEs from Cisco PSIRT cache.
-    Reads from local cache — no API call. Used by the home dashboard widget.
+    Auto-populates cache from API on first call if credentials exist.
     """
     cache_path = os.path.join(CISCO_CACHE_DIR, "iosxe.json")
     advisories = []
     cache_age_hours = None
 
+    # Try reading existing cache
     if os.path.exists(cache_path):
         try:
             with open(cache_path, "r", encoding="utf-8") as f:
                 cached = json.load(f)
-            cache_age_hours = round((time.time() - cached.get("cached_at", 0)) / 3600, 1)
+            age = time.time() - cached.get("cached_at", 0)
+            cache_age_hours = round(age / 3600, 1)
             advisories = cached.get("advisories", [])
         except Exception:
             pass
+
+    # No cache or expired? Try fetching from Cisco PSIRT API automatically
+    if not advisories:
+        try:
+            provider = CiscoAdvisoryProvider()
+            creds = provider._load_credentials()
+            if creds:
+                provider.load()  # fetches + writes cache
+                # Re-read the fresh cache
+                if os.path.exists(cache_path):
+                    with open(cache_path, "r", encoding="utf-8") as f:
+                        cached = json.load(f)
+                    cache_age_hours = round((time.time() - cached.get("cached_at", 0)) / 3600, 1)
+                    advisories = cached.get("advisories", [])
+        except Exception as e:
+            print(f"[WARN] Auto-fetch for critical feed failed: {e}")
 
     # Filter critical + high, sort by lastUpdated desc
     html_tag_re = re.compile(r"<[^>]+>")

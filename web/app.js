@@ -3772,7 +3772,7 @@ async function loadThreatFeed() {
     }
 
     if (!data.items || data.items.length === 0) {
-      threatFeedList.innerHTML = '<p class="summary-muted">No critical/high CVEs in cache. Enable Cisco PSIRT API (CVE_CISCO_PSIRT=1) to populate.</p>';
+      threatFeedList.innerHTML = '<p class="summary-muted">No threat data available. Feed populates automatically when Cisco PSIRT API credentials are configured.</p>';
       return;
     }
 
