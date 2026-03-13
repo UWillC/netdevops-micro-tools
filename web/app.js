@@ -3757,13 +3757,16 @@ if (iptGenerateForm && iptOutput) {
 const threatFeedList = document.getElementById("threat-feed-list");
 const threatFeedAge = document.getElementById("threat-feed-age");
 const threatFeedRefresh = document.getElementById("threat-feed-refresh");
+const threatFeedPlatform = document.getElementById("threat-feed-platform");
 
 async function loadThreatFeed() {
   if (!threatFeedList) return;
   threatFeedList.innerHTML = '<p class="summary-muted">Loading threat feed...</p>';
 
+  const platform = threatFeedPlatform?.value || "all";
+
   try {
-    const resp = await fetch("/analyze/critical-feed");
+    const resp = await fetch(`/analyze/critical-feed?platform=${platform}`);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
 
@@ -3809,4 +3812,9 @@ loadThreatFeed();
 // Refresh button
 if (threatFeedRefresh) {
   threatFeedRefresh.addEventListener("click", loadThreatFeed);
+}
+
+// Platform filter
+if (threatFeedPlatform) {
+  threatFeedPlatform.addEventListener("change", loadThreatFeed);
 }

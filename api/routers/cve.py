@@ -175,88 +175,128 @@ def check_cve(cve_id: str):
     )
 
 
-@router.get("/critical-feed", response_model=CriticalFeedResponse)
-def get_critical_feed():
-    """
-    Returns latest critical/high CVEs from Cisco PSIRT cache.
-    Auto-populates cache from API on first call if credentials exist.
-    """
-    cache_path = os.path.join(CISCO_CACHE_DIR, "iosxe.json")
-    advisories = []
-    cache_age_hours = None
+LATEST_CACHE_PATH = os.path.join(CISCO_CACHE_DIR, "latest.json")
+LATEST_CACHE_TTL = 6 * 3600  # 6 hours
 
-    # Try reading existing cache
-    if os.path.exists(cache_path):
-        try:
-            with open(cache_path, "r", encoding="utf-8") as f:
-                cached = json.load(f)
-            age = time.time() - cached.get("cached_at", 0)
-            cache_age_hours = round(age / 3600, 1)
-            advisories = cached.get("advisories", [])
-        except Exception:
-            pass
 
-    # No cache or expired? Try fetching from Cisco PSIRT API automatically
-    if not advisories:
-        try:
-            provider = CiscoAdvisoryProvider()
-            creds = provider._load_credentials()
-            if creds:
-                provider.load()  # fetches + writes cache
-                # Re-read the fresh cache
-                if os.path.exists(cache_path):
-                    with open(cache_path, "r", encoding="utf-8") as f:
-                        cached = json.load(f)
-                    cache_age_hours = round((time.time() - cached.get("cached_at", 0)) / 3600, 1)
-                    advisories = cached.get("advisories", [])
-        except Exception as e:
-            print(f"[WARN] Auto-fetch for critical feed failed: {e}")
+def _load_latest_cache() -> tuple:
+    """Load latest advisories cache. Returns (advisories, cache_age_hours)."""
+    if not os.path.exists(LATEST_CACHE_PATH):
+        return [], None
+    try:
+        with open(LATEST_CACHE_PATH, "r", encoding="utf-8") as f:
+            cached = json.load(f)
+        age = time.time() - cached.get("cached_at", 0)
+        if age > LATEST_CACHE_TTL:
+            return [], None  # expired
+        return cached.get("advisories", []), round(age / 3600, 1)
+    except Exception:
+        return [], None
 
-    # Filter critical + high, sort by lastUpdated desc
+
+def _fetch_latest_advisories() -> list:
+    """Fetch latest 50 advisories from Cisco PSIRT API (all platforms)."""
+    provider = CiscoAdvisoryProvider()
+    creds = provider._load_credentials()
+    if not creds:
+        return []
+
+    api_base = creds.get("api_base", "https://apix.cisco.com/security/advisories/v2")
+    url = f"{api_base}/latest/50"
+    data = provider._api_get(url)
+    if not data:
+        return []
+
+    advisories = data.get("advisories", [])
+
+    # Cache it
+    os.makedirs(CISCO_CACHE_DIR, exist_ok=True)
+    try:
+        with open(LATEST_CACHE_PATH, "w", encoding="utf-8") as f:
+            json.dump({"cached_at": time.time(), "advisories": advisories}, f)
+    except Exception:
+        pass
+
+    return advisories
+
+
+def _advisories_to_feed(advisories: list, platform_filter: str = "all") -> list:
+    """Convert raw advisories to FeedItem list with optional platform filter."""
     html_tag_re = re.compile(r"<[^>]+>")
     feed_items = []
 
     for adv in advisories:
         sir = (adv.get("sir") or "").lower()
-        if sir not in ("critical", "high"):
+        if sir not in ("critical", "high", "medium"):
             continue
+
+        # Platform filter
+        products = adv.get("productNames") or []
+        if platform_filter != "all":
+            product_text = " ".join(products).lower()
+            if platform_filter == "iosxe" and "ios xe" not in product_text:
+                continue
+            elif platform_filter == "ios" and ("ios" not in product_text or "ios xe" in product_text):
+                continue
+            elif platform_filter == "nxos" and "nx-os" not in product_text:
+                continue
+            elif platform_filter == "asa" and "asa" not in product_text and "adaptive security" not in product_text:
+                continue
+            elif platform_filter == "ftd" and "firepower" not in product_text and "ftd" not in product_text:
+                continue
 
         cves = adv.get("cves") or []
         cve_id = cves[0] if cves else adv.get("advisoryId", "N/A")
 
-        title = adv.get("advisoryTitle", "")
-        cvss_raw = adv.get("cvssBaseScore")
         cvss = None
+        cvss_raw = adv.get("cvssBaseScore")
         if cvss_raw:
             try:
                 cvss = float(cvss_raw)
             except (ValueError, TypeError):
                 pass
 
-        summary_raw = adv.get("summary", "")
-        summary_clean = html_tag_re.sub("", summary_raw).strip()[:200]
-
-        platforms = adv.get("productNames") or []
-
         feed_items.append(FeedItem(
             cve_id=cve_id,
-            title=title,
+            title=adv.get("advisoryTitle", ""),
             severity=sir,
             cvss=cvss,
             published=adv.get("firstPublished"),
             updated=adv.get("lastUpdated"),
             url=adv.get("publicationUrl"),
-            platforms=platforms[:3],
+            platforms=products[:3],
         ))
 
-    # Sort: newest first (by lastUpdated), then critical before high, then CVSS desc
+    # Sort: newest first, then severity, then CVSS
     feed_items.sort(
         key=lambda x: (x.updated or "0", 0 if x.severity == "critical" else -1, x.cvss or 0),
         reverse=True,
     )
+    return feed_items
+
+
+@router.get("/critical-feed", response_model=CriticalFeedResponse)
+def get_critical_feed(platform: str = "all"):
+    """
+    Returns latest CVEs from Cisco PSIRT (all platforms).
+    Optional filter: ?platform=iosxe|ios|nxos|asa|ftd|all
+    Auto-fetches from API on first call.
+    """
+    advisories, cache_age_hours = _load_latest_cache()
+
+    # No cache? Fetch from API
+    if not advisories:
+        try:
+            advisories = _fetch_latest_advisories()
+            if advisories:
+                cache_age_hours = 0.0
+        except Exception as e:
+            print(f"[WARN] Auto-fetch for critical feed failed: {e}")
+
+    feed_items = _advisories_to_feed(advisories, platform)
 
     return CriticalFeedResponse(
-        items=feed_items[:10],
+        items=feed_items[:15],
         total_advisories=len(advisories),
         cache_age_hours=cache_age_hours,
         timestamp=datetime.datetime.utcnow().isoformat() + "Z",

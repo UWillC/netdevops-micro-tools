@@ -239,9 +239,17 @@
           <div class="threat-feed-header">
             <div class="threat-feed-title">
               <span class="threat-feed-icon">🔥</span>
-              <h2>Cisco IOS XE — Latest Threats</h2>
+              <h2>Cisco — Latest Threats</h2>
             </div>
             <div class="threat-feed-meta">
+              <select id="threat-feed-platform" class="threat-feed-select">
+                <option value="all">All Platforms</option>
+                <option value="iosxe">IOS XE</option>
+                <option value="ios">IOS</option>
+                <option value="nxos">NX-OS</option>
+                <option value="asa">ASA</option>
+                <option value="ftd">Firepower / FTD</option>
+              </select>
               <span class="threat-feed-age" id="threat-feed-age"></span>
               <button class="btn-secondary" id="threat-feed-refresh" style="padding:4px 10px; font-size:0.75rem;">Refresh</button>
             </div>
