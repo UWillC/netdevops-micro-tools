@@ -249,8 +249,8 @@ def get_critical_feed():
             platforms=platforms[:3],
         ))
 
-    # Sort: critical first, then by CVSS desc
-    feed_items.sort(key=lambda x: (0 if x.severity == "critical" else 1, -(x.cvss or 0)))
+    # Sort: newest first (by lastUpdated), then severity, then CVSS
+    feed_items.sort(key=lambda x: (-(x.updated or ""), 0 if x.severity == "critical" else 1, -(x.cvss or 0)))
 
     return CriticalFeedResponse(
         items=feed_items[:10],

@@ -3792,6 +3792,7 @@ async function loadThreatFeed() {
         <span class="threat-feed-cvss ${cvssClass}">${cvssText}</span>
         <span class="threat-feed-cve">${item.cve_id}</span>
         <span class="threat-feed-desc">${item.title}</span>
+        <span class="threat-feed-date">${item.updated ? item.updated.slice(0, 10) : ""}</span>
         <span class="threat-feed-severity ${cvssClass}">${item.severity}</span>
       `;
 
