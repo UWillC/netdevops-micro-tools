@@ -275,6 +275,33 @@ def _advisories_to_feed(advisories: list, platform_filter: str = "all") -> list:
     return feed_items
 
 
+def _load_platform_cache(platform: str) -> list:
+    """Load platform-specific cache (e.g. iosxe.json) if available."""
+    cache_path = os.path.join(CISCO_CACHE_DIR, f"{platform}.json")
+    if not os.path.exists(cache_path):
+        return []
+    try:
+        with open(cache_path, "r", encoding="utf-8") as f:
+            cached = json.load(f)
+        # Accept even if expired — better stale data than none for platform filter
+        return cached.get("advisories", [])
+    except Exception:
+        return []
+
+
+def _merge_advisories(*sources: list) -> list:
+    """Merge multiple advisory lists, deduplicate by advisoryId."""
+    seen = set()
+    merged = []
+    for src in sources:
+        for adv in src:
+            aid = adv.get("advisoryId", "")
+            if aid and aid not in seen:
+                seen.add(aid)
+                merged.append(adv)
+    return merged
+
+
 @router.get("/critical-feed", response_model=CriticalFeedResponse)
 def get_critical_feed(platform: str = "all"):
     """
@@ -292,6 +319,23 @@ def get_critical_feed(platform: str = "all"):
                 cache_age_hours = 0.0
         except Exception as e:
             print(f"[WARN] Auto-fetch for critical feed failed: {e}")
+
+    # When filtering by platform, also include platform-specific cache
+    # (latest/50 may not contain that platform's advisories)
+    if platform != "all":
+        platform_advisories = _load_platform_cache(platform)
+        if not platform_advisories:
+            # No platform cache — try fetching it
+            try:
+                provider = CiscoAdvisoryProvider(platform=platform)
+                creds = provider._load_credentials()
+                if creds:
+                    provider.load()  # fetches + writes platform cache
+                    platform_advisories = _load_platform_cache(platform)
+            except Exception:
+                pass
+        if platform_advisories:
+            advisories = _merge_advisories(advisories, platform_advisories)
 
     feed_items = _advisories_to_feed(advisories, platform)
 
