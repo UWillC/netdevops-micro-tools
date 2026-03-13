@@ -11,7 +11,7 @@
 
 📧 **Pricing & Updates:** https://netdevops.thebackroom.ai/
 
-![UI Screenshot](demo/ui-v3-home.png)
+![UI Screenshot](demo/ui-v3-home.png?v=0.6.0)
 
 A **micro-SaaS backend + Web UI** for generating **secure Cisco IOS / IOS XE configurations**,
 performing **security analysis** (CVE awareness), and **network calculations**.
