@@ -59,15 +59,23 @@ def root():
     """Serve the frontend index.html"""
     return FileResponse(os.path.join(WEB_DIR, "index.html"))
 
-@app.get("/style.css")
-def serve_css():
-    """Serve CSS file"""
-    return FileResponse(os.path.join(WEB_DIR, "style.css"), media_type="text/css")
+CSS_FILES = ["style", "style-base", "style-home", "style-tools"]
 
-@app.get("/app.js")
-def serve_js():
-    """Serve JS file"""
-    return FileResponse(os.path.join(WEB_DIR, "app.js"), media_type="application/javascript")
+@app.get("/{filename}.css")
+def serve_css(filename: str):
+    """Serve CSS files from web directory"""
+    if filename in CSS_FILES:
+        return FileResponse(os.path.join(WEB_DIR, f"{filename}.css"), media_type="text/css")
+    return FileResponse(os.path.join(WEB_DIR, "style-base.css"), media_type="text/css")
+
+JS_FILES = ["app-core", "app-config", "app-golden", "app-security", "app-profiles", "app-ui", "app-network", "app-feeds", "app"]
+
+@app.get("/{filename}.js")
+def serve_js(filename: str):
+    """Serve JS files from web directory"""
+    if filename in JS_FILES:
+        return FileResponse(os.path.join(WEB_DIR, f"{filename}.js"), media_type="application/javascript")
+    return FileResponse(os.path.join(WEB_DIR, "app-core.js"), media_type="application/javascript")
 
 @app.get("/api")
 def api_root():

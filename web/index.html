@@ -4,7 +4,9 @@
   <meta charset="UTF-8" />
   <title>NetDevOps Micro-Tools – Web UI</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style-base.css" />
+  <link rel="stylesheet" href="style-home.css" />
+  <link rel="stylesheet" href="style-tools.css" />
 </head>
 <body>
   <header class="header">
@@ -2896,6 +2898,21 @@ With this, only ports inactive for 6+ months are flagged."></textarea>
     <span>NetDevOps Micro-Tools – Small tools. Real automation. AI-assisted.</span>
   </footer>
 
-  <script src="app.js"></script>
+  <!-- Core: theme, tabs, navigation, utilities -->
+  <script src="app-core.js"></script>
+  <!-- Config Generators: SNMPv3, NTP, AAA, iPerf3 -->
+  <script src="app-config.js"></script>
+  <!-- Golden Config form -->
+  <script src="app-golden.js"></script>
+  <!-- CVE Analyzer -->
+  <script src="app-security.js"></script>
+  <!-- Profiles, Vuln Widget, Security Score, Export -->
+  <script src="app-profiles.js"></script>
+  <!-- Hints, Tooltips, Golden Config UI, SNMP Multi-Host -->
+  <script src="app-ui.js"></script>
+  <!-- Subnet, MTU, Config Parser, CVE Mitigation, Timezone, NATO DTG, IP Path Tracer -->
+  <script src="app-network.js"></script>
+  <!-- Threat Feed, Port Auditor -->
+  <script src="app-feeds.js"></script>
 </body>
 </html>
