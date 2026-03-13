@@ -82,7 +82,7 @@
           <button class="nav-group-header" data-group="network">
             <span class="nav-group-icon">🔧</span>
             <span class="nav-group-label">Network Tools</span>
-            <span class="nav-group-badge">5</span>
+            <span class="nav-group-badge">6</span>
             <span class="nav-group-arrow">▶</span>
           </button>
           <div class="nav-group-items collapsed" id="group-network">
@@ -91,6 +91,7 @@
             <button class="tab-button" data-tab="mtu"><span class="tool-icon">📏</span> MTU Calculator</button>
             <button class="tab-button" data-tab="timezone"><span class="tool-icon">🌍</span> Timezone Converter</button>
             <button class="tab-button" data-tab="config-parser"><span class="tool-icon">📄</span> Config Parser</button>
+            <button class="tab-button" data-tab="ip-path-tracer"><span class="tool-icon">🔀</span> IP Path Tracer</button>
           </div>
         </div>
 
@@ -208,6 +209,11 @@
                 <span class="tool-icon">📄</span>
                 <span class="tool-name">Config Parser</span>
                 <span class="tool-desc">Show run → JSON</span>
+              </button>
+              <button class="home-tool-card" data-tab="ip-path-tracer">
+                <span class="tool-icon">🔀</span>
+                <span class="tool-name">IP Path Tracer</span>
+                <span class="tool-desc">Traceroute analyzer</span>
               </button>
             </div>
           </div>
@@ -2546,6 +2552,121 @@ interface GigabitEthernet0/0
             </div>
             <textarea id="config-parser-output" class="output-text" readonly placeholder="Parsed configuration will appear here as JSON..."></textarea>
           </div>
+        </div>
+      </section>
+
+      <!-- IP PATH TRACER TAB -->
+      <section id="tab-ip-path-tracer" class="tab-content">
+        <h2>IP Path Tracer <span class="version-badge">v1.0 — Traceroute Analyzer</span></h2>
+
+        <!-- Mode selector -->
+        <div class="card" style="margin-bottom: 1rem;">
+          <div class="form-row" style="flex-direction:row; gap:0.5rem;">
+            <button type="button" class="btn-primary" id="ipt-mode-analyze" style="flex:1;">Analyze Traceroute</button>
+            <button type="button" class="btn-secondary" id="ipt-mode-generate" style="flex:1;">Generate Commands</button>
+          </div>
+        </div>
+
+        <div class="generator-layout">
+
+          <!-- ANALYZE MODE -->
+          <form id="ipt-analyze-form" class="card">
+            <div class="form-section-title">Paste Traceroute Output</div>
+
+            <div class="form-row">
+              <label>traceroute / tracert / IOS traceroute output</label>
+              <textarea id="ipt-analyze-input" rows="14" placeholder="Paste your traceroute output here...
+
+Example (Linux):
+traceroute to 8.8.8.8 (8.8.8.8), 30 hops max
+ 1  192.168.1.1 (192.168.1.1)  1.234 ms  0.987 ms  1.001 ms
+ 2  10.0.0.1 (10.0.0.1)  5.432 ms  5.123 ms  5.678 ms
+ 3  * * *
+ 4  8.8.8.8 (8.8.8.8)  12.345 ms  11.987 ms  12.001 ms
+
+Also supports: Windows tracert, Cisco IOS traceroute"></textarea>
+            </div>
+
+            <div class="form-row">
+              <label>Destination IP (optional — auto-detected from last hop)</label>
+              <input type="text" id="ipt-analyze-dest" placeholder="e.g. 8.8.8.8" />
+            </div>
+
+            <button type="submit" class="btn-primary">Analyze Path</button>
+          </form>
+
+          <!-- GENERATE MODE (hidden by default) -->
+          <form id="ipt-generate-form" class="card" style="display:none;">
+            <div class="form-section-title">Generate Traceroute Commands</div>
+
+            <div class="form-row">
+              <label>Destination IP / Hostname</label>
+              <input type="text" id="ipt-gen-dest" placeholder="e.g. 10.0.0.1 or router.example.com" required />
+            </div>
+
+            <div class="form-row">
+              <label>Platform</label>
+              <select id="ipt-gen-platform">
+                <option value="ios-xe">Cisco IOS-XE</option>
+                <option value="ios">Cisco IOS</option>
+                <option value="nxos">Cisco NX-OS</option>
+                <option value="asa">Cisco ASA</option>
+                <option value="linux">Linux</option>
+                <option value="windows">Windows</option>
+              </select>
+            </div>
+
+            <div class="form-row">
+              <label>Source IP (optional)</label>
+              <input type="text" id="ipt-gen-source" placeholder="e.g. 192.168.1.1" />
+            </div>
+
+            <div class="form-row">
+              <label>VRF (optional)</label>
+              <input type="text" id="ipt-gen-vrf" placeholder="e.g. MGMT" />
+            </div>
+
+            <div class="form-row" style="display:flex; gap:1rem;">
+              <div style="flex:1;">
+                <label>Max TTL</label>
+                <input type="number" id="ipt-gen-ttl" value="30" min="1" max="255" />
+              </div>
+              <div style="flex:1;">
+                <label>Timeout (s)</label>
+                <input type="number" id="ipt-gen-timeout" value="3" min="1" max="30" />
+              </div>
+              <div style="flex:1;">
+                <label>Probes</label>
+                <input type="number" id="ipt-gen-probes" value="3" min="1" max="10" />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <label class="checkbox-label">
+                <input type="checkbox" id="ipt-gen-tcp" />
+                Use TCP (bypass ICMP filtering)
+              </label>
+            </div>
+
+            <div class="form-row" id="ipt-gen-port-row" style="display:none;">
+              <label>TCP Port</label>
+              <input type="number" id="ipt-gen-port" value="443" min="1" max="65535" />
+            </div>
+
+            <button type="submit" class="btn-primary">Generate Commands</button>
+          </form>
+
+          <!-- Output -->
+          <div class="output-card">
+            <div class="output-header">
+              <span>Results</span>
+              <div class="output-actions">
+                <button class="btn-secondary" data-copy-target="ipt-output">Copy</button>
+              </div>
+            </div>
+            <textarea id="ipt-output" class="output-text" readonly placeholder="Traceroute analysis or generated commands will appear here..."></textarea>
+          </div>
+
         </div>
       </section>
 

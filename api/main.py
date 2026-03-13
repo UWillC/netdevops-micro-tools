@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from api.routers import snmpv3, ntp, golden_config, aaa, cve, profiles, iperf, subnet, mtu, config_parser, export, mitigation, timezone
+from api.routers import snmpv3, ntp, golden_config, aaa, cve, profiles, iperf, subnet, mtu, config_parser, export, mitigation, timezone, ip_path_tracer
 from models.meta import MetaInfo
 import datetime
 import os
@@ -46,6 +46,7 @@ app.include_router(config_parser.router, prefix="/tools", tags=["Config Parser"]
 app.include_router(export.router, tags=["Export"])
 app.include_router(mitigation.router, tags=["CVE Mitigation Advisor"])
 app.include_router(timezone.router, tags=["Timezone Converter"])
+app.include_router(ip_path_tracer.router, prefix="/tools", tags=["IP Path Tracer"])
 
 
 # Determine base path for static files
@@ -84,7 +85,7 @@ def meta_version():
     return MetaInfo(
         version="0.5.1",
         build_time=datetime.datetime.utcnow().isoformat() + "Z",
-        feature_flags=["cve_engine_v3", "nvd_enrichment", "nvd_cache", "web_ui_v2", "profiles_v2", "profiles_cve", "security_score", "subnet_calc", "mtu_calc", "config_parser", "cloud_deploy", "export_pdf", "cve_mitigation_advisor", "timezone_converter"]
+        feature_flags=["cve_engine_v3", "nvd_enrichment", "nvd_cache", "web_ui_v2", "profiles_v2", "profiles_cve", "security_score", "subnet_calc", "mtu_calc", "config_parser", "cloud_deploy", "export_pdf", "cve_mitigation_advisor", "timezone_converter", "ip_path_tracer"]
     )
 
 # Mount static files (CSS, JS) - must be after all API routes

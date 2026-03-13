@@ -3583,3 +3583,169 @@ if (dtgNowBtn) {
 if (dtgClearBtn) {
   dtgClearBtn.addEventListener("click", clearDtgPicker);
 }
+
+// =============================================
+// IP PATH TRACER
+// =============================================
+
+const iptAnalyzeForm = document.getElementById("ipt-analyze-form");
+const iptGenerateForm = document.getElementById("ipt-generate-form");
+const iptModeAnalyze = document.getElementById("ipt-mode-analyze");
+const iptModeGenerate = document.getElementById("ipt-mode-generate");
+const iptOutput = document.getElementById("ipt-output");
+const iptGenTcp = document.getElementById("ipt-gen-tcp");
+const iptGenPortRow = document.getElementById("ipt-gen-port-row");
+
+// Mode toggle
+if (iptModeAnalyze && iptModeGenerate) {
+  iptModeAnalyze.addEventListener("click", () => {
+    iptAnalyzeForm.style.display = "";
+    iptGenerateForm.style.display = "none";
+    iptModeAnalyze.className = "btn-primary";
+    iptModeGenerate.className = "btn-secondary";
+  });
+  iptModeGenerate.addEventListener("click", () => {
+    iptAnalyzeForm.style.display = "none";
+    iptGenerateForm.style.display = "";
+    iptModeAnalyze.className = "btn-secondary";
+    iptModeGenerate.className = "btn-primary";
+  });
+}
+
+// TCP checkbox shows port field
+if (iptGenTcp && iptGenPortRow) {
+  iptGenTcp.addEventListener("change", () => {
+    iptGenPortRow.style.display = iptGenTcp.checked ? "" : "none";
+  });
+}
+
+// Format analyze results
+function formatPathAnalysis(data) {
+  let out = [];
+
+  out.push(`PATH ANALYSIS`);
+  out.push(`${"=".repeat(50)}`);
+  out.push(`Summary: ${data.summary}`);
+  out.push(`Hops: ${data.hop_count} | Destination: ${data.destination_reached ? "REACHED" : "NOT REACHED"}`);
+  if (data.destination_ip) out.push(`Destination IP: ${data.destination_ip}`);
+  if (data.total_latency_ms != null) out.push(`Total Latency: ${data.total_latency_ms} ms`);
+  out.push("");
+
+  // Warnings
+  if (data.warnings && data.warnings.length > 0) {
+    out.push(`WARNINGS`);
+    out.push(`${"-".repeat(50)}`);
+    data.warnings.forEach(w => out.push(`  ⚠  ${w}`));
+    out.push("");
+  }
+
+  // Hop table
+  out.push(`HOP DETAILS`);
+  out.push(`${"-".repeat(50)}`);
+  out.push(`${"#".padEnd(4)} ${"IP Address".padEnd(18)} ${"Hostname".padEnd(20)} ${"Avg RTT".padEnd(10)} Flags`);
+  out.push(`${"-".repeat(70)}`);
+
+  data.hops.forEach(hop => {
+    const num = String(hop.hop_number).padEnd(4);
+    const ip = (hop.ip_address || "* * *").padEnd(18);
+    const host = (hop.hostname || "").padEnd(20);
+    const rtt = hop.rtt_avg_ms != null ? `${hop.rtt_avg_ms} ms`.padEnd(10) : "timeout".padEnd(10);
+
+    let flags = [];
+    if (hop.is_destination) flags.push("DST");
+    if (hop.is_private) flags.push("RFC1918");
+    if (hop.packet_loss) flags.push("LOSS");
+
+    out.push(`${num} ${ip} ${host} ${rtt} ${flags.join(" ")}`);
+
+    if (hop.issues && hop.issues.length > 0) {
+      hop.issues.forEach(issue => {
+        out.push(`     └─ ${issue}`);
+      });
+    }
+  });
+
+  return out.join("\n");
+}
+
+// Format generate results
+function formatPathCommands(data) {
+  let out = [];
+  out.push(`TRACEROUTE COMMANDS — ${data.platform}`);
+  out.push(`${"=".repeat(50)}`);
+  out.push("");
+  data.commands.forEach((cmd, i) => {
+    out.push(`${i + 1}. ${cmd}`);
+  });
+  if (data.notes && data.notes.length > 0) {
+    out.push("");
+    out.push(`NOTES`);
+    out.push(`${"-".repeat(50)}`);
+    data.notes.forEach(n => out.push(`  • ${n}`));
+  }
+  return out.join("\n");
+}
+
+// Analyze form
+if (iptAnalyzeForm && iptOutput) {
+  iptAnalyzeForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const traceOutput = document.getElementById("ipt-analyze-input")?.value || "";
+    const destIp = document.getElementById("ipt-analyze-dest")?.value?.trim() || null;
+
+    if (!traceOutput.trim()) {
+      iptOutput.value = "Error: Please paste traceroute output to analyze.";
+      return;
+    }
+
+    iptOutput.value = "Analyzing traceroute...";
+
+    try {
+      const payload = { traceroute_output: traceOutput };
+      if (destIp) payload.destination_ip = destIp;
+      const data = await postJSON("/tools/ip-path-tracer/analyze", payload);
+      iptOutput.value = formatPathAnalysis(data);
+    } catch (err) {
+      iptOutput.value = `Error: ${err.message}`;
+    }
+  });
+}
+
+// Generate form
+if (iptGenerateForm && iptOutput) {
+  iptGenerateForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const dest = document.getElementById("ipt-gen-dest")?.value?.trim();
+    if (!dest) {
+      iptOutput.value = "Error: Destination is required.";
+      return;
+    }
+
+    const payload = {
+      destination: dest,
+      platform: document.getElementById("ipt-gen-platform")?.value || "ios-xe",
+      source_ip: document.getElementById("ipt-gen-source")?.value?.trim() || null,
+      vrf: document.getElementById("ipt-gen-vrf")?.value?.trim() || null,
+      max_ttl: parseInt(document.getElementById("ipt-gen-ttl")?.value || "30", 10),
+      timeout: parseInt(document.getElementById("ipt-gen-timeout")?.value || "3", 10),
+      probe_count: parseInt(document.getElementById("ipt-gen-probes")?.value || "3", 10),
+      use_tcp: document.getElementById("ipt-gen-tcp")?.checked || false,
+    };
+
+    if (payload.use_tcp) {
+      payload.port = parseInt(document.getElementById("ipt-gen-port")?.value || "443", 10);
+    }
+
+    // Remove null values
+    Object.keys(payload).forEach(k => { if (payload[k] === null) delete payload[k]; });
+
+    iptOutput.value = "Generating commands...";
+
+    try {
+      const data = await postJSON("/tools/ip-path-tracer/generate", payload);
+      iptOutput.value = formatPathCommands(data);
+    } catch (err) {
+      iptOutput.value = `Error: ${err.message}`;
+    }
+  });
+}
