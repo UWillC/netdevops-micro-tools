@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from services.cve_engine import CVEEngine, CVEEngineConfig
-from services.cve_sources import NvdEnricherProvider
+from services.cve_sources import NvdEnricherProvider, CiscoAdvisoryProvider
 from models.cve_model import CVEEntry
 
 
@@ -81,7 +81,8 @@ def analyze_cve(req: CVEAnalyzeRequest):
 @router.get("/cve/{cve_id}", response_model=CVECheckResponse)
 def check_cve(cve_id: str):
     """
-    Check if a specific CVE exists in the local database.
+    Check if a specific CVE exists in the database.
+    If not found locally, tries Cisco PSIRT API (auto-imports to local).
     Optionally enriches with NVD data if CVE_NVD_ENRICH=1.
     """
     # Normalize CVE ID format
@@ -89,7 +90,7 @@ def check_cve(cve_id: str):
     if not cve_id_upper.startswith("CVE-"):
         cve_id_upper = f"CVE-{cve_id_upper}"
 
-    # Load CVE database
+    # Load CVE database (local only first — fast)
     engine = CVEEngine(config=CVEEngineConfig(engine_version="0.3.3"))
     engine.load_all()
 
@@ -99,6 +100,36 @@ def check_cve(cve_id: str):
         if cve.cve_id.upper() == cve_id_upper:
             entry = cve
             break
+
+    # Not found locally? Try Cisco PSIRT API (fallback lookup)
+    if entry is None:
+        try:
+            cisco = CiscoAdvisoryProvider()
+            creds = cisco._load_credentials()
+            if creds:
+                api_base = creds.get("api_base", "https://apix.cisco.com/security/advisories/v2")
+                url = f"{api_base}/cve/{cve_id_upper}"
+                data = cisco._api_get(url)
+                if data:
+                    advisories = data.get("advisories", [])
+                    if advisories:
+                        # Auto-sync this advisory to local files
+                        try:
+                            from services.cisco_sync import auto_sync_new_cves
+                            auto_sync_new_cves(advisories)
+                        except Exception:
+                            pass
+                        # Parse and return
+                        for adv in advisories:
+                            parsed = cisco._parse_advisory(adv)
+                            for p in parsed:
+                                if p.cve_id.upper() == cve_id_upper:
+                                    entry = p
+                                    break
+                            if entry:
+                                break
+        except Exception as e:
+            print(f"[WARN] Cisco PSIRT fallback lookup failed: {e}")
 
     # Optional NVD enrichment for this specific CVE
     if entry and _env_true("CVE_NVD_ENRICH"):

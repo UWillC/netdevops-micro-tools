@@ -122,7 +122,7 @@ class CVEEngine:
 
     Enable:
       - NVD enrichment:      CVE_NVD_ENRICH=1
-      - Cisco provider stub: CVE_CISCO_PROVIDER=1
+      - Cisco PSIRT provider: CVE_CISCO_PSIRT=1
       - Tenable provider stub:CVE_TENABLE_PROVIDER=1
     """
 
@@ -134,7 +134,7 @@ class CVEEngine:
         self.config = config or CVEEngineConfig()
 
         enable_nvd = self.config.enable_nvd_enrichment or _env_true("CVE_NVD_ENRICH")
-        enable_cisco = self.config.enable_cisco_provider or _env_true("CVE_CISCO_PROVIDER")
+        enable_cisco = self.config.enable_cisco_provider or _env_true("CVE_CISCO_PSIRT")
         enable_tenable = self.config.enable_tenable_provider or _env_true("CVE_TENABLE_PROVIDER")
 
         if providers is not None:
