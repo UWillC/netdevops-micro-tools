@@ -84,7 +84,7 @@
           <button class="nav-group-header" data-group="network">
             <span class="nav-group-icon">🔧</span>
             <span class="nav-group-label">Network Tools</span>
-            <span class="nav-group-badge">7</span>
+            <span class="nav-group-badge">8</span>
             <span class="nav-group-arrow">▶</span>
           </button>
           <div class="nav-group-items collapsed" id="group-network">
@@ -93,6 +93,7 @@
             <button class="tab-button" data-tab="mtu"><span class="tool-icon">📏</span> MTU Calculator</button>
             <button class="tab-button" data-tab="timezone"><span class="tool-icon">🌍</span> Timezone Converter</button>
             <button class="tab-button" data-tab="config-parser"><span class="tool-icon">📄</span> Config Parser</button>
+            <button class="tab-button" data-tab="config-explainer"><span class="tool-icon">💬</span> Config Explainer</button>
             <button class="tab-button" data-tab="ip-path-tracer"><span class="tool-icon">🔀</span> IP Path Tracer</button>
             <button class="tab-button" data-tab="port-auditor"><span class="tool-icon">🔌</span> Port Auditor</button>
           </div>
@@ -237,6 +238,11 @@
                 <span class="tool-icon">📄</span>
                 <span class="tool-name">Config Parser</span>
                 <span class="tool-desc">Show run → JSON</span>
+              </button>
+              <button class="home-tool-card" data-tab="config-explainer">
+                <span class="tool-icon">💬</span>
+                <span class="tool-name">Config Explainer</span>
+                <span class="tool-desc">Explain config in English</span>
               </button>
               <button class="home-tool-card" data-tab="ip-path-tracer">
                 <span class="tool-icon">🔀</span>
@@ -2698,6 +2704,65 @@ Also supports: Windows tracert, Cisco IOS traceroute"></textarea>
               </div>
             </div>
             <textarea id="ipt-output" class="output-text" readonly placeholder="Traceroute analysis or generated commands will appear here..."></textarea>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- CONFIG EXPLAINER TAB -->
+      <section id="tab-config-explainer" class="tab-content">
+        <h2>Config Explainer <span class="version-badge">v1.0 — Plain English</span></h2>
+
+        <div class="generator-layout">
+
+          <form id="ce-form" class="card">
+            <div class="form-section-title">Paste Cisco Config</div>
+
+            <div class="form-row">
+              <label>Running config or config snippet</label>
+              <textarea id="ce-config-input" rows="16" placeholder="Paste your 'show running-config' output or any config snippet here...
+
+Example:
+hostname CORE-SW01
+!
+service password-encryption
+enable secret 9 $9$abc
+!
+snmp-server community PUBLIC RO
+snmp-server group NETADMIN v3 priv
+!
+interface GigabitEthernet1/0/1
+ description UPLINK
+ ip address 10.1.1.1 255.255.255.0
+ no shutdown
+!
+line vty 0 15
+ transport input ssh
+ exec-timeout 5 0"></textarea>
+            </div>
+
+            <div class="form-row" style="display:flex; gap:1rem; align-items:end;">
+              <div style="flex:1;">
+                <label>Explanation Mode</label>
+                <select id="ce-mode">
+                  <option value="standard">Standard</option>
+                  <option value="junior">Junior-friendly (more context)</option>
+                </select>
+              </div>
+            </div>
+
+            <button type="submit" class="btn-primary">Explain Config</button>
+          </form>
+
+          <!-- Output -->
+          <div class="output-card">
+            <div class="output-header">
+              <span>Explanation</span>
+              <div class="output-actions">
+                <button class="btn-secondary" data-copy-target="ce-output">Copy</button>
+              </div>
+            </div>
+            <textarea id="ce-output" class="output-text" readonly placeholder="Config explanation will appear here..."></textarea>
           </div>
 
         </div>

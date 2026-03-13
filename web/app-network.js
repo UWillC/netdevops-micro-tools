@@ -1191,3 +1191,86 @@ if (iptGenerateForm && iptOutput) {
     }
   });
 }
+
+// =============================================
+// CONFIG EXPLAINER
+// =============================================
+
+const ceForm = document.getElementById("ce-form");
+const ceOutput = document.getElementById("ce-output");
+
+function formatExplanation(data) {
+  let out = [];
+
+  out.push(`CONFIG EXPLANATION`);
+  out.push(`${"=".repeat(60)}`);
+  if (data.hostname) out.push(`Device: ${data.hostname}`);
+  out.push(`Mode: ${data.mode === "junior" ? "Junior-friendly" : "Standard"}`);
+  out.push(`Coverage: ${data.explained_lines}/${data.total_lines} lines explained (${data.coverage_pct}%)`);
+  out.push("");
+
+  // Security notes first
+  if (data.security_notes && data.security_notes.length > 0) {
+    out.push(`SECURITY NOTES`);
+    out.push(`${"-".repeat(60)}`);
+    data.security_notes.forEach(note => {
+      const prefix = note.startsWith("CRITICAL") ? "!!!" : note.startsWith("WARNING") ? " ! " : "   ";
+      out.push(`${prefix} ${note}`);
+    });
+    out.push("");
+  }
+
+  // Sections
+  data.sections.forEach(section => {
+    out.push(`${section.title.toUpperCase()}`);
+    out.push(`${"-".repeat(60)}`);
+
+    section.lines.forEach(line => {
+      if (!line.explanation) {
+        // Unexplained line — show dimmed
+        out.push(`  ${line.line}`);
+        return;
+      }
+
+      const riskTag = line.risk === "critical" ? " [CRITICAL]"
+        : line.risk === "warning" ? " [WARNING]"
+        : line.risk === "info" ? " [INFO]"
+        : "";
+
+      out.push(`  ${line.line}`);
+      out.push(`    -> ${line.explanation}${riskTag}`);
+      if (line.tip) {
+        out.push(`    TIP: ${line.tip}`);
+      }
+    });
+
+    out.push("");
+  });
+
+  return out.join("\n");
+}
+
+if (ceForm && ceOutput) {
+  ceForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const configText = document.getElementById("ce-config-input")?.value || "";
+    const mode = document.getElementById("ce-mode")?.value || "standard";
+
+    if (!configText.trim()) {
+      ceOutput.value = "Error: Please paste a Cisco config to explain.";
+      return;
+    }
+
+    ceOutput.value = "Analyzing config...";
+
+    try {
+      const data = await postJSON("/tools/config-explainer/explain", {
+        config_text: configText,
+        mode: mode,
+      });
+      ceOutput.value = formatExplanation(data);
+    } catch (err) {
+      ceOutput.value = `Error: ${err.message}`;
+    }
+  });
+}
