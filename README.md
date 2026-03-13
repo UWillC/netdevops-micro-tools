@@ -1,6 +1,6 @@
 # NetDevOps Micro-Tools
 
-![Version](https://img.shields.io/badge/version-0.5.1-blue)
+![Version](https://img.shields.io/badge/version-0.6.0-blue)
 ![Python](https://img.shields.io/badge/python-3.10+-green)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 ![Status](https://img.shields.io/badge/status-LIVE-brightgreen)
@@ -101,6 +101,30 @@ NetDevOps Micro-Tools aims to solve this by providing:
 - Extracts: hostname, interfaces, SNMP, NTP, AAA, users, banners
 - Summary mode for quick stats
 
+#### IP Path Tracer
+- Traceroute output analyzer (Linux, Windows, Cisco IOS)
+- Latency spike detection, packet loss, RFC1918 boundaries
+- Command generator for 6 platforms (IOS, IOS-XE, NX-OS, ASA, Linux, Windows)
+- VRF, TCP mode, source IP support
+
+#### Port Auditor
+- Parse `show interface status` + optional `show interfaces`
+- Detect unused switch ports (configurable threshold)
+- Generate shutdown config for inactive ports
+- Based on real Tcl script used in production networks
+
+#### Config Drift Detection
+- Compare two configs (baseline vs current)
+- Section-by-section diff with added/removed lines
+- Risk flags on security-sensitive changes
+- Drift score 0-100%
+
+#### Config Explainer
+- Explain Cisco config in plain English (rule-based, no LLM)
+- 150+ command patterns with risk flags and tips
+- Standard and Junior-friendly modes
+- Security notes for missing best practices
+
 ### 💻 CLI Tool (v0.4.3)
 
 Terminal interface for power users:
@@ -133,7 +157,17 @@ A lightweight CVE awareness engine focused on Cisco platforms with NVD enrichmen
 - **Multi-format Export** — PDF, JSON, and Markdown reports
 - **File-based cache** — NVD responses cached for 24h (eliminates rate limiting)
 
-### 🛡️ CVE Mitigation Advisor ⭐ NEW
+### 📋 CIS Compliance Audit ⭐ NEW
+
+Audit your Cisco config against CIS Benchmark hardening rules.
+
+- **37 rules** based on CIS Cisco IOS Benchmark (Level 1 + Level 2)
+- Categories: Management Plane, Access, Services, Logging & NTP, Banner, SNMP, Layer 2 Security
+- Compliance score 0-100% with letter grade (A-F)
+- Remediation commands per failed rule
+- Weighted scoring by severity
+
+### 🛡️ CVE Mitigation Advisor
 
 **The killer feature — zero competition in this space.**
 
@@ -241,6 +275,11 @@ netdevops-micro-tools/
 │       ├── cve.py           # POST /analyze/cve, GET /analyze/cve/{id}
 │       ├── mitigation.py    # /mitigate/* endpoints (CVE Mitigation Advisor)
 │       ├── timezone.py      # /timezone/* endpoints
+│       ├── ip_path_tracer.py # /tools/ip-path-tracer/* endpoints
+│       ├── port_auditor.py  # /tools/port-auditor/* endpoints
+│       ├── config_explainer.py # /tools/config-explainer/* endpoints
+│       ├── config_drift.py  # /tools/config-drift/* endpoints
+│       ├── cis_audit.py     # /tools/cis-audit/* endpoints
 │       └── profiles.py      # /profiles/* endpoints
 ├── services/                # Business logic layer
 │   ├── cve_engine.py        # CVE matching engine
@@ -258,8 +297,17 @@ netdevops-micro-tools/
 ├── profiles/                # Saved device profiles
 ├── web/
 │   ├── index.html           # SPA entry
-│   ├── app.js               # Frontend logic
-│   └── style.css
+│   ├── app-core.js          # Core: theme, quick access, helpers
+│   ├── app-config.js        # Config generators (SNMP, NTP, AAA)
+│   ├── app-golden.js        # Golden Config builder
+│   ├── app-security.js      # CVE Analyzer
+│   ├── app-profiles.js      # Profiles, Vuln Widget, Export
+│   ├── app-ui.js            # Hints, tooltips, SNMP Multi-Host
+│   ├── app-network.js       # Network tools, Config Explainer, Drift, CIS
+│   ├── app-feeds.js         # Threat Feed, Port Auditor
+│   ├── style-base.css       # Base styles, layout, theme
+│   ├── style-home.css       # Home page, navigation
+│   └── style-tools.css      # Tool-specific styles
 ├── Dockerfile
 ├── .gitignore
 └── README.md
@@ -320,24 +368,23 @@ are persisted across container restarts.
 
 ## 🛣 Roadmap (high level)
 
-**v0.5.1 (current):** ✅ LIVE
-- 14 production modules (generators, analyzers, calculators)
-- **CVE Mitigation Advisor** — 19 CVEs with actionable workarounds
-- **UI/UX Redesign** — grouped sidebar, dark/light mode, quick access
-- Multi-format export (PDF, JSON, Markdown)
-- Timezone Converter with NATO DTG
+**v0.6.0 (current):** ✅ LIVE — 20 production modules
+- **Config Generators** (5): SNMPv3, NTP, AAA, Golden Config, SNMP Multi-Host
+- **Network Tools** (8): iPerf3, Subnet, MTU, Timezone/NATO DTG, Config Parser, IP Path Tracer, Port Auditor, Config Drift
+- **Security Tools** (5): CVE Analyzer, CVE Mitigation Advisor, Cisco Threat Feed, Config Explainer, CIS Compliance Audit
+- **Management** (2): Profiles v2, Security Score Engine
+- Modular frontend architecture (8 JS + 3 CSS files)
 - Cloud deployment on custom domain
 
-**v0.6.0 (next):**
+**v0.7.0 (next):**
 - Authentication & multi-user mode
-- Stripe billing integration
+- Email capture / signup flow
 - User-scoped profiles and history
 
 **Future:**
-- Cisco PSIRT API integration
 - Tenable vulnerability scanner integration
-- Config drift detection
-- Compliance checking (CIS benchmarks)
+- Network Config Backup (script generator)
+- Stripe billing integration
 
 See `CHANGELOG.md` for version history.
 

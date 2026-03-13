@@ -4,6 +4,48 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.0] – 2026-03-13
+
+### Added
+
+- **Cisco Threat Feed** (v1.0) — live CVE dashboard:
+  - Cisco PSIRT API integration (`/latest/50`)
+  - Platform filter: All / IOS XE / IOS / NX-OS / ASA / FTD
+  - Home dashboard widget, 6h cache TTL, CVSS badge coloring
+- **IP Path Tracer** (v1.0) — traceroute analyzer:
+  - Parse output from Linux traceroute, Windows tracert, Cisco IOS
+  - Latency spike detection, packet loss, RFC1918 boundaries
+  - Command generator for 6 platforms (IOS, IOS-XE, NX-OS, ASA, Linux, Windows)
+- **Port Auditor** (v1.0) — unused port detection:
+  - Parse `show interface status` + optional `show interfaces`
+  - Detect unused ports with configurable threshold
+  - Generate shutdown config for inactive ports
+- **Config Explainer** (v1.0) — plain English explanations:
+  - Rule-based: 150+ Cisco command patterns, zero LLM cost
+  - Risk flags (critical/warning/info), security notes
+  - Standard and Junior-friendly modes
+- **Config Drift Detection** (v1.0) — compare two configs:
+  - Section-by-section diff (added/removed)
+  - Risk flags on security-sensitive changes
+  - Drift score 0-100%
+- **CIS Compliance Audit** (v1.0) — hardening benchmark:
+  - 37 rules based on CIS Cisco IOS Benchmark
+  - Level 1 (28 rules) / Level 2 (37 rules)
+  - Compliance score with letter grade (A-F)
+  - Remediation commands per failed rule
+
+### Changed
+
+- **Frontend refactored** from monolithic files to modular architecture:
+  - `app.js` (3,900 lines) → 8 domain-specific JS modules
+  - `style.css` (3,000 lines) → 3 CSS modules (base, home, tools)
+- Security Tools badge count: 2 → 5 (added CIS Audit)
+- Network Tools badge count: 6 → 9 (added Port Auditor, Config Drift, + IP Path Tracer)
+- Quick Access icons added for all new tools
+- Version bumped to 0.6.0
+
+---
+
 ## [v0.5.1] – 2026-02-23
 
 ### Added
@@ -332,7 +374,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - Authentication and multi-user support.
+- Email capture / signup flow.
 - Stripe billing integration.
-- CVE Mitigation Advisor (hardening recommendations).
-- Cisco PSIRT / Tenable integrations.
-- Advanced Profiles UX (rename, duplicate, diff preview).
+- Network Config Backup (script generator).
+- Tenable vulnerability scanner integration.

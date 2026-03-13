@@ -1,8 +1,8 @@
 # ROADMAP — NetDevOps Micro-Tools
 
-Current version: **v0.5.1** (LIVE)
+Current version: **v0.6.0** (LIVE)
 Live URL: https://netdevops-tools.thebackroom.ai
-Last updated: 2026-02-23
+Last updated: 2026-03-13
 
 ---
 
@@ -79,6 +79,16 @@ Last updated: 2026-02-23
 - [x] Home page with tool cards
 - [x] Dark/Light mode toggle
 
+### v0.6.0 — Feature Expansion (Mar 2026)
+- [x] **Cisco Threat Feed** — live PSIRT dashboard with platform filtering
+- [x] **IP Path Tracer** — traceroute analyzer + command generator (6 platforms)
+- [x] **Port Auditor** — unused port detection from `show interface status`
+- [x] **Config Explainer** — plain English explanations, 150+ patterns, zero LLM cost
+- [x] **Config Drift Detection** — compare two configs, risk flags, drift score
+- [x] **CIS Compliance Audit** — 37 CIS Benchmark rules, Level 1/2, grading A-F
+- [x] Frontend refactor: monolithic → modular (8 JS + 3 CSS files)
+- [x] 20 production modules total
+
 ---
 
 ## 🎯 Current Phase: Validation (Q1 2026)
@@ -91,7 +101,7 @@ Focus: Confirm product-market fit before monetization.
 |--------|--------|--------|
 | Discovery calls | 5 | 🔴 0/5 |
 | Beta users | 10 | 🔴 0/10 |
-| LinkedIn followers | 500 | 🟡 ~50 |
+| LinkedIn followers | 500 | ✅ 1,169 |
 
 ### Key Activities
 
@@ -102,7 +112,7 @@ Focus: Confirm product-market fit before monetization.
 
 ---
 
-## 🚀 v0.5.0 — SaaS Monetization (Q2 2026)
+## 🚀 v0.7.0 — SaaS Monetization (Q2 2026)
 
 Focus: Multi-user support and billing.
 
@@ -123,25 +133,20 @@ Focus: Multi-user support and billing.
 
 ---
 
-## 🔮 Future (v0.6.0+)
+## 🔮 Future (v0.8.0+)
 
-### CVE Mitigation Advisor (Killer Feature)
-- [ ] Hardening config recommendations per CVE
-- [ ] Patch recommendations
-- [ ] Risk explanations
-- [ ] Links to Cisco PSIRT and Field Notices
-- **Note:** ZERO competition in this space
+### ✅ Already Built (moved from Future)
+- [x] CVE Mitigation Advisor — 19 CVEs with copy-paste commands
+- [x] Cisco PSIRT Advisory integration — auto-sync + on-demand
+- [x] Config drift detection — v1.0 LIVE
+- [x] CIS Compliance checking — 37 rules LIVE
 
-### External Data Providers
-- [ ] Cisco PSIRT Advisory integration
+### Remaining
 - [ ] Tenable vulnerability scanner integration
-- [ ] Custom CVE dataset upload
-
-### Advanced Features
-- [ ] Config diff / drift detection
-- [ ] Compliance checking (CIS benchmarks)
+- [ ] Network Config Backup (script generator)
 - [ ] Network topology awareness
 - [ ] Scheduled email reports
+- [ ] Server Tools (Andrei request — double audience)
 
 ---
 
