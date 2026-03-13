@@ -121,6 +121,31 @@
           <p class="home-tagline">Small tools. Real automation. Zero friction.</p>
         </div>
 
+        <!-- Critical CVE Feed Widget -->
+        <div class="threat-feed-widget" id="threat-feed-widget">
+          <div class="threat-feed-header">
+            <div class="threat-feed-title">
+              <span class="threat-feed-icon">🔥</span>
+              <h2>Cisco — Latest Threats</h2>
+            </div>
+            <div class="threat-feed-meta">
+              <select id="threat-feed-platform" class="threat-feed-select">
+                <option value="all">All Platforms</option>
+                <option value="iosxe">IOS XE</option>
+                <option value="ios">IOS</option>
+                <option value="nxos">NX-OS</option>
+                <option value="asa">ASA</option>
+                <option value="ftd">Firepower / FTD</option>
+              </select>
+              <span class="threat-feed-age" id="threat-feed-age"></span>
+              <button class="btn-secondary" id="threat-feed-refresh" style="padding:4px 10px; font-size:0.75rem;">Refresh</button>
+            </div>
+          </div>
+          <div class="threat-feed-list" id="threat-feed-list">
+            <p class="summary-muted">Loading threat feed...</p>
+          </div>
+        </div>
+
         <div class="home-grid">
           <!-- Config Generators -->
           <div class="home-category" data-category="config">
@@ -231,31 +256,6 @@
                 <span class="tool-desc">Save & load configurations</span>
               </button>
             </div>
-          </div>
-        </div>
-
-        <!-- Critical CVE Feed Widget -->
-        <div class="threat-feed-widget" id="threat-feed-widget">
-          <div class="threat-feed-header">
-            <div class="threat-feed-title">
-              <span class="threat-feed-icon">🔥</span>
-              <h2>Cisco — Latest Threats</h2>
-            </div>
-            <div class="threat-feed-meta">
-              <select id="threat-feed-platform" class="threat-feed-select">
-                <option value="all">All Platforms</option>
-                <option value="iosxe">IOS XE</option>
-                <option value="ios">IOS</option>
-                <option value="nxos">NX-OS</option>
-                <option value="asa">ASA</option>
-                <option value="ftd">Firepower / FTD</option>
-              </select>
-              <span class="threat-feed-age" id="threat-feed-age"></span>
-              <button class="btn-secondary" id="threat-feed-refresh" style="padding:4px 10px; font-size:0.75rem;">Refresh</button>
-            </div>
-          </div>
-          <div class="threat-feed-list" id="threat-feed-list">
-            <p class="summary-muted">Loading threat feed...</p>
           </div>
         </div>
 

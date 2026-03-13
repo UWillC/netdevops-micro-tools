@@ -340,7 +340,7 @@ def get_critical_feed(platform: str = "all"):
     feed_items = _advisories_to_feed(advisories, platform)
 
     return CriticalFeedResponse(
-        items=feed_items[:15],
+        items=feed_items[:10],
         total_advisories=len(advisories),
         cache_age_hours=cache_age_hours,
         timestamp=datetime.datetime.utcnow().isoformat() + "Z",

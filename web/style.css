@@ -1042,12 +1042,11 @@ textarea:focus {
 /* Threat Feed Widget */
 /* ----------------------------- */
 .threat-feed-widget {
-  grid-column: 1 / -1;
   background: var(--card);
   border: 1px solid rgba(239, 68, 68, 0.3);
   border-radius: var(--radius);
   padding: 16px;
-  margin-top: 4px;
+  margin-bottom: 16px;
 }
 
 .threat-feed-header {
