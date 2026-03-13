@@ -2273,48 +2273,49 @@ Use with caution on production!">debug ip icmp</code>
 
         <!-- NATO DTG Format -->
         <div class="card">
-          <h3>NATO DTG Format <span class="version-badge">v1.2</span></h3>
+          <h3>NATO DTG Format <span class="version-badge">v1.3</span></h3>
           <p class="form-description">
             Convert NATO Date-Time Group (DTG) format used in military communications.
           </p>
 
-          <!-- Date/Time Picker (Zoltan's request) -->
+          <!-- Date/Time Picker (Zoltan's request: "like booking a flight") -->
           <form id="dtg-picker-form">
-            <div class="dtg-picker-grid">
-              <div class="dtg-picker-section">
+            <div class="dtg-picker-layout">
+              <!-- Calendar date picker -->
+              <div class="dtg-calendar-section">
                 <label>Date</label>
-                <div class="dtg-date-selects">
-                  <select id="dtg-month" title="Month">
-                    <option value="01">Jan</option>
-                    <option value="02">Feb</option>
-                    <option value="03">Mar</option>
-                    <option value="04">Apr</option>
-                    <option value="05">May</option>
-                    <option value="06">Jun</option>
-                    <option value="07">Jul</option>
-                    <option value="08">Aug</option>
-                    <option value="09">Sep</option>
-                    <option value="10">Oct</option>
-                    <option value="11">Nov</option>
-                    <option value="12">Dec</option>
-                  </select>
-                  <select id="dtg-day" title="Day"></select>
-                  <select id="dtg-year" title="Year"></select>
+                <div class="dtg-calendar" id="dtg-calendar">
+                  <div class="dtg-cal-header">
+                    <button type="button" class="dtg-cal-nav" id="dtg-cal-prev" title="Previous month">&lsaquo;</button>
+                    <span class="dtg-cal-title" id="dtg-cal-title">Mar 2026</span>
+                    <button type="button" class="dtg-cal-nav" id="dtg-cal-next" title="Next month">&rsaquo;</button>
+                  </div>
+                  <div class="dtg-cal-weekdays">
+                    <span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span><span>Su</span>
+                  </div>
+                  <div class="dtg-cal-grid" id="dtg-cal-grid"></div>
                 </div>
+                <!-- Hidden fields for JS compatibility -->
+                <input type="hidden" id="dtg-month" />
+                <input type="hidden" id="dtg-day" />
+                <input type="hidden" id="dtg-year" />
               </div>
-              <div class="dtg-picker-section">
-                <label>Time</label>
-                <div class="dtg-time-selects">
-                  <select id="dtg-hour" title="Hour"></select>
-                  <span class="dtg-time-sep">:</span>
-                  <select id="dtg-minute" title="Minute"></select>
-                  <span class="dtg-time-sep">:</span>
-                  <select id="dtg-second" title="Second"></select>
+
+              <!-- Time + Timezone -->
+              <div class="dtg-right-panel">
+                <div class="dtg-picker-section">
+                  <label>Time</label>
+                  <div class="dtg-time-selects">
+                    <select id="dtg-hour" title="Hour"></select>
+                    <span class="dtg-time-sep">:</span>
+                    <select id="dtg-minute" title="Minute"></select>
+                    <span class="dtg-time-sep">:</span>
+                    <select id="dtg-second" title="Second"></select>
+                  </div>
                 </div>
-              </div>
-              <div class="dtg-picker-section">
-                <label>Timezone</label>
-                <select id="dtg-tz-letter" title="Military Timezone">
+                <div class="dtg-picker-section">
+                  <label>Timezone</label>
+                  <select id="dtg-tz-letter" title="Military Timezone">
                   <option value="Z">Z - Zulu (UTC)</option>
                   <option value="A">A - Alpha (+1)</option>
                   <option value="B">B - Bravo (+2)</option>
@@ -2341,6 +2342,7 @@ Use with caution on production!">debug ip icmp</code>
                   <option value="X">X - X-ray (-11)</option>
                   <option value="Y">Y - Yankee (-12)</option>
                 </select>
+                </div>
               </div>
             </div>
             <div class="dtg-preview" id="dtg-preview">

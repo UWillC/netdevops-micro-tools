@@ -3312,25 +3312,99 @@ function populateSelect(select, start, end, padZero = true) {
   }
 }
 
-// Initialize DTG picker dropdowns
-function initDtgPicker() {
-  const now = new Date();
+// Calendar state
+let calViewYear = new Date().getUTCFullYear();
+let calViewMonth = new Date().getUTCMonth(); // 0-based
+let calSelectedDate = null; // { year, month, day }
 
-  // Populate days (01-31)
-  populateSelect(dtgDay, 1, 31);
+const dtgCalGrid = document.getElementById("dtg-cal-grid");
+const dtgCalTitle = document.getElementById("dtg-cal-title");
+const dtgCalPrev = document.getElementById("dtg-cal-prev");
+const dtgCalNext = document.getElementById("dtg-cal-next");
 
-  // Populate years (current year -1 to +5)
-  const currentYear = now.getFullYear();
-  if (dtgYear) {
-    dtgYear.innerHTML = "";
-    for (let y = currentYear - 1; y <= currentYear + 5; y++) {
-      const opt = document.createElement("option");
-      opt.value = String(y).slice(-2); // Last 2 digits
-      opt.textContent = String(y);
-      dtgYear.appendChild(opt);
-    }
+// Render the calendar grid for current calViewYear/calViewMonth
+function renderCalendar() {
+  if (!dtgCalGrid) return;
+  dtgCalGrid.innerHTML = "";
+
+  const firstDay = new Date(calViewYear, calViewMonth, 1);
+  const lastDay = new Date(calViewYear, calViewMonth + 1, 0);
+  const daysInMonth = lastDay.getDate();
+
+  // Monday=0 start (ISO week)
+  let startWeekday = firstDay.getDay() - 1;
+  if (startWeekday < 0) startWeekday = 6;
+
+  const today = new Date();
+  const todayStr = `${today.getUTCFullYear()}-${today.getUTCMonth()}-${today.getUTCDate()}`;
+
+  // Title
+  if (dtgCalTitle) {
+    dtgCalTitle.textContent = `${MONTH_NAMES[calViewMonth]} ${calViewYear}`;
   }
 
+  // Empty cells before day 1
+  for (let i = 0; i < startWeekday; i++) {
+    const empty = document.createElement("div");
+    empty.className = "dtg-cal-day empty";
+    dtgCalGrid.appendChild(empty);
+  }
+
+  // Day cells
+  for (let d = 1; d <= daysInMonth; d++) {
+    const cell = document.createElement("div");
+    cell.className = "dtg-cal-day";
+    cell.textContent = d;
+
+    const cellStr = `${calViewYear}-${calViewMonth}-${d}`;
+    if (cellStr === todayStr) {
+      cell.classList.add("today");
+    }
+
+    if (calSelectedDate &&
+        calSelectedDate.year === calViewYear &&
+        calSelectedDate.month === calViewMonth &&
+        calSelectedDate.day === d) {
+      cell.classList.add("selected");
+    }
+
+    cell.addEventListener("click", () => {
+      calSelectedDate = { year: calViewYear, month: calViewMonth, day: d };
+      syncCalendarToHidden();
+      renderCalendar();
+      updateDtgPreview();
+    });
+
+    dtgCalGrid.appendChild(cell);
+  }
+}
+
+// Sync calendar selection to hidden inputs (for buildDtgFromPicker)
+function syncCalendarToHidden() {
+  if (!calSelectedDate) return;
+  if (dtgMonth) dtgMonth.value = String(calSelectedDate.month + 1).padStart(2, "0");
+  if (dtgDay) dtgDay.value = String(calSelectedDate.day).padStart(2, "0");
+  if (dtgYear) dtgYear.value = String(calSelectedDate.year).slice(-2);
+}
+
+// Navigate calendar
+if (dtgCalPrev) {
+  dtgCalPrev.addEventListener("click", () => {
+    calViewMonth--;
+    if (calViewMonth < 0) { calViewMonth = 11; calViewYear--; }
+    renderCalendar();
+  });
+}
+if (dtgCalNext) {
+  dtgCalNext.addEventListener("click", () => {
+    calViewMonth++;
+    if (calViewMonth > 11) { calViewMonth = 0; calViewYear++; }
+    renderCalendar();
+  });
+}
+
+// Initialize DTG picker
+function initDtgPicker() {
   // Populate hours (00-23)
   populateSelect(dtgHour, 0, 23);
 
@@ -3347,19 +3421,15 @@ function initDtgPicker() {
 // Set picker to current UTC time
 function setDtgPickerToNow() {
   const now = new Date();
-  const utcMonth = now.getUTCMonth() + 1;
-  const utcDay = now.getUTCDate();
-  const utcYear = now.getUTCFullYear();
-  const utcHour = now.getUTCHours();
-  const utcMinute = now.getUTCMinutes();
-  const utcSecond = now.getUTCSeconds();
+  calViewYear = now.getUTCFullYear();
+  calViewMonth = now.getUTCMonth();
+  calSelectedDate = { year: calViewYear, month: calViewMonth, day: now.getUTCDate() };
+  syncCalendarToHidden();
+  renderCalendar();
 
-  if (dtgMonth) dtgMonth.value = String(utcMonth).padStart(2, "0");
-  if (dtgDay) dtgDay.value = String(utcDay).padStart(2, "0");
-  if (dtgYear) dtgYear.value = String(utcYear).slice(-2);
-  if (dtgHour) dtgHour.value = String(utcHour).padStart(2, "0");
-  if (dtgMinute) dtgMinute.value = String(utcMinute).padStart(2, "0");
-  if (dtgSecond) dtgSecond.value = String(utcSecond).padStart(2, "0");
+  if (dtgHour) dtgHour.value = String(now.getUTCHours()).padStart(2, "0");
+  if (dtgMinute) dtgMinute.value = String(now.getUTCMinutes()).padStart(2, "0");
+  if (dtgSecond) dtgSecond.value = String(now.getUTCSeconds()).padStart(2, "0");
   if (dtgTzLetter) dtgTzLetter.value = "Z";
 
   updateDtgPreview();
@@ -3367,9 +3437,13 @@ function setDtgPickerToNow() {
 
 // Clear picker to defaults
 function clearDtgPicker() {
-  if (dtgMonth) dtgMonth.value = "01";
-  if (dtgDay) dtgDay.value = "01";
-  if (dtgYear) dtgYear.value = String(new Date().getFullYear()).slice(-2);
+  const now = new Date();
+  calViewYear = now.getUTCFullYear();
+  calViewMonth = 0;
+  calSelectedDate = { year: calViewYear, month: 0, day: 1 };
+  syncCalendarToHidden();
+  renderCalendar();
+
   if (dtgHour) dtgHour.value = "00";
   if (dtgMinute) dtgMinute.value = "00";
   if (dtgSecond) dtgSecond.value = "00";
@@ -3472,8 +3546,8 @@ async function fetchCurrentDtg() {
 // Initialize picker on load
 initDtgPicker();
 
-// Add change listeners for live preview
-[dtgMonth, dtgDay, dtgYear, dtgHour, dtgMinute, dtgSecond, dtgTzLetter].forEach(el => {
+// Add change listeners for live preview (time + timezone only — calendar handles date)
+[dtgHour, dtgMinute, dtgSecond, dtgTzLetter].forEach(el => {
   if (el) el.addEventListener("change", updateDtgPreview);
 });
 
