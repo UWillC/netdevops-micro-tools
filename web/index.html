@@ -2853,26 +2853,34 @@ With this, only ports inactive for 6+ months are flagged."></textarea>
         <h2>Config Drift Detection <span class="version-badge">v1.0 — Compare Two Configs</span></h2>
         <p class="tool-description">Paste two configs (baseline vs current) to detect changes, additions, and removals. Risk-flags highlight security-sensitive drift.</p>
 
-        <form id="cd-form" class="tool-form">
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-            <div>
-              <label for="cd-config-a">Config A (Baseline / Backup)</label>
-              <textarea id="cd-config-a" rows="14" placeholder="Paste baseline running-config here..." required></textarea>
-            </div>
-            <div>
-              <label for="cd-config-b">Config B (Current / Running)</label>
-              <textarea id="cd-config-b" rows="14" placeholder="Paste current running-config here..." required></textarea>
-            </div>
-          </div>
+        <div class="generator-layout">
+          <form id="cd-form" class="card">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+              <div>
+                <div class="form-section-title">Config A (Baseline / Backup)</div>
+                <textarea id="cd-config-a" rows="20" style="width:100%; min-height:350px;" placeholder="Paste baseline running-config here...
 
-          <div class="form-row" style="margin-top: 0.75rem;">
-            <label class="checkbox-label">
-              <input type="checkbox" id="cd-ignore-cosmetic" checked> Ignore cosmetic lines (version, timestamps)
-            </label>
-          </div>
+Example: your last known-good backup
+or golden config template..." required></textarea>
+              </div>
+              <div>
+                <div class="form-section-title">Config B (Current / Running)</div>
+                <textarea id="cd-config-b" rows="20" style="width:100%; min-height:350px;" placeholder="Paste current running-config here...
 
-          <button type="submit" class="btn btn-primary" style="margin-top: 0.75rem;">Compare Configs</button>
-        </form>
+Example: output of 'show running-config'
+from the device right now..." required></textarea>
+              </div>
+            </div>
+
+            <div class="form-row" style="margin-top: 0.75rem;">
+              <label class="checkbox-label">
+                <input type="checkbox" id="cd-ignore-cosmetic" checked> Ignore cosmetic lines (version, timestamps, build info)
+              </label>
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="margin-top: 0.75rem;">Compare Configs</button>
+          </form>
+        </div>
 
         <div id="cd-summary" class="card" style="display:none; margin-top:1rem;">
           <div id="cd-summary-content"></div>
@@ -2895,20 +2903,41 @@ With this, only ports inactive for 6+ months are flagged."></textarea>
         <h2>CIS Compliance Audit <span class="version-badge">v1.0 — Cisco IOS Benchmark</span></h2>
         <p class="tool-description">Audit your Cisco IOS/IOS-XE config against CIS Benchmark hardening rules. Get a compliance score, pass/fail per rule, and remediation commands.</p>
 
-        <form id="cis-form" class="tool-form">
-          <label for="cis-config">Paste Running-Config</label>
-          <textarea id="cis-config" rows="14" placeholder="Paste full running-config here..." required></textarea>
+        <div class="generator-layout">
+          <form id="cis-form" class="card">
+            <div class="form-section-title">Paste Running-Config</div>
 
-          <div class="form-row" style="margin-top: 0.75rem;">
-            <label>CIS Level:</label>
-            <select id="cis-level" class="form-select" style="width:auto;">
-              <option value="1">Level 1 — Basic (recommended)</option>
-              <option value="2">Level 2 — Hardened (all rules)</option>
-            </select>
-          </div>
+            <div class="form-row">
+              <label>Full running-config or security-relevant sections</label>
+              <textarea id="cis-config" rows="20" style="min-height:350px;" placeholder="Paste your 'show running-config' output here...
 
-          <button type="submit" class="btn btn-primary" style="margin-top: 0.75rem;">Run Audit</button>
-        </form>
+Example:
+hostname CORE-SW01
+!
+service password-encryption
+enable secret 9 $9$abc
+!
+aaa new-model
+aaa authentication login default group tacacs+ local
+!
+ip ssh version 2
+!
+line vty 0 15
+ transport input ssh
+ exec-timeout 10 0" required></textarea>
+            </div>
+
+            <div class="form-row" style="margin-top: 0.75rem;">
+              <label>CIS Level:</label>
+              <select id="cis-level" class="form-select" style="width:auto;">
+                <option value="1">Level 1 — Basic (28 rules, recommended)</option>
+                <option value="2">Level 2 — Hardened (37 rules, all checks)</option>
+              </select>
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="margin-top: 0.75rem;">Run Audit</button>
+          </form>
+        </div>
 
         <div id="cis-summary" class="card" style="display:none; margin-top:1rem;">
           <div id="cis-summary-content"></div>
