@@ -82,7 +82,7 @@
           <button class="nav-group-header" data-group="network">
             <span class="nav-group-icon">🔧</span>
             <span class="nav-group-label">Network Tools</span>
-            <span class="nav-group-badge">6</span>
+            <span class="nav-group-badge">7</span>
             <span class="nav-group-arrow">▶</span>
           </button>
           <div class="nav-group-items collapsed" id="group-network">
@@ -92,6 +92,7 @@
             <button class="tab-button" data-tab="timezone"><span class="tool-icon">🌍</span> Timezone Converter</button>
             <button class="tab-button" data-tab="config-parser"><span class="tool-icon">📄</span> Config Parser</button>
             <button class="tab-button" data-tab="ip-path-tracer"><span class="tool-icon">🔀</span> IP Path Tracer</button>
+            <button class="tab-button" data-tab="port-auditor"><span class="tool-icon">🔌</span> Port Auditor</button>
           </div>
         </div>
 
@@ -239,6 +240,11 @@
                 <span class="tool-icon">🔀</span>
                 <span class="tool-name">IP Path Tracer</span>
                 <span class="tool-desc">Traceroute analyzer</span>
+              </button>
+              <button class="home-tool-card" data-tab="port-auditor">
+                <span class="tool-icon">🔌</span>
+                <span class="tool-name">Port Auditor</span>
+                <span class="tool-desc">Find unused switch ports</span>
               </button>
             </div>
           </div>
@@ -2690,6 +2696,74 @@ Also supports: Windows tracert, Cisco IOS traceroute"></textarea>
               </div>
             </div>
             <textarea id="ipt-output" class="output-text" readonly placeholder="Traceroute analysis or generated commands will appear here..."></textarea>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- PORT AUDITOR TAB -->
+      <section id="tab-port-auditor" class="tab-content">
+        <h2>Unused Port Auditor <span class="version-badge">v1.0 — Find Inactive Ports</span></h2>
+
+        <div class="generator-layout">
+
+          <form id="pa-form" class="card">
+            <div class="form-section-title">Paste 'show interface status' Output</div>
+
+            <div class="form-row">
+              <label>show interface status (required)</label>
+              <textarea id="pa-status-input" rows="12" placeholder="Paste your 'show interface status' output here...
+
+Example:
+Port      Name               Status       Vlan       Duplex  Speed Type
+Gi1/0/1   PC-ADMIN           connected    10         a-full  a-1000 10/100/1000BaseTX
+Gi1/0/2                      notconnect   1            auto    auto 10/100/1000BaseTX
+Gi1/0/3   PRINTER            disabled     20           auto    auto 10/100/1000BaseTX
+Gi1/0/4                      notconnect   1            auto    auto 10/100/1000BaseTX
+..."></textarea>
+            </div>
+
+            <div class="form-row">
+              <label>show interfaces (optional — adds Last Input data for accurate age detection)</label>
+              <textarea id="pa-detail-input" rows="6" placeholder="Optional: Paste 'show interfaces' output here for Last Input analysis...
+
+Without this, all notconnect/disabled ports will be flagged.
+With this, only ports inactive for 6+ months are flagged."></textarea>
+            </div>
+
+            <div class="form-row" style="display:flex; gap:1rem; align-items:end;">
+              <div style="flex:1;">
+                <label>Unused threshold (days)</label>
+                <input type="number" id="pa-threshold" value="180" min="30" max="730" />
+              </div>
+              <div style="flex:1;">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="pa-include-disabled" checked />
+                  Include admin-disabled ports
+                </label>
+              </div>
+              <div style="flex:1;">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="pa-exclude-uplinks" checked />
+                  Exclude uplinks (10G/40G/100G)
+                </label>
+              </div>
+            </div>
+
+            <button type="submit" class="btn-primary">Audit Ports</button>
+          </form>
+
+          <!-- Output -->
+          <div class="output-card">
+            <div class="output-header">
+              <span>Audit Results</span>
+              <div class="output-actions">
+                <button class="btn-secondary" id="pa-copy-table" data-copy-target="pa-output">Copy Table</button>
+                <button class="btn-secondary" id="pa-copy-config" style="display:none;">Copy Shutdown Config</button>
+              </div>
+            </div>
+            <textarea id="pa-output" class="output-text" readonly placeholder="Audit results will appear here..."></textarea>
+            <textarea id="pa-config-output" class="output-text" readonly style="display:none; margin-top:0.5rem;" placeholder="Shutdown config..."></textarea>
           </div>
 
         </div>
