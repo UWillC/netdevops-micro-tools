@@ -1274,3 +1274,218 @@ if (ceForm && ceOutput) {
     }
   });
 }
+
+// =============================================
+// CONFIG DRIFT DETECTION
+// =============================================
+
+const cdForm = document.getElementById("cd-form");
+const cdOutput = document.getElementById("cd-output");
+const cdSummary = document.getElementById("cd-summary");
+const cdResults = document.getElementById("cd-results");
+
+function formatDrift(data) {
+  let out = [];
+
+  out.push("CONFIG DRIFT REPORT");
+  out.push("=".repeat(60));
+  if (data.hostname_a || data.hostname_b) {
+    out.push(`Config A: ${data.hostname_a || "unknown"}  →  Config B: ${data.hostname_b || "unknown"}`);
+  }
+  out.push(`Drift Score: ${data.drift_score}%`);
+  out.push(`Added: ${data.total_added} | Removed: ${data.total_removed} | Unchanged: ${data.total_unchanged}`);
+  out.push("");
+
+  data.summary.forEach(s => out.push(s));
+  out.push("");
+
+  data.sections.forEach(sec => {
+    out.push("-".repeat(60));
+    out.push(`[${sec.title}]  +${sec.added_count} -${sec.removed_count}`);
+    out.push("");
+
+    sec.changes.forEach(c => {
+      const prefix = c.change_type === "added" ? "+" : c.change_type === "removed" ? "-" : " ";
+      const risk = c.risk ? ` [${c.risk.toUpperCase()}]` : "";
+      const note = c.note ? ` — ${c.note}` : "";
+      out.push(`  ${prefix} ${c.line}${risk}${note}`);
+    });
+    out.push("");
+  });
+
+  return out.join("\n");
+}
+
+function formatDriftSummary(data) {
+  const scoreColor = data.drift_score === 0 ? "#22c55e" :
+    data.drift_score < 20 ? "#22c55e" :
+    data.drift_score < 50 ? "#eab308" :
+    data.drift_score < 80 ? "#f97316" : "#ef4444";
+
+  let html = `<div style="display:flex; align-items:center; gap:1.5rem; flex-wrap:wrap;">`;
+  html += `<div style="text-align:center;">
+    <div style="font-size:2.5rem; font-weight:bold; color:${scoreColor}">${data.drift_score}%</div>
+    <div style="font-size:0.8rem; color:var(--text-dim);">Drift Score</div>
+  </div>`;
+  html += `<div style="flex:1; min-width:200px;">`;
+  html += `<div style="display:flex; gap:1rem; margin-bottom:0.5rem;">
+    <span style="color:#22c55e; font-weight:600;">+${data.total_added} added</span>
+    <span style="color:#ef4444; font-weight:600;">-${data.total_removed} removed</span>
+    <span style="color:var(--text-dim);">${data.total_unchanged} unchanged</span>
+  </div>`;
+  data.summary.forEach(s => {
+    const cls = s.includes("CRITICAL") ? "color:#ef4444" : s.includes("WARNING") ? "color:#eab308" : "";
+    html += `<div style="${cls}; font-size:0.85rem;">${s}</div>`;
+  });
+  html += `</div></div>`;
+  return html;
+}
+
+if (cdForm) {
+  cdForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const configA = document.getElementById("cd-config-a")?.value || "";
+    const configB = document.getElementById("cd-config-b")?.value || "";
+
+    if (!configA.trim() || !configB.trim()) {
+      if (cdOutput) cdOutput.value = "Error: Please paste both configs.";
+      return;
+    }
+
+    if (cdOutput) cdOutput.value = "Comparing configs...";
+    if (cdSummary) cdSummary.style.display = "none";
+    if (cdResults) cdResults.style.display = "none";
+
+    try {
+      const data = await postJSON("/tools/config-drift/compare", {
+        config_a: configA,
+        config_b: configB,
+        ignore_cosmetic: document.getElementById("cd-ignore-cosmetic")?.checked ?? true,
+      });
+
+      if (cdSummary) {
+        document.getElementById("cd-summary-content").innerHTML = formatDriftSummary(data);
+        cdSummary.style.display = "block";
+      }
+      if (cdResults) cdResults.style.display = "block";
+      if (cdOutput) cdOutput.value = formatDrift(data);
+    } catch (err) {
+      if (cdOutput) cdOutput.value = `Error: ${err.message}`;
+    }
+  });
+}
+
+// =============================================
+// CIS COMPLIANCE AUDIT
+// =============================================
+
+const cisForm = document.getElementById("cis-form");
+const cisOutput = document.getElementById("cis-output");
+const cisSummary = document.getElementById("cis-summary");
+const cisResults = document.getElementById("cis-results");
+
+function formatCisAudit(data) {
+  let out = [];
+
+  out.push("CIS COMPLIANCE AUDIT REPORT");
+  out.push("=".repeat(60));
+  if (data.hostname) out.push(`Device: ${data.hostname}`);
+  out.push(`CIS Level: ${data.level}`);
+  out.push(`Score: ${data.score}% (Grade ${data.grade})`);
+  out.push(`Passed: ${data.passed} | Failed: ${data.failed} | Warnings: ${data.warnings}`);
+  out.push("");
+
+  data.summary.forEach(s => out.push(s));
+  out.push("");
+
+  data.categories.forEach(cat => {
+    out.push("-".repeat(60));
+    out.push(`[${cat.name}]  Pass: ${cat.passed} | Fail: ${cat.failed} | Warn: ${cat.warnings}`);
+    out.push("");
+
+    cat.rules.forEach(r => {
+      const icon = r.result === "PASS" ? "PASS" : r.result === "FAIL" ? "FAIL" : r.result === "WARNING" ? "WARN" : "N/A ";
+      const sev = r.severity === "critical" ? " [CRITICAL]" : r.severity === "high" ? " [HIGH]" : "";
+      out.push(`  [${icon}] ${r.rule_id} ${r.title}${sev}`);
+      out.push(`         ${r.evidence}`);
+      if (r.result === "FAIL" && r.remediation) {
+        out.push(`         FIX: ${r.remediation}`);
+      }
+    });
+    out.push("");
+  });
+
+  return out.join("\n");
+}
+
+function formatCisSummary(data) {
+  const gradeColor = data.grade === "A" ? "#22c55e" :
+    data.grade === "B" ? "#22c55e" :
+    data.grade === "C" ? "#eab308" :
+    data.grade === "D" ? "#f97316" : "#ef4444";
+
+  let html = `<div style="display:flex; align-items:center; gap:1.5rem; flex-wrap:wrap;">`;
+  html += `<div style="text-align:center;">
+    <div style="font-size:2.5rem; font-weight:bold; color:${gradeColor}">${data.grade}</div>
+    <div style="font-size:0.8rem; color:var(--text-dim);">${data.score}%</div>
+  </div>`;
+
+  // Score bar
+  html += `<div style="flex:1; min-width:200px;">`;
+  html += `<div style="background:rgba(148,163,184,0.2); border-radius:8px; height:12px; margin-bottom:0.5rem; overflow:hidden;">
+    <div style="width:${data.score}%; height:100%; background:${gradeColor}; border-radius:8px; transition:width 0.5s;"></div>
+  </div>`;
+  html += `<div style="display:flex; gap:1rem; font-size:0.85rem;">
+    <span style="color:#22c55e; font-weight:600;">${data.passed} passed</span>
+    <span style="color:#ef4444; font-weight:600;">${data.failed} failed</span>
+    <span style="color:#eab308; font-weight:600;">${data.warnings} warnings</span>
+    <span style="color:var(--text-dim);">Level ${data.level}</span>
+  </div>`;
+
+  // Critical failures
+  const critFails = [];
+  data.categories.forEach(cat => {
+    cat.rules.forEach(r => {
+      if (r.result === "FAIL" && r.severity === "critical") critFails.push(r.title);
+    });
+  });
+  if (critFails.length > 0) {
+    html += `<div style="color:#ef4444; font-size:0.85rem; margin-top:0.5rem;">Critical: ${critFails.join(", ")}</div>`;
+  }
+
+  html += `</div></div>`;
+  return html;
+}
+
+if (cisForm) {
+  cisForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const configText = document.getElementById("cis-config")?.value || "";
+    const level = document.getElementById("cis-level")?.value || "1";
+
+    if (!configText.trim()) {
+      if (cisOutput) cisOutput.value = "Error: Please paste a running-config.";
+      return;
+    }
+
+    if (cisOutput) cisOutput.value = "Running CIS audit...";
+    if (cisSummary) cisSummary.style.display = "none";
+    if (cisResults) cisResults.style.display = "none";
+
+    try {
+      const data = await postJSON("/tools/cis-audit/check", {
+        config_text: configText,
+        level: level,
+      });
+
+      if (cisSummary) {
+        document.getElementById("cis-summary-content").innerHTML = formatCisSummary(data);
+        cisSummary.style.display = "block";
+      }
+      if (cisResults) cisResults.style.display = "block";
+      if (cisOutput) cisOutput.value = formatCisAudit(data);
+    } catch (err) {
+      if (cisOutput) cisOutput.value = `Error: ${err.message}`;
+    }
+  });
+}

@@ -64,6 +64,8 @@ const toolIcons = {
   "config-explainer": "💬",
   "ip-path-tracer": "🔀",
   "port-auditor": "🔌",
+  "config-drift": "🔃",
+  "cis-audit": "📋",
   "profiles": "💾"
 };
 
@@ -83,6 +85,8 @@ const toolNames = {
   "config-explainer": "Explainer",
   "ip-path-tracer": "Path Tracer",
   "port-auditor": "Port Auditor",
+  "config-drift": "Config Drift",
+  "cis-audit": "CIS Audit",
   "profiles": "Profiles"
 };
 
