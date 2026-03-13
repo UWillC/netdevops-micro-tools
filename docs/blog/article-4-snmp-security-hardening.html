@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SNMP Security Hardening: From Default Community Strings to SNMPv3 | NetDevOps Blog</title>
+    <meta name="description" content="Two critical CVEs. 2 million exposed devices. A complete SNMP hardening guide with IOS/IOS-XE commands you can run Monday morning.">
+
+    <!-- Open Graph / LinkedIn -->
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://netdevops-micro-tools.github.io/blog/article-4-snmp-security-hardening.html">
+    <meta property="og:title" content="SNMP Security Hardening: From Default Community Strings to SNMPv3">
+    <meta property="og:description" content="Two critical CVEs. 2 million exposed devices. A complete SNMP hardening guide with IOS/IOS-XE commands.">
+    <meta property="og:image" content="https://netdevops-micro-tools.github.io/blog/images/snmp-security-hardening.png">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="SNMP Security Hardening: From Default Community Strings to SNMPv3">
+    <meta name="twitter:description" content="Two critical CVEs. 2 million exposed devices. A complete SNMP hardening guide.">
+
+    <!-- Plausible Analytics -->
+    <script defer data-domain="netdevops-micro-tools.com" src="https://plausible.io/js/script.js"></script>
+
+    <!-- Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%230A3A60' width='100' height='100' rx='12'/><text x='50' y='62' font-family='monospace' font-size='28' font-weight='bold' fill='white' text-anchor='middle'>MTG</text><rect x='4' y='4' width='92' height='92' rx='10' fill='none' stroke='%234FB8D6' stroke-width='3'/></svg>">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../css/shared.css">
+    <link rel="stylesheet" href="../css/article.css">
+    <script>
+        (function() {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'dark') {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            } else if (savedTheme === 'light') {
+                document.documentElement.setAttribute('data-theme', 'light');
+            }
+        })();
+    </script>
+</head>
+<body>
+    <nav class="nav">
+        <div class="nav-content">
+            <a href="../index.html" class="nav-logo">
+                <span class="nav-logo-icon">MTG</span>
+                NetDevOps Micro-Tools
+            </a>
+            <div class="nav-actions">
+                <a href="index.html" class="nav-link">Blog</a>
+                <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">
+                    <svg class="icon-moon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                    <svg class="icon-sun" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+                </button>
+                <a href="../index.html#pricing" class="nav-cta">Start Free</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container">
+        <p class="breadcrumb"><a href="index.html">Blog</a> / SNMP Security Hardening</p>
+
+        <article>
+            <h1>SNMP Security Hardening: From Default Community Strings to SNMPv3</h1>
+            <p class="meta">March 13, 2026 &bull; By <span class="author">Przemyslaw 'SNOW' Snowacki</span> &bull; 8 min read</p>
+
+            <img src="images/snmp-security-hardening.png" alt="SNMP Security Hardening - from default community strings to SNMPv3" class="featured-image">
+
+            <div class="content">
+                <p><strong>2 million Cisco devices with SNMP exposed to the internet. Two critical CVEs published in the last 6 months. One of them actively exploited as a zero-day.</strong></p>
+
+                <p>If you manage Cisco infrastructure, SNMP is probably the most dangerous protocol running on your devices right now. Not because SNMP is bad. Because the way most networks configure it is.</p>
+
+                <p>This guide gives you the exact commands to audit and harden SNMP on IOS and IOS-XE. No theory. Just what to type and why.</p>
+
+                <h2>Why SNMP Is a Priority Target in 2026</h2>
+
+                <p>Two CVEs changed the SNMP threat landscape:</p>
+
+                <p><strong>CVE-2026-28775 (CVSS 10.0)</strong> &mdash; Default SNMP community strings (<code>public</code>, <code>private</code>) on Cisco IOS/IOS-XE allow unauthenticated remote attackers to read and write device configurations. With write access, an attacker can modify running config, upload malicious firmware, or execute arbitrary commands. Over 2 million devices still have SNMP exposed with default strings.</p>
+
+                <p><strong>CVE-2025-20352 (CVSS 8.8)</strong> &mdash; Stack overflow in the SNMP subsystem of Cisco IOS/IOS-XE. Even a read-only community string is enough to crash the device. With admin credentials on IOS-XE, it escalates to remote code execution as root. This was a zero-day actively exploited in Operation Zero Disco, where attackers used compromised Cisco devices to deploy rootkits on connected systems. Listed in CISA KEV.</p>
+
+                <div class="highlight-box">
+                    <p><strong>The gap:</strong> Most organizations passing security audits still run SNMPv2c with plaintext community strings. Audits check if SNMP is configured. They rarely check <em>how</em> it is configured.</p>
+                </div>
+
+                <h2>Step 1: Audit Your Current SNMP Configuration</h2>
+
+                <p>Before you change anything, understand what you have. Run these commands on every device:</p>
+
+<pre><code>show snmp community
+show snmp group
+show snmp user
+show snmp host</code></pre>
+
+                <p><strong>What to look for:</strong></p>
+                <ul>
+                    <li><code>public</code> or <code>private</code> in the community list &mdash; CVE-2026-28775 territory</li>
+                    <li>Any community string without an ACL applied &mdash; open to any source IP</li>
+                    <li>SNMPv1 or v2c groups without corresponding v3 groups &mdash; no encryption</li>
+                    <li>SNMP hosts pointing to decommissioned NMS servers</li>
+                </ul>
+
+                <p>If <code>show snmp community</code> returns <code>public</code> or <code>private</code>, stop reading and go fix it. Right now.</p>
+
+                <h2>Step 2: Remove Default Community Strings</h2>
+
+                <p>This is the single most impactful change you can make:</p>
+
+<pre><code>configure terminal
+no snmp-server community public
+no snmp-server community private
+end
+write memory</code></pre>
+
+                <div class="highlight-box">
+                    <p><strong>Warning:</strong> If your monitoring tools (SolarWinds, PRTG, LibreNMS) use these strings, they will lose connectivity. Update the NMS configuration first, then remove the defaults.</p>
+                </div>
+
+                <h2>Step 3: Migrate to SNMPv3 with authPriv</h2>
+
+                <p>SNMPv3 adds authentication and encryption. The <code>authPriv</code> security level means both are active &mdash; credentials are verified and traffic is encrypted.</p>
+
+<pre><code>configure terminal
+
+! Create SNMPv3 group with privacy (encryption)
+snmp-server group MONITOR-GRP v3 priv
+
+! Create SNMPv3 user with SHA auth + AES-256 encryption
+snmp-server user MONITOR-USER MONITOR-GRP v3 auth sha MyAuthPass2026! priv aes 256 MyPrivPass2026!
+
+! Point SNMP traps/informs to your NMS
+snmp-server host 10.0.0.50 version 3 priv MONITOR-USER
+
+end
+write memory</code></pre>
+
+                <p><strong>Key points:</strong></p>
+                <ul>
+                    <li>Use <strong>SHA</strong> for authentication (not MD5 &mdash; it is deprecated)</li>
+                    <li>Use <strong>AES-256</strong> for privacy (not DES &mdash; it is broken)</li>
+                    <li>Passwords must be 8+ characters. Use 16+ for production</li>
+                    <li>Replace <code>10.0.0.50</code> with your actual NMS server IP</li>
+                </ul>
+
+                <h2>Step 4: Apply ACLs to Restrict SNMP Access</h2>
+
+                <p>Even with SNMPv3, restrict which IPs can send SNMP queries. Defense in depth.</p>
+
+<pre><code>configure terminal
+
+ip access-list standard SNMP-ACL
+ remark Allow SNMP only from management subnet
+ permit 10.0.0.0 0.0.0.255
+ deny any log
+exit
+
+! Apply ACL to SNMPv3 group
+snmp-server group MONITOR-GRP v3 priv access SNMP-ACL
+
+! If you must keep v2c as fallback (not recommended):
+! snmp-server community YOUR-STRONG-STRING RO SNMP-ACL
+
+end
+write memory</code></pre>
+
+                <p>Replace <code>10.0.0.0/24</code> with your management subnet. The <code>deny any log</code> line helps you catch unauthorized SNMP probes in your syslog.</p>
+
+                <h2>Step 5: Disable SNMPv1 and v2c</h2>
+
+                <p>Once your NMS is working with SNMPv3, kill the old versions:</p>
+
+<pre><code>configure terminal
+! Remove all v2c community strings
+no snmp-server community YOUR-OLD-STRING
+end
+write memory</code></pre>
+
+                <p>Removing all community strings disables SNMPv1 and v2c entirely. SNMPv3 continues to work because it uses user-based authentication, not community strings.</p>
+
+                <h2>Step 6: Check for Active Exploitation</h2>
+
+                <p>CVE-2025-20352 was exploited in the wild. If you were running a vulnerable version with SNMP exposed, check for compromise indicators:</p>
+
+<pre><code>show logging | include SNMP
+show users
+show privilege
+show running-config | include snmp-server</code></pre>
+
+                <p><strong>Red flags:</strong></p>
+                <ul>
+                    <li>Unexpected SNMP activity in logs</li>
+                    <li>Unknown users or sessions</li>
+                    <li>Privilege escalation you did not configure</li>
+                    <li>SNMP community strings or hosts you did not add</li>
+                </ul>
+
+                <p>If you find signs of exploitation, check downstream Linux hosts too. Operation Zero Disco used compromised network devices as a pivot point to deploy rootkits on connected systems.</p>
+
+                <div class="highlight-box">
+                    <p><strong>For CVE-2025-20352:</strong> The fix is IOS XE 17.15.4a or later. No workaround fully mitigates the stack overflow &mdash; ACLs reduce the attack surface but do not eliminate the vulnerability. Patch.</p>
+                </div>
+
+                <h2>Hardening Checklist</h2>
+
+                <p>Run through this before you close the maintenance window:</p>
+
+                <ul>
+                    <li><strong>[ ]</strong> Default community strings removed (<code>public</code>, <code>private</code>)</li>
+                    <li><strong>[ ]</strong> SNMPv3 group created with <code>priv</code> security level</li>
+                    <li><strong>[ ]</strong> SNMPv3 user created with SHA auth + AES-256</li>
+                    <li><strong>[ ]</strong> ACL applied to SNMP group (management subnet only)</li>
+                    <li><strong>[ ]</strong> All v2c community strings removed</li>
+                    <li><strong>[ ]</strong> SNMP hosts point to current NMS servers only</li>
+                    <li><strong>[ ]</strong> IOS XE upgraded to 17.15.4a+ (for CVE-2025-20352)</li>
+                    <li><strong>[ ]</strong> Syslog checked for exploitation indicators</li>
+                    <li><strong>[ ]</strong> Downstream hosts checked for compromise</li>
+                    <li><strong>[ ]</strong> Config saved (<code>write memory</code>)</li>
+                </ul>
+
+                <h2>Misconfigurations That Audits Miss</h2>
+
+                <p>After years of managing Cisco infrastructure, these are the SNMP gaps I keep finding:</p>
+
+                <ul>
+                    <li><strong>ACL-less community strings.</strong> A community string without an ACL is reachable from any IP. Most configs omit the ACL because "it's on the management VLAN." VLANs are not security boundaries.</li>
+                    <li><strong>SNMPv3 without privacy.</strong> Configuring SNMPv3 with <code>auth</code> but no <code>priv</code> means credentials are verified but traffic is cleartext. An attacker on the wire sees everything.</li>
+                    <li><strong>Stale SNMP hosts.</strong> <code>snmp-server host</code> entries pointing to decommissioned servers. The device sends traps to an IP that someone else now controls.</li>
+                    <li><strong>SNMP enabled on non-management interfaces.</strong> If your device listens for SNMP on all interfaces, any interface facing an untrusted network is an attack surface. Use ACLs or control-plane policing.</li>
+                </ul>
+
+                <h2>What This Means for Your Monday Morning</h2>
+
+                <p>Pick one device. Run <code>show snmp community</code>. If you see defaults, you know where to start.</p>
+
+                <p>The full migration (audit, SNMPv3 config, ACL, verification) takes about 15 minutes per device manually. With automation, you can template it and deploy to your entire fleet in one session.</p>
+
+                <div class="cta">
+                    <h3>Automate Your SNMP Security Audit</h3>
+                    <p>NetDevOps Micro-Tools includes SNMPv3 config generators and CVE Analyzer with built-in mitigation commands for CVE-2026-28775 and CVE-2025-20352.</p>
+                    <p><a href="../index.html">Try It Free &rarr;</a></p>
+                </div>
+            </div>
+
+            <nav class="article-nav">
+                <a href="article-3-netdevops-journey.html" class="prev">
+                    <span class="nav-label">&larr; Previous Article</span>
+                    <span class="nav-title">From CLI to NetDevOps: A Practical Transformation Guide</span>
+                </a>
+                <span></span>
+            </nav>
+        </article>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-company">
+                <p class="footer-brand">NetDevOps Micro-Tools</p>
+                <p class="footer-tagline">Small tools. Real automation. AI-assisted.</p>
+                <p class="footer-location">Norfolk, Virginia, USA</p>
+            </div>
+            <div class="footer-links">
+                <a href="index.html">Blog</a>
+                <a href="../legal/privacy.html">Privacy Policy</a>
+                <a href="#" onclick="openCookieSettings(); return false;">Cookie Settings</a>
+                <a href="mailto:psnowacki@gmail.com">Contact</a>
+                <a href="https://github.com/UWillC/netdevops-micro-tools" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://www.linkedin.com/company/netdevops-micro-tools" target="_blank" rel="noopener">LinkedIn</a>
+            </div>
+            <p class="footer-copyright">2026 NetDevOps Micro-Tools. All rights reserved. | Built in public.</p>
+        </div>
+    </footer>
+
+    <div class="cookie-banner" id="cookieBanner" style="display: none;">
+        This site uses cookies. <a href="../legal/privacy.html">Learn more</a>
+        <button onclick="acceptCookies()">Accept</button>
+    </div>
+
+    <script>
+        const themeToggle = document.getElementById('themeToggle');
+
+        function getEffectiveTheme() {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme) return savedTheme;
+            return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+
+        themeToggle.addEventListener('click', () => {
+            const currentTheme = getEffectiveTheme();
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+        });
+
+        function acceptCookies() {
+            localStorage.setItem('cookieConsent', JSON.stringify({necessary: true, analytics: true, marketing: false, functional: true}));
+            document.getElementById('cookieBanner').style.display = 'none';
+        }
+        function openCookieSettings() {
+            document.getElementById('cookieBanner').style.display = 'flex';
+        }
+        if (!localStorage.getItem('cookieConsent')) {
+            document.getElementById('cookieBanner').style.display = 'flex';
+        }
+    </script>
+</body>
+</html>
