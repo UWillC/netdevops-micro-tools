@@ -3749,3 +3749,63 @@ if (iptGenerateForm && iptOutput) {
     }
   });
 }
+
+// =============================================
+// CRITICAL THREAT FEED (Home Dashboard)
+// =============================================
+
+const threatFeedList = document.getElementById("threat-feed-list");
+const threatFeedAge = document.getElementById("threat-feed-age");
+const threatFeedRefresh = document.getElementById("threat-feed-refresh");
+
+async function loadThreatFeed() {
+  if (!threatFeedList) return;
+  threatFeedList.innerHTML = '<p class="summary-muted">Loading threat feed...</p>';
+
+  try {
+    const resp = await fetch("/analyze/critical-feed");
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+
+    if (data.cache_age_hours != null && threatFeedAge) {
+      threatFeedAge.textContent = `Cache: ${data.cache_age_hours}h ago · ${data.total_advisories} advisories`;
+    }
+
+    if (!data.items || data.items.length === 0) {
+      threatFeedList.innerHTML = '<p class="summary-muted">No critical/high CVEs in cache. Enable Cisco PSIRT API (CVE_CISCO_PSIRT=1) to populate.</p>';
+      return;
+    }
+
+    threatFeedList.innerHTML = "";
+
+    data.items.forEach(item => {
+      const a = document.createElement("a");
+      a.className = "threat-feed-item";
+      a.href = item.url || "#";
+      a.target = "_blank";
+      a.rel = "noopener";
+
+      const cvssClass = item.severity === "critical" ? "critical" : "high";
+      const cvssText = item.cvss != null ? item.cvss.toFixed(1) : "—";
+
+      a.innerHTML = `
+        <span class="threat-feed-cvss ${cvssClass}">${cvssText}</span>
+        <span class="threat-feed-cve">${item.cve_id}</span>
+        <span class="threat-feed-desc">${item.title}</span>
+        <span class="threat-feed-severity ${cvssClass}">${item.severity}</span>
+      `;
+
+      threatFeedList.appendChild(a);
+    });
+  } catch (err) {
+    threatFeedList.innerHTML = `<p class="summary-muted">Could not load threat feed: ${err.message}</p>`;
+  }
+}
+
+// Load feed on page load
+loadThreatFeed();
+
+// Refresh button
+if (threatFeedRefresh) {
+  threatFeedRefresh.addEventListener("click", loadThreatFeed);
+}

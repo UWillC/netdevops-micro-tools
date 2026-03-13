@@ -1,12 +1,15 @@
 import datetime
+import json
 import os
+import re
+import time
 from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from services.cve_engine import CVEEngine, CVEEngineConfig
-from services.cve_sources import NvdEnricherProvider, CiscoAdvisoryProvider
+from services.cve_sources import NvdEnricherProvider, CiscoAdvisoryProvider, CISCO_CACHE_DIR
 from models.cve_model import CVEEntry
 
 
@@ -32,6 +35,24 @@ class CVECheckResponse(BaseModel):
     cve_id: str
     found: bool
     entry: Optional[CVEEntry]
+    timestamp: str
+
+
+class FeedItem(BaseModel):
+    cve_id: str
+    title: str
+    severity: str
+    cvss: Optional[float]
+    published: Optional[str]
+    updated: Optional[str]
+    url: Optional[str]
+    platforms: List[str]
+
+
+class CriticalFeedResponse(BaseModel):
+    items: List[FeedItem]
+    total_advisories: int
+    cache_age_hours: Optional[float]
     timestamp: str
 
 
@@ -150,5 +171,72 @@ def check_cve(cve_id: str):
         cve_id=cve_id_upper,
         found=entry is not None,
         entry=entry,
+        timestamp=datetime.datetime.utcnow().isoformat() + "Z",
+    )
+
+
+@router.get("/critical-feed", response_model=CriticalFeedResponse)
+def get_critical_feed():
+    """
+    Returns latest critical/high CVEs from Cisco PSIRT cache.
+    Reads from local cache — no API call. Used by the home dashboard widget.
+    """
+    cache_path = os.path.join(CISCO_CACHE_DIR, "iosxe.json")
+    advisories = []
+    cache_age_hours = None
+
+    if os.path.exists(cache_path):
+        try:
+            with open(cache_path, "r", encoding="utf-8") as f:
+                cached = json.load(f)
+            cache_age_hours = round((time.time() - cached.get("cached_at", 0)) / 3600, 1)
+            advisories = cached.get("advisories", [])
+        except Exception:
+            pass
+
+    # Filter critical + high, sort by lastUpdated desc
+    html_tag_re = re.compile(r"<[^>]+>")
+    feed_items = []
+
+    for adv in advisories:
+        sir = (adv.get("sir") or "").lower()
+        if sir not in ("critical", "high"):
+            continue
+
+        cves = adv.get("cves") or []
+        cve_id = cves[0] if cves else adv.get("advisoryId", "N/A")
+
+        title = adv.get("advisoryTitle", "")
+        cvss_raw = adv.get("cvssBaseScore")
+        cvss = None
+        if cvss_raw:
+            try:
+                cvss = float(cvss_raw)
+            except (ValueError, TypeError):
+                pass
+
+        summary_raw = adv.get("summary", "")
+        summary_clean = html_tag_re.sub("", summary_raw).strip()[:200]
+
+        platforms = adv.get("productNames") or []
+
+        feed_items.append(FeedItem(
+            cve_id=cve_id,
+            title=title,
+            severity=sir,
+            cvss=cvss,
+            published=adv.get("firstPublished"),
+            updated=adv.get("lastUpdated"),
+            url=adv.get("publicationUrl"),
+            platforms=platforms[:3],
+        ))
+
+    # Sort: critical first, then by CVSS desc
+    feed_items.sort(key=lambda x: (0 if x.severity == "critical" else 1, -(x.cvss or 0)))
+
+    return CriticalFeedResponse(
+        items=feed_items[:10],
+        total_advisories=len(advisories),
+        cache_age_hours=cache_age_hours,
         timestamp=datetime.datetime.utcnow().isoformat() + "Z",
     )
