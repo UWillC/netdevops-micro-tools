@@ -72,7 +72,7 @@ def serve_css(filename: str):
         return FileResponse(os.path.join(WEB_DIR, f"{filename}.css"), media_type="text/css")
     return FileResponse(os.path.join(WEB_DIR, "style-base.css"), media_type="text/css")
 
-JS_FILES = ["app-core", "app-config", "app-golden", "app-security", "app-profiles", "app-ui", "app-network", "app-feeds", "app"]
+JS_FILES = ["app-gate", "app-core", "app-config", "app-golden", "app-security", "app-profiles", "app-ui", "app-network", "app-feeds", "app"]
 
 @app.get("/{filename}.js")
 def serve_js(filename: str):
