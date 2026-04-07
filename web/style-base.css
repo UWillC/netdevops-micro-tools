@@ -887,3 +887,222 @@ textarea:focus {
   text-align: left;
 }
 
+/* =============================
+   Gate System — Email Gate UI
+   ============================= */
+
+/* Lock badge on sidebar buttons and home cards */
+.gate-lock {
+  font-size: 0.65rem;
+  margin-left: auto;
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+
+.home-tool-card .gate-lock {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 0.7rem;
+  opacity: 0.4;
+}
+
+.home-tool-card {
+  position: relative;
+}
+
+/* Gate modal overlay */
+.gate-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: gateFadeIn 0.2s ease;
+}
+
+@keyframes gateFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.gate-modal {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 40px;
+  max-width: 440px;
+  width: 90%;
+  text-align: center;
+  box-shadow: var(--shadow);
+  position: relative;
+  animation: gateSlideUp 0.25s ease;
+}
+
+@keyframes gateSlideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.gate-modal-close {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 4px 8px;
+  line-height: 1;
+}
+
+.gate-modal-close:hover {
+  color: var(--text);
+}
+
+.gate-modal-icon {
+  font-size: 2.5rem;
+  margin-bottom: 12px;
+}
+
+.gate-modal h2 {
+  color: var(--text);
+  margin: 0 0 8px;
+  font-size: 1.4rem;
+}
+
+.gate-modal p {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0 0 20px;
+  line-height: 1.5;
+}
+
+.gate-email-form {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.gate-email-form input[type="email"] {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.95rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.gate-email-form input[type="email"]:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.gate-submit-btn {
+  padding: 10px 20px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+
+.gate-submit-btn:hover {
+  background: #2563eb;
+}
+
+.gate-submit-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.gate-modal-note {
+  color: var(--muted);
+  font-size: 0.75rem;
+  margin: 0;
+  opacity: 0.7;
+}
+
+/* Gate banner on home page */
+.gate-banner {
+  margin: 24px 0 0;
+  padding: 20px 24px;
+  background: linear-gradient(135deg, var(--accent-soft) 0%, rgba(59, 130, 246, 0.05) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: var(--radius);
+}
+
+.gate-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.gate-banner-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.gate-banner-text {
+  flex: 1;
+  min-width: 200px;
+}
+
+.gate-banner-text strong {
+  display: block;
+  color: var(--text);
+  font-size: 0.95rem;
+  margin-bottom: 2px;
+}
+
+.gate-banner-text span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.gate-banner-btn {
+  padding: 8px 20px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+
+.gate-banner-btn:hover {
+  background: #2563eb;
+}
+
+/* Responsive: stack form on mobile */
+@media (max-width: 480px) {
+  .gate-email-form {
+    flex-direction: column;
+  }
+  .gate-modal {
+    padding: 28px 20px;
+  }
+  .gate-banner-content {
+    flex-direction: column;
+    text-align: center;
+  }
+}
+

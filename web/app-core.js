@@ -162,10 +162,17 @@ homeButton.addEventListener("click", () => {
   homeTab.classList.add("active");
 });
 
-// Home tool cards - navigate to tool
+// Home tool cards - navigate to tool (with gate check)
 document.querySelectorAll(".home-tool-card").forEach(card => {
   card.addEventListener("click", () => {
     const tab = card.dataset.tab;
+
+    // Gate check for home cards too
+    if (typeof shouldGate === "function" && shouldGate(tab)) {
+      showGateModal(tab);
+      return;
+    }
+
     const tabBtn = document.querySelector(`.tab-button[data-tab="${tab}"]`);
     if (tabBtn) tabBtn.click();
   });
@@ -205,6 +212,12 @@ const tabContents = document.querySelectorAll(".tab-content");
 tabButtons.forEach((btn) => {
   btn.addEventListener("click", () => {
     const tab = btn.dataset.tab;
+
+    // Gate check — show email modal if tool is gated and user hasn't unlocked
+    if (typeof shouldGate === "function" && shouldGate(tab)) {
+      showGateModal(tab);
+      return;
+    }
 
     // Deactivate home button
     const homeBtn = document.getElementById("home-button");
