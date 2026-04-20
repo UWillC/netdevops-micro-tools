@@ -153,7 +153,15 @@ if (cveForm && cveOutput) {
       });
 
       if (data.recommended_upgrade) {
-        out += `\nRecommended upgrade target: ${data.recommended_upgrade}\n`;
+        const label = data.eol_status && data.eol_status.is_eol ? "Remediation" : "Recommended upgrade target";
+        out += `\n${label}: ${data.recommended_upgrade}\n`;
+        if (
+          data.eol_status &&
+          data.eol_status.is_eol &&
+          data.original_engine_recommendation
+        ) {
+          out += `(Engine's pre-EoL suggestion would have been: ${data.original_engine_recommendation} — not actionable on this hardware.)\n`;
+        }
       }
 
       if (data.severity_policy) {
@@ -323,9 +331,14 @@ if (cveForm && cveOutput) {
           }
           ${
             data.recommended_upgrade
-              ? `<div class="summary-upgrade">
-                   Recommended upgrade target:<br/>
+              ? `<div class="summary-upgrade${data.eol_status && data.eol_status.is_eol ? " summary-upgrade-eol" : ""}">
+                   ${data.eol_status && data.eol_status.is_eol ? "Remediation:" : "Recommended upgrade target:"}<br/>
                    <strong>${data.recommended_upgrade}</strong>
+                   ${
+                     data.eol_status && data.eol_status.is_eol && data.original_engine_recommendation
+                       ? `<div class="summary-upgrade-context">Engine's pre-EoL suggestion would have been: <code>${data.original_engine_recommendation}</code> (not actionable on this hardware).</div>`
+                       : ""
+                   }
                  </div>`
               : `<div class="summary-upgrade summary-muted">
                    No specific upgrade target recommended based on current CVEs.

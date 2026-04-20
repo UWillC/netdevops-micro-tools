@@ -51,6 +51,12 @@ class CVEAnalyzeResponse(BaseModel):
     matched: List[CVEEntry]
     summary: dict
     recommended_upgrade: Optional[str]
+    # v0.6.21: when the engine returns an "upgrade to X" suggestion but the
+    # platform is EoL, recommended_upgrade is rewritten to "hardware
+    # replacement required". This field preserves the original engine
+    # suggestion so an operator can see what the patch path WOULD have been
+    # if the hardware were still supported.
+    original_engine_recommendation: Optional[str] = None
     # v0.3.6 P1.3 severity transparency: per-CVE details including CVSS rating
     # derived from score, effective label, and escalation reason (KEV / actively
     # exploited) when the displayed label differs from the raw CVSS rating.
@@ -149,6 +155,22 @@ def analyze_cve(req: CVEAnalyzeRequest):
     # populated even when matched is empty).
     eol_status = detect_eol(req.platform, req.version)
 
+    # v0.6.21: when the platform is EoL, the engine's "upgrade to X" output
+    # is misleading — there is no patch path. Override the displayed
+    # recommendation with a hardware-replacement message but preserve the
+    # engine's original suggestion in a separate field for context.
+    original_recommendation = recommendation
+    if eol_status and eol_status.get("is_eol"):
+        replacement_hint = ""
+        hw = eol_status.get("hardware") or {}
+        if hw.get("replacement_suggestion"):
+            replacement_hint = f" Suggested replacement: {hw['replacement_suggestion']}."
+        recommendation = (
+            f"Hardware replacement required — platform is past "
+            f"end-of-vulnerability-security-support. Software upgrade is not a "
+            f"remediation path on this device.{replacement_hint}"
+        )
+
     # v0.6.19 XCUT-002: provenance footer.
     provenance = cve_provenance(
         tool_version=_APP_VERSION,
@@ -162,6 +184,7 @@ def analyze_cve(req: CVEAnalyzeRequest):
         matched=matched,
         summary=summary,
         recommended_upgrade=recommendation,
+        original_engine_recommendation=original_recommendation,
         severity_details=severity_details,
         bundles=bundles,
         eol_status=eol_status,

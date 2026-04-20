@@ -254,6 +254,29 @@
   font-size: 0.8rem;
 }
 
+/* v0.6.21 — EoL variant of the recommendation block. Same shape as
+ * regular upgrade rec but red-tinted to match the EoL banner upstream. */
+.summary-upgrade-eol {
+  border-left: 3px solid rgba(248, 113, 113, 0.7);
+  padding-left: 8px;
+  color: rgba(254, 226, 226, 0.95);
+}
+
+.summary-upgrade-context {
+  margin-top: 6px;
+  font-size: 0.7rem;
+  font-style: italic;
+  color: rgba(148, 163, 184, 0.85);
+  line-height: 1.4;
+}
+
+.summary-upgrade-context code {
+  background: rgba(148, 163, 184, 0.15);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 0.68rem;
+}
+
 @media (max-width: 860px) {
   .cve-layout {
     grid-template-columns: minmax(0, 1fr);

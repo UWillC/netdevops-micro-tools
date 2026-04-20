@@ -4,6 +4,54 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.21] – 2026-04-20 (W17 Day 1 — EoL upgrade-rec override)
+
+### Fixed — Recommended upgrade target on EoL platforms (CVE-009 follow-up)
+
+CVE-009 banner (v0.6.18) flagged the platform as EoL but the right-rail
+"Recommended upgrade target: IOS XE 17.15.4a" was still being rendered
+beneath it — internally inconsistent. An operator skimming the right rail
+might miss the banner and act on the upgrade target that is not a
+remediation path on this hardware.
+
+**Fix.** When `eol_status.is_eol` is True, `recommended_upgrade` is
+overridden in the API response with a hardware-replacement message:
+
+> Hardware replacement required — platform is past
+> end-of-vulnerability-security-support. Software upgrade is not a
+> remediation path on this device. Suggested replacement: ISR 4000 series
+> (4321/4331/4351/4451) or Catalyst 8200 series.
+
+The engine's original suggestion (e.g., "IOS XE 17.15.4a — driven by
+CVE-2025-20352 (KEV, actively exploited)") is preserved in a new
+`original_engine_recommendation` field. UI surfaces it as italic context:
+
+> Engine's pre-EoL suggestion would have been: `IOS XE 17.15.4a — driven
+> by CVE-2025-20352 (KEV, actively exploited)` (not actionable on this
+> hardware).
+
+This keeps the audit trail intact: an operator can see what the patch
+path WOULD have been if the hardware were supported, while the headline
+recommendation is the real remediation (replace).
+
+UI: right-rail block label switches from "Recommended upgrade target" to
+"Remediation" on EoL platforms, with red border-left accent matching the
+EoL banner upstream. Text report mirrors the same wording for
+paste-into-ticket use.
+
+Smoke test on `Cisco 2900 Series ISR + 15.7(3)M5`:
+- `recommended_upgrade`: "Hardware replacement required — ..."
+- `original_engine_recommendation`: "IOS XE 17.15.4a — driven by
+  CVE-2025-20352 (KEV, actively exploited)"
+
+Smoke test on current `IOS XE 17.9.4`: no change (eol_status=None).
+
+Tests: 62 passing (no regressions).
+
+Version: app 0.6.20 → 0.6.21.
+
+---
+
 ## [v0.6.20] – 2026-04-20 (W17 Day 1 — provenance UX clarity)
 
 ### Changed — Provenance footer separates attribution from cache freshness
