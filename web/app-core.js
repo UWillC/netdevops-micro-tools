@@ -297,51 +297,70 @@ tabButtons.forEach((btn) => {
 // -----------------------------
 // Copy to clipboard buttons
 // -----------------------------
+// Supports two attribute patterns (UI-001 fix 2026-04-20):
+//   1. Standard: .btn-secondary[data-copy-target="output-id"]  (most tools)
+//   2. Alt:      .copy-btn[data-target="output-id"]            (CIS Audit, Config Drift)
+// Both funnel into the same copy logic.
+function _bindCopyButton(btn, targetAttr) {
+  btn.addEventListener("click", () => {
+    const targetId = btn.dataset[targetAttr];
+    const textarea = document.getElementById(targetId);
+    if (!textarea) return;
+
+    textarea.select();
+    textarea.setSelectionRange(0, 99999);
+    document.execCommand("copy");
+
+    const original = btn.textContent;
+    btn.textContent = "Copied!";
+    setTimeout(() => {
+      btn.textContent = original;
+    }, 1200);
+  });
+}
+
 document
   .querySelectorAll(".btn-secondary[data-copy-target]")
-  .forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const targetId = btn.dataset.copyTarget;
-      const textarea = document.getElementById(targetId);
-      if (!textarea) return;
+  .forEach((btn) => _bindCopyButton(btn, "copyTarget"));
 
-      textarea.select();
-      textarea.setSelectionRange(0, 99999);
-      document.execCommand("copy");
-
-      const original = btn.textContent;
-      btn.textContent = "Copied!";
-      setTimeout(() => {
-        btn.textContent = original;
-      }, 1200);
-    });
-  });
+document
+  .querySelectorAll(".copy-btn[data-target]")
+  .forEach((btn) => _bindCopyButton(btn, "target"));
 
 // -----------------------------
 // Download buttons (.txt files)
 // -----------------------------
+// Supports two attribute patterns (UI-001 fix 2026-04-20):
+//   1. Standard: .btn-secondary[data-download-target="output-id"]  (most tools)
+//   2. Alt:      .download-btn[data-target="output-id"]            (CIS Audit, Config Drift)
+function _bindDownloadButton(btn, targetAttr) {
+  btn.addEventListener("click", () => {
+    const targetId = btn.dataset[targetAttr];
+    const filename = btn.dataset.filename || "config.txt";
+    const textarea = document.getElementById(targetId);
+    if (!textarea) return;
+
+    const blob = new Blob([textarea.value || ""], {
+      type: "text/plain;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+}
+
 document
   .querySelectorAll(".btn-secondary[data-download-target]")
-  .forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const targetId = btn.dataset.downloadTarget;
-      const filename = btn.dataset.filename || "config.txt";
-      const textarea = document.getElementById(targetId);
-      if (!textarea) return;
+  .forEach((btn) => _bindDownloadButton(btn, "downloadTarget"));
 
-      const blob = new Blob([textarea.value || ""], {
-        type: "text/plain;charset=utf-8",
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    });
-  });
+document
+  .querySelectorAll(".download-btn[data-target]")
+  .forEach((btn) => _bindDownloadButton(btn, "target"));
 
 // -----------------------------
 // Helper: generic POST JSON

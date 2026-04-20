@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.9] – 2026-04-20 (W17 Day 1)
+
+### Fixed — UI-001: Copy + Download buttons in CIS Audit and Config Drift
+
+Root cause (finally): CIS Audit (tab-cis-audit) and Config Drift (tab-config-drift)
+use a different HTML attribute pattern for their Copy/Download buttons than the
+rest of the tools:
+
+- Standard (17 tools): `.btn-secondary[data-copy-target]` + `.btn-secondary[data-download-target]`
+- CIS Audit + Config Drift: `.btn.btn-small.copy-btn[data-target]` + `.btn.btn-small.download-btn[data-target]`
+
+Event handlers in `app-core.js` only bound to the standard pattern, so the
+buttons in CIS Audit and Config Drift rendered fine (hover, click feedback)
+but did nothing — no copy, no download triggered.
+
+Fix: refactored `app-core.js` to extract `_bindCopyButton()` and
+`_bindDownloadButton()` helpers and register both attribute patterns.
+Zero HTML/CSS changes needed; styling and layout preserved.
+
+Version bump: app 0.6.8 → 0.6.9.
+
+---
+
 ## [v0.6.8] – 2026-04-19 (late evening)
 
 ### Changed — Further cosmetic filter cleanup
