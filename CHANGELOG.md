@@ -4,6 +4,42 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.20] – 2026-04-20 (W17 Day 1 — provenance UX clarity)
+
+### Changed — Provenance footer separates attribution from cache freshness
+
+Production deploy of v0.6.19 surfaced a UX confusion: the Cisco PSIRT
+import row showed `cisco-psirt-import: 100` in source distribution, yet
+the same provider's source row showed "not present". Both true — records
+were imported into local-json earlier; the live API cache is empty on a
+fresh Render deploy (cache directories are not persisted by the platform).
+But to a non-author reading the report, the two lines look contradictory.
+
+**Fix.** UI labels and policy note rewritten to make the two concepts
+distinct:
+
+- "Source distribution across matched CVEs" →
+  **"Per-CVE source attribution"** with hint
+  *"(which provider originally supplied each record)"*
+- "Data sources" →
+  **"Live provider cache freshness"** with hint
+  *"(current on-disk cache state for re-fetch)"*
+- Tooltip on "not present": *"On-disk cache is empty. Records from this
+  provider may still appear in attribution above (imported into local-json
+  earlier)."*
+- Policy note expanded to explain the relationship explicitly: a provider
+  can show "not present" in cache while still appearing in attribution
+  counts; this is not a contradiction.
+
+Same wording mirrored in the text report ("Copy" output) so paste-into-
+ticket workflows carry the same clarity.
+
+No backend schema change. No new dependencies. Pure UX fix.
+
+Version: app 0.6.19 → 0.6.20.
+
+---
+
 ## [v0.6.19] – 2026-04-20 (W17 Day 1 — XCUT-002 provenance footer)
 
 ### Added — Provenance / audit-trail footer (XCUT-002)

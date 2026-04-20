@@ -169,13 +169,14 @@ if (cveForm && cveOutput) {
           const dist = Object.entries(p.source_distribution)
             .map(([k, v]) => `${k}=${v}`)
             .join(", ");
-          out += `Source distribution: ${dist}\n`;
+          out += `Per-CVE source attribution: ${dist}\n`;
         }
+        out += "Live provider cache freshness:\n";
         (p.sources || []).forEach((s) => {
           if (s.available) {
             out += `  ${s.name}: ${s.last_refreshed} (${s.age_hours}h ago, ${s.file_count} files)\n`;
           } else {
-            out += `  ${s.name}: not present\n`;
+            out += `  ${s.name}: not present (cache empty; records may still appear in attribution above)\n`;
           }
         });
       }
@@ -338,20 +339,29 @@ if (cveForm && cveOutput) {
         `;
       }
 
-      // v0.6.19 XCUT-002: provenance footer (collapsible). Establishes
-      // chain of custody so the CVE report is usable as audit evidence.
+      // v0.6.19 XCUT-002 + v0.6.20 UX clarification: provenance footer.
+      // Two distinct concepts surfaced separately so an auditor doesn't
+      // misread "cache not present" as "no data from that provider":
+      //   (1) Per-CVE source attribution = where each record originally came
+      //       from (counts per provider).
+      //   (2) Live provider cache freshness = current state of on-disk
+      //       caches used for re-fetch. May be empty even when attribution
+      //       counts are non-zero.
       if (cveProvenance && data.provenance && Object.keys(data.provenance).length) {
         const p = data.provenance;
         const sourceRows = (p.sources || [])
           .map((s) => {
             const status = s.available
               ? `<span class="prov-fresh">${s.last_refreshed} (${s.age_hours}h ago, ${s.file_count} file${s.file_count === 1 ? "" : "s"})</span>`
-              : `<span class="prov-missing">not present</span>`;
+              : `<span class="prov-missing" title="On-disk cache is empty. Records from this provider may still appear in attribution above (imported into local-json earlier).">not present</span>`;
             return `<div class="prov-row"><span class="prov-name">${s.name}</span> ${status}<div class="prov-desc">${s.description}</div></div>`;
           })
           .join("");
         const distRows = Object.entries(p.source_distribution || {})
-          .map(([src, n]) => `<span class="prov-pill">${src}: ${n}</span>`)
+          .map(
+            ([src, n]) =>
+              `<span class="prov-pill" title="Provider that originally supplied ${n} of the matched records.">${src}: ${n}</span>`
+          )
           .join(" ");
         cveProvenance.innerHTML = `
           <details class="provenance-block">
@@ -360,9 +370,9 @@ if (cveForm && cveOutput) {
               <div class="prov-meta">
                 Engine ${p.cve_engine_version || "?"} • Tool ${p.tool_version || "?"} • Ruleset ${p.ruleset_version || "?"}
               </div>
-              ${distRows ? `<div class="prov-section"><div class="prov-section-title">Source distribution across matched CVEs</div><div class="prov-pills">${distRows}</div></div>` : ""}
+              ${distRows ? `<div class="prov-section"><div class="prov-section-title">Per-CVE source attribution <span class="prov-section-hint">(which provider originally supplied each record)</span></div><div class="prov-pills">${distRows}</div></div>` : ""}
               <div class="prov-section">
-                <div class="prov-section-title">Data sources</div>
+                <div class="prov-section-title">Live provider cache freshness <span class="prov-section-hint">(current on-disk cache state for re-fetch)</span></div>
                 ${sourceRows}
               </div>
               ${p.policy_note ? `<div class="prov-note">${p.policy_note}</div>` : ""}

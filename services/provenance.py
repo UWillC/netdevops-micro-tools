@@ -166,9 +166,15 @@ def cve_provenance(
         "sources": sources,
         "source_distribution": source_counts,
         "policy_note": (
-            "Per-CVE 'source' field on each finding identifies which provider "
-            "supplied that record. 'advisory_url' (when present) is the "
-            "canonical Cisco advisory page. This footer establishes chain of "
-            "custody for audit / compliance use."
+            "Per-CVE source attribution (above) records which provider "
+            "originally supplied each finding. Live provider cache freshness "
+            "(below) reflects the current state of on-disk caches used for "
+            "re-fetch. A provider can show 'not present' in cache while still "
+            "appearing in attribution counts — that means records from that "
+            "provider were previously imported into the curated local-json "
+            "dataset and the live cache is empty (typical on fresh deploys; "
+            "caches populate on demand). 'advisory_url' on each CVE row is "
+            "the canonical Cisco advisory page. Together these establish "
+            "chain of custody for audit / compliance use."
         ),
     }
