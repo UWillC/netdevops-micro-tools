@@ -1,4 +1,5 @@
 import os
+import re
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
@@ -15,11 +16,50 @@ from services.cve_sources import (
 # -----------------------------
 # Version parsing & comparison (v0.3+)
 # -----------------------------
+# Sentinels for unbounded ranges: min=all → (-inf), max=all → (+inf)
+_MIN_SENTINEL: Tuple[int, ...] = (-1,)
+_MAX_SENTINEL: Tuple[int, ...] = (10**9,)
+
+# Regex to extract a dotted version (with optional rebuild letter) from free text.
+# Matches "17.15.4a", "17.12.3", "15.7(3)M5" (captures "15.7.3"), etc.
+_VERSION_RE = re.compile(r"(\d+)\.(\d+)(?:[.\(](\d+)[.\)]?(?:[Mm](\d+))?)?([a-z])?")
+
+
+def _extract_version(text: str) -> Optional[Tuple[int, ...]]:
+    """Extract the first version-like token from free text. Returns tuple or None."""
+    if not text:
+        return None
+    m = _VERSION_RE.search(text)
+    if not m:
+        return None
+    parts: List[int] = []
+    for g in m.groups()[:4]:
+        if g is None:
+            parts.append(0)
+            continue
+        try:
+            parts.append(int(g))
+        except ValueError:
+            parts.append(0)
+    # rebuild letter → small tiebreaker (a=1, b=2, ...); absent = 0
+    letter = m.group(5)
+    if letter:
+        parts.append(ord(letter.lower()) - ord("a") + 1)
+    return tuple(parts) if parts else None
+
+
 def _tokenize_version(v: str) -> Tuple[int, ...]:
+    """Parse a plain version string (best-effort). Used for target versions."""
     v = (v or "").strip()
     if not v:
         return (0,)
 
+    # First try the regex extractor (handles "17.15.4a" cleanly).
+    extracted = _extract_version(v)
+    if extracted:
+        return extracted
+
+    # Fallback: strip to digits + dots only.
     cleaned = []
     for ch in v:
         if ch.isdigit() or ch == ".":
@@ -45,19 +85,98 @@ def _tokenize_version(v: str) -> Tuple[int, ...]:
     return tuple(nums)
 
 
-def compare_versions(a: str, b: str) -> int:
-    ta = _tokenize_version(a)
-    tb = _tokenize_version(b)
-
-    max_len = max(len(ta), len(tb))
-    ta = ta + (0,) * (max_len - len(ta))
-    tb = tb + (0,) * (max_len - len(tb))
-
-    if ta < tb:
+def _cmp_tuples(a: Tuple[int, ...], b: Tuple[int, ...]) -> int:
+    """Compare two version tuples, padding with zeros."""
+    max_len = max(len(a), len(b))
+    pa = a + (0,) * (max_len - len(a))
+    pb = b + (0,) * (max_len - len(b))
+    if pa < pb:
         return -1
-    if ta > tb:
+    if pa > pb:
         return 1
     return 0
+
+
+def compare_versions(a: str, b: str) -> int:
+    return _cmp_tuples(_tokenize_version(a), _tokenize_version(b))
+
+
+def parse_affected_range(
+    affected_min: str, affected_max: str, fixed_in: Optional[str] = None
+) -> Tuple[Tuple[int, ...], Tuple[int, ...], bool]:
+    """
+    Parse CVE affected.{min,max} free-text into (min_ver, max_ver, inclusive_max).
+
+    Rules:
+    - min = "all" / "any" / "" → unbounded below (MIN_SENTINEL).
+    - max = "all" / "any" / "" → bounded by fixed_in (exclusive) if present, else unbounded above.
+    - max containing "before <X>" → (X, inclusive_max=False).
+    - max containing "<X> and earlier" / "through <X>" / "up to <X>" → (X, inclusive_max=True).
+    - max with only a version token → parse as inclusive upper.
+    - Any other non-parseable max → fall back to fixed_in (exclusive) if present, else unbounded.
+    """
+    # --- min ---
+    mn = (affected_min or "").strip().lower()
+    if not mn or mn in ("all", "any", "none", "*"):
+        min_ver = _MIN_SENTINEL
+    else:
+        extracted = _extract_version(affected_min)
+        min_ver = extracted if extracted else _MIN_SENTINEL
+
+    # --- max ---
+    mx = (affected_max or "").strip()
+    mx_low = mx.lower()
+
+    max_ver: Optional[Tuple[int, ...]] = None
+    inclusive_max = True
+
+    if not mx or mx_low in ("all", "any", "none", "*"):
+        # Use fixed_in as exclusive upper bound if present
+        fix_ver = _extract_version(fixed_in or "")
+        if fix_ver:
+            max_ver = fix_ver
+            inclusive_max = False
+        else:
+            max_ver = _MAX_SENTINEL
+    elif "before" in mx_low:
+        # "all versions before 17.15.4a ..." → exclusive upper = 17.15.4a
+        # Extract version AFTER "before"
+        idx = mx_low.find("before")
+        tail = mx[idx + len("before"):]
+        ver = _extract_version(tail)
+        if ver is None:
+            # Fall back to fixed_in
+            fix_ver = _extract_version(fixed_in or "")
+            max_ver = fix_ver if fix_ver else _MAX_SENTINEL
+            inclusive_max = fix_ver is None
+        else:
+            max_ver = ver
+            inclusive_max = False
+    elif any(k in mx_low for k in ("earlier", "through", "up to", "prior to")):
+        ver = _extract_version(mx)
+        if ver is None:
+            fix_ver = _extract_version(fixed_in or "")
+            max_ver = fix_ver if fix_ver else _MAX_SENTINEL
+            inclusive_max = "prior to" in mx_low  # "prior to X" = exclusive
+        else:
+            max_ver = ver
+            inclusive_max = "prior to" not in mx_low
+    else:
+        # Try plain version parse
+        ver = _extract_version(mx)
+        if ver:
+            max_ver = ver
+            inclusive_max = True
+        else:
+            # Unparseable → fall back to fixed_in (exclusive) or unbounded
+            fix_ver = _extract_version(fixed_in or "")
+            if fix_ver:
+                max_ver = fix_ver
+                inclusive_max = False
+            else:
+                max_ver = _MAX_SENTINEL
+
+    return min_ver, max_ver, inclusive_max
 
 
 # -----------------------------
@@ -252,20 +371,41 @@ class CVEEngine:
     # -------------------------
     def match(self, platform: str, version: str) -> List[CVEEntry]:
         matched: List[CVEEntry] = []
+        target_ver = _tokenize_version(version)
+
         for cve in self.cves:
             if not platform_matches(platform, cve.platforms):
                 continue
 
-            if compare_versions(version, cve.affected.min) < 0:
-                continue
-            if compare_versions(version, cve.affected.max) > 0:
+            min_ver, max_ver, inclusive_max = parse_affected_range(
+                cve.affected.min,
+                cve.affected.max,
+                getattr(cve, "fixed_in", None),
+            )
+
+            # target < min → not yet affected
+            if _cmp_tuples(target_ver, min_ver) < 0:
                 continue
 
+            # target > max (or >= when exclusive) → already fixed, skip
+            if inclusive_max:
+                if _cmp_tuples(target_ver, max_ver) > 0:
+                    continue
+            else:
+                if _cmp_tuples(target_ver, max_ver) >= 0:
+                    continue
+
             matched.append(cve)
+
+        # KEV / actively-exploited CVEs first, then critical/high, then CVE ID
+        def _kev_flag(c: CVEEntry) -> int:
+            tags = [t.lower() for t in (getattr(c, "tags", []) or [])]
+            return 0 if any(t in tags for t in ("kev", "actively-exploited", "zero-day")) else 1
 
         severity_rank = {"critical": 0, "high": 1, "medium": 2, "low": 3}
         matched.sort(
             key=lambda x: (
+                _kev_flag(x),
                 severity_rank.get((x.severity or "").lower(), 99),
                 x.cve_id,
             )
@@ -287,16 +427,41 @@ class CVEEngine:
     # Recommended upgrade
     # -------------------------
     def recommended_upgrade(self, matched: List[CVEEntry]) -> Optional[str]:
-        candidates: List[str] = []
+        """
+        Return the MINIMUM SAFE version: the lowest version that fixes EVERY
+        applicable critical/high CVE. This is max(fix_versions), not min.
+
+        Fixed 2026-04-19 per defect report CVE-002: previous logic picked the
+        LOWEST fix version, producing false "patched" state (e.g. recommending
+        17.15.2 while CVE-2025-20352 first-fixed in 17.15.4a).
+        """
+        # Collect (fixed_in_string, parsed_version_tuple, driver_cve) for each
+        # critical/high CVE that has a fix version. Skip CVEs without fixed_in.
+        candidates: List[Tuple[str, Tuple[int, ...], CVEEntry]] = []
         for cve in matched:
-            if (cve.severity or "").lower() in ("critical", "high") and cve.fixed_in:
-                candidates.append(cve.fixed_in)
+            sev = (cve.severity or "").lower()
+            if sev not in ("critical", "high"):
+                continue
+            if not cve.fixed_in:
+                continue
+            parsed = _extract_version(cve.fixed_in)
+            if parsed is None:
+                # Can't compare this one safely → skip it rather than let a
+                # non-parseable fix version hide a real upgrade requirement.
+                continue
+            candidates.append((cve.fixed_in, parsed, cve))
 
         if not candidates:
             return None
 
-        best = candidates[0]
-        for v in candidates[1:]:
-            if compare_versions(v, best) < 0:
-                best = v
-        return best
+        # Pick the MAXIMUM — any lower version leaves at least one CVE unpatched.
+        best_str, best_ver, driver = candidates[0]
+        for fix_str, fix_ver, cve in candidates[1:]:
+            if _cmp_tuples(fix_ver, best_ver) > 0:
+                best_str, best_ver, driver = fix_str, fix_ver, cve
+
+        # Annotate driver CVE for operator trust
+        driver_tags = [t.lower() for t in (getattr(driver, "tags", []) or [])]
+        is_kev = any(t in driver_tags for t in ("kev", "actively-exploited", "zero-day"))
+        kev_note = " (KEV, actively exploited)" if is_kev else ""
+        return f"{best_str} — driven by {driver.cve_id}{kev_note}"
