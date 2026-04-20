@@ -216,7 +216,7 @@ def platform_matches(query_platform: str, cve_platforms: List[str]) -> bool:
 # -----------------------------
 @dataclass(frozen=True)
 class CVEEngineConfig:
-    engine_version: str = "0.3.3"
+    engine_version: str = "0.3.4"
     data_dir: str = "cve_data/ios_xe"
 
     # External enrichers/providers are OFF by default
@@ -232,7 +232,16 @@ def _env_true(name: str) -> bool:
 
 class CVEEngine:
     """
-    CVE Engine v0.3.3
+    CVE Engine v0.3.4
+
+    v0.3.4 (2026-04-19) — defect report fixes:
+    - parse_affected_range(): handle "all" / "all versions before X" / "X and
+      earlier" / "prior to X" / empty strings; fall back to fixed_in when max
+      field is not a version. Fixes CVE-001 (CVE-2025-20352 excluded).
+    - recommended_upgrade(): returns max(fix_versions) not min; annotates
+      driver CVE + KEV flag. Fixes CVE-002 (dangerous 17.15.2 rec).
+    - _tokenize_version(): parses rebuild letters ("17.15.4a" != "17.15.4").
+    - match(): KEV / actively-exploited / zero-day CVEs sorted first.
 
     v0.3.3 focus:
     - Real external integration (read-only) WITHOUT breaking deterministic matching.

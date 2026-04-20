@@ -4,6 +4,50 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.1] – 2026-04-19
+
+### Fixed
+
+- **CVE Analyzer v0.3** (engine 0.3.4) — 2 CRITICAL defects from 2026-04-19 self-audit:
+  - **CVE-001:** CVE-2025-20352 (SNMP stack-overflow, CISA KEV, actively
+    exploited) was silently excluded for every IOS/IOS XE target because
+    `_tokenize_version("all versions before 17.15.4a...")` parsed the free-text
+    max field as `(0,)`. New `parse_affected_range()` handles `all` / `all
+    versions before X` / `X and earlier` / `prior to X` / empty strings and
+    falls back to `fixed_in` when the max field is not a version token.
+  - **CVE-002:** `recommended_upgrade()` returned the LOWEST fix version
+    across applicable CVEs, producing a false "patched" state (e.g.
+    recommending 17.15.2 while the SNMP KEV first-fixes in 17.15.4a). Now
+    returns `max(fix_versions)` and annotates the driver CVE + KEV flag:
+    *"17.15.4a — driven by CVE-2025-20352 (KEV, actively exploited)"*.
+
+### Changed
+
+- `_tokenize_version()` parses rebuild letters correctly (`17.15.4a` → tuple
+  with letter tiebreaker; distinguishes from `17.15.4`).
+- `match()` sorts KEV / actively-exploited / zero-day CVEs before
+  critical/high — operators see the worst-risk items first.
+
+### Frontend
+
+- **Quickstart banner** added to homepage: guided entry for first-time users
+  (Subnet Calculator, Timezone + NATO DTG, MTU Calculator — all free, no email).
+- **Favicon** — network topology SVG (5-node diagram, gradient hub).
+- Quickstart buttons bound to tab navigation (`app-core.js`).
+
+### Remaining from 2026-04-19 defect report (queued W19+)
+
+- CIS-001 / CIS-003 CRITICAL: VTY range parser, SNMP community parser.
+- CVE-003 / CVE-004 / CVE-005 HIGH: product-family and hardware-family
+  taxonomy to eliminate scope leakage.
+- CVE-006 CRITICAL: version-range matching for local-json source is now
+  partially correct (via `parse_affected_range`); remaining work is to
+  extend the parser to IOS classic trains (`15.7(3)M5` style) and SMU
+  suffixes.
+- XCUT-001 HIGH: correlate CIS findings with CVE exploitability.
+
+---
+
 ## [v0.6.0] – 2026-03-13
 
 ### Added
