@@ -1037,8 +1037,8 @@ textarea:focus {
   opacity: 0.7;
 }
 
-/* Gate banner on home page */
-.gate-banner {
+/* Gate notice on home page */
+.gate-notice {
   margin: 24px 0 0;
   padding: 20px 24px;
   background: linear-gradient(135deg, var(--accent-soft) 0%, rgba(59, 130, 246, 0.05) 100%);
@@ -1046,36 +1046,36 @@ textarea:focus {
   border-radius: var(--radius);
 }
 
-.gate-banner-content {
+.gate-notice-content {
   display: flex;
   align-items: center;
   gap: 16px;
   flex-wrap: wrap;
 }
 
-.gate-banner-icon {
+.gate-notice-icon {
   font-size: 1.5rem;
   flex-shrink: 0;
 }
 
-.gate-banner-text {
+.gate-notice-text {
   flex: 1;
   min-width: 200px;
 }
 
-.gate-banner-text strong {
+.gate-notice-text strong {
   display: block;
   color: var(--text);
   font-size: 0.95rem;
   margin-bottom: 2px;
 }
 
-.gate-banner-text span {
+.gate-notice-text span {
   color: var(--muted);
   font-size: 0.8rem;
 }
 
-.gate-banner-btn {
+.gate-notice-btn {
   padding: 8px 20px;
   background: var(--accent);
   color: #fff;
@@ -1088,7 +1088,7 @@ textarea:focus {
   transition: background 0.2s;
 }
 
-.gate-banner-btn:hover {
+.gate-notice-btn:hover {
   background: #2563eb;
 }
 
@@ -1100,7 +1100,7 @@ textarea:focus {
   .gate-modal {
     padding: 28px 20px;
   }
-  .gate-banner-content {
+  .gate-notice-content {
     flex-direction: column;
     text-align: center;
   }

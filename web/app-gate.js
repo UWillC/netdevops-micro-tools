@@ -38,7 +38,7 @@ function unlockGate(email) {
   document.querySelectorAll(".gate-lock").forEach(el => el.remove());
 
   // Hide the gate banner on home page
-  const banner = document.getElementById("gate-banner");
+  const banner = document.getElementById("gate-notice");
   if (banner) banner.style.display = "none";
 
   // Show success toast
@@ -188,23 +188,23 @@ function addGateBanner() {
   if (!homeFooter) return;
 
   const banner = document.createElement("div");
-  banner.id = "gate-banner";
-  banner.className = "gate-banner";
+  banner.id = "gate-notice";
+  banner.className = "gate-notice";
   banner.innerHTML = `
-    <div class="gate-banner-content">
-      <span class="gate-banner-icon">🔓</span>
-      <div class="gate-banner-text">
+    <div class="gate-notice-content">
+      <span class="gate-notice-icon">🔓</span>
+      <div class="gate-notice-text">
         <strong>5 tools free. 15 pro tools — just enter your email.</strong>
         <span>One-time. No spam. No account needed.</span>
       </div>
-      <button class="btn-primary gate-banner-btn" id="gate-banner-btn">Unlock Pro Tools</button>
+      <button class="btn-primary gate-notice-btn" id="gate-notice-btn">Unlock Pro Tools</button>
     </div>
   `;
 
   // Insert before the footer text
   homeFooter.parentNode.insertBefore(banner, homeFooter);
 
-  document.getElementById("gate-banner-btn").addEventListener("click", () => {
+  document.getElementById("gate-notice-btn").addEventListener("click", () => {
     showGateModal(null);
   });
 }

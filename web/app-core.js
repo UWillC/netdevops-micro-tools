@@ -186,7 +186,7 @@ document.querySelectorAll(".home-tool-card, .quickstart-tool").forEach(card => {
 // Counter resets if localStorage is cleared — that's fine (re-onboarding
 // is cheap).
 (function initQuickstartBanner() {
-  const banner = document.getElementById("quickstart-banner");
+  const banner = document.getElementById("quickstart-card");
   if (!banner) return;
 
   const DISMISS_KEY = "netdevops_quickstart_dismissed";

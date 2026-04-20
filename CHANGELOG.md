@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.7] – 2026-04-19 (late evening)
+
+### Changed — Rename "banner" CSS classes to avoid ad-blocker cosmetic filters
+
+Even after the /critical-feed → /advisories route rename in v0.6.6, users
+still saw the Arc / Brave "not working correctly" popup on first visit.
+Root cause found: EasyList-based cosmetic filters (Brave Shields, uBlock
+Origin) hide ANY element with `class*="banner"` pattern. The DOM still
+had `.quickstart-banner` and `.gate-banner` classes, which triggered the
+shield warning regardless of whether content actually looked like ads.
+
+- `.quickstart-banner` → `.quickstart-card` (6 occurrences across index.html,
+  style-home.css, app-core.js).
+- `.gate-banner`, `.gate-banner-content`, `.gate-banner-icon`,
+  `.gate-banner-text`, `.gate-banner-btn`, `#gate-banner` → `.gate-notice*`
+  equivalents (app-gate.js, style-base.css).
+- Form field names `include_banner` / `custom_banner` (Cisco MOTD config)
+  preserved — they're API payload fields, not CSS selectors.
+
+Version bump: app 0.6.6 → 0.6.7.
+
+---
+
 ## [v0.6.6] – 2026-04-19 (late evening)
 
 ### Changed

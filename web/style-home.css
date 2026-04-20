@@ -2,8 +2,8 @@
 /* Home Page Content */
 /* ----------------------------- */
 
-/* Quickstart Banner */
-.quickstart-banner {
+/* Quickstart Card */
+.quickstart-card {
   position: relative;
   background: linear-gradient(135deg, rgba(88, 166, 255, 0.1) 0%, rgba(188, 140, 255, 0.05) 100%);
   border: 1px solid rgba(88, 166, 255, 0.3);
@@ -13,7 +13,7 @@
   transition: opacity 0.3s ease, max-height 0.3s ease;
 }
 
-.quickstart-banner.hidden {
+.quickstart-card.hidden {
   display: none;
 }
 
