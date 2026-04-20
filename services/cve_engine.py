@@ -148,6 +148,77 @@ def _is_prose_not_version(fixed_in: str) -> bool:
     return False
 
 
+# v0.3.6 (2026-04-19) — P1.3 severity transparency helpers
+def cvss_rating_from_score(score: Optional[float]) -> str:
+    """
+    Return NVD CVSS v3.x qualitative severity rating for a given score.
+    Reference: https://nvd.nist.gov/vuln-metrics/cvss
+    """
+    if score is None:
+        return "UNKNOWN"
+    if score == 0.0:
+        return "NONE"
+    if score < 4.0:
+        return "LOW"
+    if score < 7.0:
+        return "MEDIUM"
+    if score < 9.0:
+        return "HIGH"
+    return "CRITICAL"
+
+
+_ESCALATION_TAGS = {
+    "kev": "Listed in CISA KEV catalog",
+    "actively-exploited": "Actively exploited in the wild",
+    "zero-day": "Zero-day (exploited before patch)",
+    "exploited-in-wild": "Actively exploited in the wild",
+}
+
+
+def _escalation_reason(tags: Optional[List[str]]) -> Optional[str]:
+    """
+    Return human-readable escalation reason if the CVE has any risk-escalation
+    tags (KEV / actively-exploited / zero-day). Returns None for normal CVEs.
+    """
+    if not tags:
+        return None
+    low = [t.lower() for t in tags]
+    reasons = []
+    for tag, reason in _ESCALATION_TAGS.items():
+        if tag in low and reason not in reasons:
+            reasons.append(reason)
+    if not reasons:
+        return None
+    return " + ".join(reasons)
+
+
+def severity_info(cve: "CVEEntry") -> Dict[str, Optional[str]]:
+    """
+    Compute severity transparency info for a CVE entry.
+
+    Returns dict with:
+      cvss_score (float)   — raw CVSS base score
+      cvss_rating (str)    — NVD qualitative rating derived from score
+      effective_label (str) — what the tool displays (may be escalated)
+      escalation_reason (str|None) — why label differs from CVSS rating
+      label_matches_cvss (bool) — True if effective_label == cvss_rating
+    """
+    score = getattr(cve, "cvss_score", None)
+    tags = getattr(cve, "tags", None) or []
+    cvss = cvss_rating_from_score(score)
+    label = (getattr(cve, "severity", "") or "").upper()
+    reason = _escalation_reason(tags)
+
+    info: Dict[str, Optional[str]] = {
+        "cvss_score": score,
+        "cvss_rating": cvss,
+        "effective_label": label,
+        "escalation_reason": reason,
+        "label_matches_cvss": (label == cvss) if score is not None else None,
+    }
+    return info
+
+
 def parse_affected_range(
     affected_min: str, affected_max: str, fixed_in: Optional[str] = None
 ) -> Tuple[Tuple[int, ...], Tuple[int, ...], bool]:
@@ -263,7 +334,7 @@ def platform_matches(query_platform: str, cve_platforms: List[str]) -> bool:
 # -----------------------------
 @dataclass(frozen=True)
 class CVEEngineConfig:
-    engine_version: str = "0.3.6"
+    engine_version: str = "0.3.7"
     data_dir: str = "cve_data/ios_xe"
 
     # External enrichers/providers are OFF by default

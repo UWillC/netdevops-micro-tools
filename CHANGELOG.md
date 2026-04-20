@@ -4,6 +4,46 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.4] – 2026-04-19 (late evening)
+
+### Added — CVE Analyzer severity transparency (engine 0.3.7, backend only)
+
+CTO memo P1.3: `[CRITICAL]` label on CVE-2025-20352 with CVSS 8.8 confuses
+operators — they see a contradiction between the displayed severity and the
+base score. Add transparency so the API response explains the relationship.
+
+- `cvss_rating_from_score(score)` helper: returns NVD CVSS v3.x qualitative
+  rating (LOW / MEDIUM / HIGH / CRITICAL) from a numeric score.
+- `severity_info(cve)` helper returns dict:
+  - `cvss_score` (raw), `cvss_rating` (derived), `effective_label` (what the
+    tool displays), `escalation_reason` (why label differs from CVSS rating —
+    e.g. "Listed in CISA KEV catalog + Actively exploited in the wild"),
+    `label_matches_cvss` (bool).
+- `CVEAnalyzeResponse` now includes `severity_details: dict[cve_id, info]`
+  populated for every matched CVE.
+
+Example for CVE-2025-20352:
+```
+  cvss_score: 8.8
+  cvss_rating: HIGH
+  effective_label: CRITICAL
+  escalation_reason: "Listed in CISA KEV catalog + Actively exploited in the wild + Zero-day"
+  label_matches_cvss: false
+```
+
+Frontend UI display still pending (API consumer gets enriched data already).
+
+### Audit finding
+
+Of 142 CVEs in local dataset, 10 had label ≠ CVSS rating:
+- 1 legitimate (CVE-2025-20352 — KEV-escalated).
+- 9 unexplained (labeled HIGH, CVSS 5.9-6.7) — Cisco SIR rating bleeding
+  through without escalation tags. These will surface in the API as
+  `label_matches_cvss: false, escalation_reason: null`, which is the
+  correct signal for downstream cleanup (W19+).
+
+---
+
 ## [v0.6.3] – 2026-04-19 (late evening)
 
 ### Added — CVE Analyzer v0.5 (engine 0.3.6)

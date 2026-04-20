@@ -8,7 +8,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from services.cve_engine import CVEEngine, CVEEngineConfig
+from services.cve_engine import CVEEngine, CVEEngineConfig, severity_info
 from services.cve_sources import NvdEnricherProvider, CiscoAdvisoryProvider, CISCO_CACHE_DIR
 from models.cve_model import CVEEntry
 
@@ -28,6 +28,11 @@ class CVEAnalyzeResponse(BaseModel):
     matched: List[CVEEntry]
     summary: dict
     recommended_upgrade: Optional[str]
+    # v0.3.6 P1.3 severity transparency: per-CVE details including CVSS rating
+    # derived from score, effective label, and escalation reason (KEV / actively
+    # exploited) when the displayed label differs from the raw CVSS rating.
+    # Keyed by CVE ID; empty {} if no matches.
+    severity_details: dict = {}
     timestamp: str
 
 
@@ -64,7 +69,7 @@ def _env_true(name: str) -> bool:
 @router.post("/cve", response_model=CVEAnalyzeResponse)
 def analyze_cve(req: CVEAnalyzeRequest):
     # 1) Base run (local JSON only) to find which CVE IDs apply
-    base_engine = CVEEngine(config=CVEEngineConfig(engine_version="0.3.6"))
+    base_engine = CVEEngine(config=CVEEngineConfig(engine_version="0.3.7"))
     base_engine.load_all()
     matched_base = base_engine.match(req.platform, req.version)
 
@@ -73,7 +78,7 @@ def analyze_cve(req: CVEAnalyzeRequest):
         ids = [c.cve_id for c in matched_base]
         # Build a new engine with local + NVD enricher (IDs)
         enriched_engine = CVEEngine(
-            config=CVEEngineConfig(engine_version="0.3.6", enable_nvd_enrichment=True),
+            config=CVEEngineConfig(engine_version="0.3.7", enable_nvd_enrichment=True),
             providers=[
                 # Keep local base provider first (created internally)
                 *base_engine.providers[:1],
@@ -89,12 +94,16 @@ def analyze_cve(req: CVEAnalyzeRequest):
         summary = base_engine.summary(matched)
         recommendation = base_engine.recommended_upgrade(matched) if req.include_suggestions else None
 
+    # v0.3.6 P1.3: build per-CVE severity transparency map
+    severity_details = {cve.cve_id: severity_info(cve) for cve in matched}
+
     return CVEAnalyzeResponse(
         platform=req.platform,
         version=req.version,
         matched=matched,
         summary=summary,
         recommended_upgrade=recommendation,
+        severity_details=severity_details,
         timestamp=datetime.datetime.utcnow().isoformat() + "Z",
     )
 
@@ -112,7 +121,7 @@ def check_cve(cve_id: str):
         cve_id_upper = f"CVE-{cve_id_upper}"
 
     # Load CVE database (local only first — fast)
-    engine = CVEEngine(config=CVEEngineConfig(engine_version="0.3.6"))
+    engine = CVEEngine(config=CVEEngineConfig(engine_version="0.3.7"))
     engine.load_all()
 
     # Find the CVE by ID
@@ -155,7 +164,7 @@ def check_cve(cve_id: str):
     # Optional NVD enrichment for this specific CVE
     if entry and _env_true("CVE_NVD_ENRICH"):
         enriched_engine = CVEEngine(
-            config=CVEEngineConfig(engine_version="0.3.6", enable_nvd_enrichment=True),
+            config=CVEEngineConfig(engine_version="0.3.7", enable_nvd_enrichment=True),
             providers=[
                 *engine.providers[:1],
                 NvdEnricherProvider(cve_ids=[cve_id_upper]),
