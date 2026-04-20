@@ -8,7 +8,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from services.cve_engine import CVEEngine, CVEEngineConfig, severity_info
+from services.cve_engine import CVEEngine, CVEEngineConfig, severity_info, detect_bundle
 from services.cve_sources import NvdEnricherProvider, CiscoAdvisoryProvider, CISCO_CACHE_DIR
 from models.cve_model import CVEEntry
 
@@ -31,8 +31,22 @@ class CVEAnalyzeResponse(BaseModel):
     # v0.3.6 P1.3 severity transparency: per-CVE details including CVSS rating
     # derived from score, effective label, and escalation reason (KEV / actively
     # exploited) when the displayed label differs from the raw CVSS rating.
+    # v0.6.16 CVE-007: adds cisco_sir + primary_severity fields. Primary is
+    # CVSS v3.x NVD bucket when score is known; Cisco SIR is secondary.
     # Keyed by CVE ID; empty {} if no matches.
     severity_details: dict = {}
+    # v0.6.16 CVE-010: per-CVE bundled-publication identifier
+    # (e.g. "2025-09" for Cisco's September 2025 semi-annual bundle).
+    # Keyed by CVE ID; value None if CVE is not part of a bundle.
+    bundles: dict = {}
+    # Policy note for the report footer.
+    severity_policy: str = (
+        "Primary severity uses the NVD CVSS v3.x qualitative scale "
+        "(None/Low/Medium/High/Critical). When Cisco's Security Impact Rating "
+        "(SIR) differs from the CVSS bucket, it is shown as a secondary tag. "
+        "CISA KEV / actively-exploited flags are surfaced separately, not as "
+        "severity escalations."
+    )
     timestamp: str
 
 
@@ -94,8 +108,10 @@ def analyze_cve(req: CVEAnalyzeRequest):
         summary = base_engine.summary(matched)
         recommendation = base_engine.recommended_upgrade(matched) if req.include_suggestions else None
 
-    # v0.3.6 P1.3: build per-CVE severity transparency map
+    # v0.3.6 P1.3 + v0.6.16 CVE-007: per-CVE severity transparency map.
     severity_details = {cve.cve_id: severity_info(cve) for cve in matched}
+    # v0.6.16 CVE-010: bundled-publication lookup per CVE.
+    bundles = {cve.cve_id: detect_bundle(cve) for cve in matched}
 
     return CVEAnalyzeResponse(
         platform=req.platform,
@@ -104,6 +120,7 @@ def analyze_cve(req: CVEAnalyzeRequest):
         summary=summary,
         recommended_upgrade=recommendation,
         severity_details=severity_details,
+        bundles=bundles,
         timestamp=datetime.datetime.utcnow().isoformat() + "Z",
     )
 

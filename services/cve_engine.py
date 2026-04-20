@@ -196,27 +196,94 @@ def severity_info(cve: "CVEEntry") -> Dict[str, Optional[str]]:
     """
     Compute severity transparency info for a CVE entry.
 
+    Severity policy (CVE-007, v0.6.16):
+    - Primary severity = NVD CVSS v3.x bucket derived from `cvss_score`.
+    - Cisco SIR = Cisco's Security Impact Rating, distinct scale (stored in
+      `cisco_sir` if different from the primary).
+    - KEV / actively-exploited / zero-day flags are shown as additional tags,
+      not as severity escalations (operators should see the raw CVSS and
+      judge escalation themselves).
+
     Returns dict with:
-      cvss_score (float)   — raw CVSS base score
-      cvss_rating (str)    — NVD qualitative rating derived from score
-      effective_label (str) — what the tool displays (may be escalated)
-      escalation_reason (str|None) — why label differs from CVSS rating
-      label_matches_cvss (bool) — True if effective_label == cvss_rating
+      cvss_score (float)          — raw CVSS base score
+      cvss_rating (str)           — NVD qualitative rating (primary severity)
+      cisco_sir (str|None)        — Cisco SIR if distinct from CVSS bucket
+      effective_label (str)       — what the tool currently displays (legacy)
+      escalation_reason (str|None)— KEV / actively-exploited marker if any
+      label_matches_cvss (bool)   — True if current label == CVSS bucket
+      primary_severity (str)      — canonical severity the UI should render
+                                     (= cvss_rating when score is known,
+                                        else effective_label)
     """
     score = getattr(cve, "cvss_score", None)
     tags = getattr(cve, "tags", None) or []
     cvss = cvss_rating_from_score(score)
     label = (getattr(cve, "severity", "") or "").upper()
+    explicit_sir = getattr(cve, "cisco_sir", None)
     reason = _escalation_reason(tags)
+
+    # Determine what the UI should treat as primary severity.
+    if score is not None:
+        primary = cvss
+    else:
+        primary = label or "UNKNOWN"
+
+    # Determine secondary Cisco SIR tag.
+    # - If cisco_sir is explicitly set on the entry, trust it.
+    # - Else, if the curated `severity` label differs from the CVSS bucket,
+    #   treat the curated label as the effective Cisco SIR source.
+    if explicit_sir:
+        sir_display: Optional[str] = explicit_sir.upper()
+    elif score is not None and label and label != cvss:
+        sir_display = label
+    else:
+        sir_display = None
 
     info: Dict[str, Optional[str]] = {
         "cvss_score": score,
         "cvss_rating": cvss,
+        "cisco_sir": sir_display,
         "effective_label": label,
         "escalation_reason": reason,
         "label_matches_cvss": (label == cvss) if score is not None else None,
+        "primary_severity": primary,
     }
     return info
+
+
+# -----------------------------
+# CVE-010 — Bundled-publication detection
+# -----------------------------
+
+# Cisco publishes semi-annual IOS + IOS XE advisory bundles in March and
+# September. Matching by title keeps us independent of published-date quirks
+# (republished advisories carry the original publication date).
+_BUNDLE_TITLE_RE = re.compile(
+    r"semi?annual.*cisco.*ios(?:\s+xe)?\s+software\s+security\s+advisory\s+bundled\s+publication",
+    re.IGNORECASE,
+)
+
+
+def detect_bundle(cve: "CVEEntry") -> Optional[str]:
+    """
+    Return a canonical bundle identifier (e.g. "2025-09") if the CVE is part
+    of a Cisco semi-annual bundled publication. Returns None otherwise.
+
+    Detection strategy (first match wins):
+    1. If entry already has `bundle` populated → trust it.
+    2. If `title` matches the Cisco semi-annual bundle template → derive the
+       bundle ID from `published` date (YYYY-MM prefix), defaulting to
+       "unknown" if no date.
+    3. Otherwise: None.
+    """
+    explicit = getattr(cve, "bundle", None)
+    if explicit:
+        return explicit
+    title = getattr(cve, "title", "") or ""
+    if not _BUNDLE_TITLE_RE.search(title):
+        return None
+    published = (getattr(cve, "published", "") or "")[:7]  # YYYY-MM
+    return published if published else "unknown"
 
 
 def parse_affected_range(

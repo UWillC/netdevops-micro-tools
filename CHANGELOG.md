@@ -4,6 +4,82 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.16] – 2026-04-20 (W17 Day 1 — CVE-007 + CVE-010)
+
+### Fixed — Severity canonicalization (CVE-007)
+
+Per defect report §3 CVE-007. The tool displayed `[HIGH]` labels on CVEs
+whose CVSS base scores were in the Medium band (4.0–6.9) of the NVD scale.
+The `[HIGH]` label was being inherited from **Cisco SIR** (Security Impact
+Rating), a separate scale from CVSS. Mixing the two in one field caused
+operational confusion: a CVSS 6.7 issue was rendered as HIGH next to a
+CVSS 9.8 CRITICAL, implying the same severity tier.
+
+**Fix.** `severity_info()` now returns:
+- `primary_severity`: NVD CVSS v3.x bucket when `cvss_score` is known
+  (`None/Low/Medium/High/Critical`). Falls back to the curated label when
+  no CVSS score is available.
+- `cisco_sir`: the Cisco SIR rating, populated when it differs from the
+  CVSS bucket. Displayed as a secondary tag (e.g., `Cisco SIR: High`).
+- `primary_severity` and `cisco_sir` are separate fields — no more
+  conflation.
+- KEV / actively-exploited / zero-day flags remain surfaced as
+  `escalation_reason`; they no longer silently escalate the severity label.
+
+**Concrete effect** on the IOS XE 17.9.4 matchset:
+- 8 of 104 CVEs now show distinct Cisco SIR ≠ CVSS bucket. Examples:
+  - CVE-2025-20197..20201: primary MEDIUM (6.7), secondary Cisco SIR HIGH
+  - CVE-2025-20313/20314: primary MEDIUM (6.7), secondary Cisco SIR HIGH
+  - CVE-2025-20352: primary HIGH (8.8), secondary Cisco SIR CRITICAL
+- Zero regressions on CVEs where the two scales agreed.
+
+**CVEAnalyzeResponse** gains a `severity_policy` footer string for the UI
+to render near the severity column.
+
+### Added — Bundled-publication tag (CVE-010)
+
+Per defect report §3 CVE-010. Cisco publishes semi-annual IOS + IOS XE
+advisory bundles in March and September. Operators patching one bundle
+item typically want to batch-patch the rest. The tool had no way to surface
+"this CVE is part of the 2025-09 bundle; here are the others".
+
+**Added.**
+- `CVEEntry.bundle` field (`Optional[str]`, e.g. `"2025-09"`).
+- `detect_bundle(cve)` helper: matches the Cisco semi-annual bundle title
+  template, derives the bucket from `published` date (`YYYY-MM`).
+- `CVEAnalyzeResponse.bundles`: dict keyed by CVE ID, value is the bundle
+  identifier or `None`.
+
+**Current population.** Zero CVEs in the local JSON dataset carry the
+bundled-publication title today. The detector runs as a no-op until the
+PSIRT importer refactor (W19+ per CVE-003/004/005) ingests bundled
+advisories. Mechanism is in place and tested.
+
+### Testing
+
+- `tests/test_cve_severity_and_bundle.py`: 12 new unit tests covering
+  CVSS-boundary math, Cisco SIR distinctness, escalation reason mapping,
+  and bundle detection for semi-annual title variants.
+- Full suite: 41 passing (21 prior + 8 CIS goldens + 12 new CVE tests).
+- No regressions in existing CVE engine tests.
+
+### Scorecard (23 findings from 2026-04-19 defect report)
+
+```
+CIS   10/10 CLOSED
+CVE    5/10 CLOSED  (+CVE-007, +CVE-010 tonight)
+XCUT   1/3  CLOSED
+Total 16/23 CLOSED (70%)
+```
+
+Remaining: CVE-003/004/005 (platform taxonomy, unblock ASA/RV),
+CVE-006 PSIRT closure, CVE-009 (EoL banner), XCUT-001 (cross-tool
+correlation), XCUT-002 (provenance).
+
+Version bump: app 0.6.15 → 0.6.16.
+
+---
+
 ## [v0.6.15] – 2026-04-20 (W17 Day 1 — XCUT-003 harness + normalize fix)
 
 ### Added — Golden-output regression test harness (XCUT-003)
