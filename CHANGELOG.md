@@ -4,6 +4,57 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.3] – 2026-04-19 (late evening)
+
+### Added — CVE Analyzer v0.5 (engine 0.3.6)
+
+3 canonical CVEs manually added to local dataset to close the biggest
+feed-gap items from CTO memo P0.2:
+
+- **CVE-2018-0101** — Cisco ASA Webvpn/AnyConnect RCE + DoS. CVSS 10.0.
+  Affected: all Cisco ASA Software with Webvpn/AnyConnect configured.
+  Fixed in 9.9.1.2 (per-train fixes: 9.1.7.20, 9.2.4.25, 9.4.4.14,
+  9.5.3.9, 9.6.3.20, 9.7.1.16, 9.8.2.14). Previously 100% missing for
+  ASA queries.
+
+- **CVE-2019-1652** — Cisco RV320/RV325 command injection. CVSS 7.2.
+  Fixed in 1.4.2.22. Flagship RV-series advisory, previously missing.
+
+- **CVE-2019-1653** — Cisco RV320/RV325 information disclosure. CVSS 7.5.
+  Fixed in 1.4.2.20. Commonly chained with CVE-2019-1652 for full
+  device compromise. Previously missing.
+
+### Fixed
+
+- **Version parser regex** (`_extract_version`): previously truncated
+  4-component versions to 3 (e.g. "1.4.2.19" → (1, 4, 2, 0) instead of
+  (1, 4, 2, 19)), causing incorrect range matching for RV-series and
+  ASA interim-release versions. Rewrote using two-regex approach
+  (IOS-classic `15.7(3)M5` + generic N-component dotted), preserving
+  arbitrary depth + optional rebuild letter.
+
+### Test results vs CTO memo 2026-04-19
+
+| Platform | Version | Expected | Before | After |
+|----------|---------|----------|--------|-------|
+| Cisco ASA | 9.8.1 | CVE-2018-0101 present | ❌ missing | ✅ present |
+| Cisco RV320 | 1.4.2.19 | CVE-2019-1652 + 1653 | ❌ missing | ✅ both present |
+| Cisco RV320 | 1.4.2.20 | CVE-2019-1652 still vuln, 1653 patched | ❌ missing | ✅ 1652 shown, 1653 excluded |
+| Cisco RV320 | 1.4.2.22 | Both patched, excluded | ❌ missing | ✅ both excluded |
+| Cisco IOS XE | 17.9.1 | CVE-2025-20352 present | ✅ | ✅ (regression clear) |
+
+### Remaining (W19+ sprint)
+
+- P0.1 PSIRT importer refactor (3-5 dni) — still the authoritative fix
+  for systemic "IOS XE" mislabeling at feed level.
+- P0.2 additional missing CVEs — need audit of PSIRT back-catalog for
+  platforms where feed gap is wide (NX-OS, FXOS, IOS XR).
+- P1.1 Safe-upgrade 3-level fallback.
+- P1.2 EoL registry.
+- P1.3 CVSS-vs-label severity transparency in UI.
+
+---
+
 ## [v0.6.2] – 2026-04-19 (evening)
 
 ### Fixed — CVE Analyzer v0.4 (engine 0.3.5)

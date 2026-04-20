@@ -64,7 +64,7 @@ def _env_true(name: str) -> bool:
 @router.post("/cve", response_model=CVEAnalyzeResponse)
 def analyze_cve(req: CVEAnalyzeRequest):
     # 1) Base run (local JSON only) to find which CVE IDs apply
-    base_engine = CVEEngine(config=CVEEngineConfig(engine_version="0.3.5"))
+    base_engine = CVEEngine(config=CVEEngineConfig(engine_version="0.3.6"))
     base_engine.load_all()
     matched_base = base_engine.match(req.platform, req.version)
 
@@ -73,7 +73,7 @@ def analyze_cve(req: CVEAnalyzeRequest):
         ids = [c.cve_id for c in matched_base]
         # Build a new engine with local + NVD enricher (IDs)
         enriched_engine = CVEEngine(
-            config=CVEEngineConfig(engine_version="0.3.5", enable_nvd_enrichment=True),
+            config=CVEEngineConfig(engine_version="0.3.6", enable_nvd_enrichment=True),
             providers=[
                 # Keep local base provider first (created internally)
                 *base_engine.providers[:1],
@@ -112,7 +112,7 @@ def check_cve(cve_id: str):
         cve_id_upper = f"CVE-{cve_id_upper}"
 
     # Load CVE database (local only first — fast)
-    engine = CVEEngine(config=CVEEngineConfig(engine_version="0.3.5"))
+    engine = CVEEngine(config=CVEEngineConfig(engine_version="0.3.6"))
     engine.load_all()
 
     # Find the CVE by ID
@@ -155,7 +155,7 @@ def check_cve(cve_id: str):
     # Optional NVD enrichment for this specific CVE
     if entry and _env_true("CVE_NVD_ENRICH"):
         enriched_engine = CVEEngine(
-            config=CVEEngineConfig(engine_version="0.3.5", enable_nvd_enrichment=True),
+            config=CVEEngineConfig(engine_version="0.3.6", enable_nvd_enrichment=True),
             providers=[
                 *engine.providers[:1],
                 NvdEnricherProvider(cve_ids=[cve_id_upper]),

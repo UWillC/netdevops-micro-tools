@@ -26,32 +26,44 @@ from services.platform_taxonomy import (
 _MIN_SENTINEL: Tuple[int, ...] = (-1,)
 _MAX_SENTINEL: Tuple[int, ...] = (10**9,)
 
-# Regex to extract a dotted version (with optional rebuild letter) from free text.
-# Matches "17.15.4a", "17.12.3", "15.7(3)M5" (captures "15.7.3"), etc.
-_VERSION_RE = re.compile(r"(\d+)\.(\d+)(?:[.\(](\d+)[.\)]?(?:[Mm](\d+))?)?([a-z])?")
+# Regex family for version extraction.
+# - IOS classic: "15.7(3)M5" → (15, 7, 3, 0, 5) where 4th position is M-train indicator
+# - Dotted generic: "17.15.4a", "1.4.2.19", "9.8.1" → variable length + optional rebuild letter
+_IOS_CLASSIC_RE = re.compile(r"(\d+)\.(\d+)\((\d+)\)[Mm](\d+)")
+_DOTTED_VERSION_RE = re.compile(r"(\d+(?:\.\d+)+)([a-z])?")
 
 
 def _extract_version(text: str) -> Optional[Tuple[int, ...]]:
-    """Extract the first version-like token from free text. Returns tuple or None."""
+    """
+    Extract the first version-like token from free text. Returns tuple or None.
+
+    v0.3.5 (2026-04-19 evening): fixed regex to handle arbitrary-depth dotted
+    versions. Previously truncated "1.4.2.19" → (1, 4, 2, 0), losing the .19
+    component. Now parses all dot-separated numeric parts preserving order.
+    """
     if not text:
         return None
-    m = _VERSION_RE.search(text)
-    if not m:
-        return None
-    parts: List[int] = []
-    for g in m.groups()[:4]:
-        if g is None:
-            parts.append(0)
-            continue
+
+    # IOS classic format: "15.7(3)M5" style
+    m = _IOS_CLASSIC_RE.search(text)
+    if m:
+        return (int(m.group(1)), int(m.group(2)), int(m.group(3)), 0, int(m.group(4)))
+
+    # Generic dotted format: any number of .-separated integers + optional rebuild letter
+    m = _DOTTED_VERSION_RE.search(text)
+    if m:
+        dotted = m.group(1)
+        letter = m.group(2)
         try:
-            parts.append(int(g))
+            parts = [int(p) for p in dotted.split(".")]
         except ValueError:
-            parts.append(0)
-    # rebuild letter → small tiebreaker (a=1, b=2, ...); absent = 0
-    letter = m.group(5)
-    if letter:
-        parts.append(ord(letter.lower()) - ord("a") + 1)
-    return tuple(parts) if parts else None
+            return None
+        if letter:
+            # rebuild letter → small tiebreaker (a=1, b=2, ...)
+            parts.append(ord(letter.lower()) - ord("a") + 1)
+        return tuple(parts)
+
+    return None
 
 
 def _tokenize_version(v: str) -> Tuple[int, ...]:
@@ -251,7 +263,7 @@ def platform_matches(query_platform: str, cve_platforms: List[str]) -> bool:
 # -----------------------------
 @dataclass(frozen=True)
 class CVEEngineConfig:
-    engine_version: str = "0.3.5"
+    engine_version: str = "0.3.6"
     data_dir: str = "cve_data/ios_xe"
 
     # External enrichers/providers are OFF by default
