@@ -4,6 +4,78 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.12] – 2026-04-20 (W17 Day 1 late night)
+
+### Fixed — CIS Audit semantic layer: CIS-007 / CIS-009 / CIS-010
+
+Final parser/scoring pass per defect report §3. Completes the CIS Audit
+refactor; CIS Compliance Audit tool now produces scores that reflect actual
+device posture.
+
+**CIS-007 — Banner content inspection (Rule 4.1.1)**
+- New `BANNER_RE` captures banner kind (motd/login/exec/incoming) + delimiter
+  + body via DOTALL.
+- Content check against 3 legal-text token groups:
+  (a) authorization warning (`unauthorized`, `no trespass`, `private system`)
+  (b) monitoring/consent (`consent`, `monitor(ing|ed)`, `recorded`)
+  (c) enforcement (`prosecuted`, `criminal`, `law enforcement`, `civil and criminal`)
+- PASS only if ≥2 of 3 groups match. Partial → WARN listing missing categories.
+- No banner → FAIL. "Welcome" banner → WARN citing US v. Mullins 992 F.2d 1472.
+- Remediation includes a full template banner.
+
+**CIS-009 — L2 rules N/A on routed-only devices (Rules 6.1.1 / 6.1.2 / 6.1.3 / 6.1.4 / 6.1.5 / 6.1.6)**
+- New `_has_switchports()` pre-check scans for any `switchport` token in interface
+  configuration.
+- All six L2 rules (DHCP snooping, DAI, port-security, IP Source Guard,
+  BPDU Guard, STP mode) return **N/A** on L3-only routers with evidence:
+  "No L2 switchports detected on this device; Layer 2 hardening rules not
+  applicable."
+- N/A already excluded from score numerator and denominator.
+
+**CIS-010 — Scoring refactor (`_calculate_score` + `_parser_coverage`)**
+- WARN weight reduced 0.5 → **0.25**. WARN is reserved for rule-level
+  ambiguity; parser failures are no longer a fallback landing spot after
+  v0.6.10 / v0.6.11 parser fixes.
+- **Hard ceiling 49%** if any CRITICAL FAIL is present. Cannot be marketed
+  as "passing" while a critical gap is open.
+- New `parser_coverage` meta-metric: `% rules with definite PASS/FAIL/N/A`.
+  Surfaced in summary when below 95%.
+- New `AuditResponse` fields: `not_applicable`, `critical_fails`,
+  `score_capped`, `parser_coverage`.
+
+**Robustness side-fix:** `enable algorithm-type scrypt secret <pw>`
+CLI-command form now parsed correctly (in addition to the running-config
+form `enable secret 9 $9$...`).
+
+### Regression
+
+| Config | Before | After |
+|--------|--------|-------|
+| Defect-report branch router | 35.1% (inflated) | **17.3% Grade F**, 7 CRITICAL FAILs, parser coverage 82.6% |
+| Hardened baseline | N/A | **100% Grade A**, all 23 rules PASS |
+| L3-only router | WARN × 6 | **N/A × 6** (score-neutral) |
+| "Welcome" banner | PASS | **WARN** — no authorization/monitoring/enforcement language |
+
+Version bump: app 0.6.11 → 0.6.12. CIS Audit UI v1.2 → v1.3.
+
+### Unblock-relaunch scorecard
+
+```
+✅ CIS-001  VTY parser           v0.6.10
+✅ CIS-003  SNMP parser          v0.6.10
+✅ CIS-006  NTP parser           v0.6.10
+✅ CVE-001  CVE-2025-20352       commit 69c6856
+✅ CVE-002  Safe upgrade         v0.3.7
+🟡 CVE-006  Version-range        PARTIAL (local JSON OK, PSIRT import open)
+❌ XCUT-001 Cross-tool correlate W19+ sprint (5 days)
+
+6 of 7 closed. Remaining: XCUT-001 feature + CVE-006 closure.
+```
+
+Full CIS parser family (CIS-001…010 bar CIS-011 rule renaming): DONE.
+
+---
+
 ## [v0.6.11] – 2026-04-20 (W17 Day 1 late evening)
 
 ### Fixed — CIS Audit parser quality: CIS-002 / CIS-004 / CIS-005 / CIS-008

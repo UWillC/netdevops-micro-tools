@@ -96,8 +96,12 @@ class AuditResponse(BaseModel):
     passed: int
     failed: int
     warnings: int
+    not_applicable: int = 0
+    critical_fails: int = 0
     score: float  # 0-100
     grade: str  # A/B/C/D/F
+    score_capped: bool = False  # True if a CRITICAL FAIL triggered the 49% ceiling
+    parser_coverage: float = 100.0  # % rules with definite result (PASS/FAIL/N/A)
     summary: List[str]
 
 
@@ -114,26 +118,35 @@ def _check_password_encryption(cfg):
     return "FAIL", "service password-encryption NOT found", "Add: service password-encryption"
 
 ENABLE_PW_RE = re.compile(
-    r"^\s*enable\s+(?P<kind>secret|password)\s+"
+    r"^\s*enable\s+"
+    r"(?:algorithm-type\s+(?P<algo>scrypt|sha256|md5)\s+)?"
+    r"(?P<kind>secret|password)\s+"
     r"(?:(?P<type>0|5|7|8|9)\s+)?"
     r"(?P<val>\S+)",
     re.MULTILINE,
 )
 
+_ALGO_TO_TYPE = {"scrypt": 9, "sha256": 8, "md5": 5}
+
 def _classify_enable_pw(cfg):
     """Return list of (kind, type_detected, raw_line) for all enable password/secret lines.
-    type_detected is: 0 (plaintext), 5 (MD5), 7 (Vigenere), 8 (PBKDF2), 9 (scrypt),
-    or None (secret without explicit type — implicit MD5 on older IOS)."""
+    type_detected is: 0 (plaintext), 5 (MD5), 7 (Vigenere), 8 (PBKDF2-SHA256), 9 (scrypt).
+
+    Handles both config-command form ('enable algorithm-type scrypt secret <pw>')
+    and running-config form ('enable secret 9 $9$...')."""
     items = []
     for m in ENABLE_PW_RE.finditer(cfg):
         kind = m.group("kind")
+        algo = m.group("algo")
         t = m.group("type")
-        # "enable password <val>" with no type prefix = Type 0 (plaintext)
-        # "enable secret <val>" with no type prefix = implicit Type 5 on modern IOS
-        if t is None:
-            detected = 0 if kind == "password" else 5
-        else:
+        if algo:
+            detected = _ALGO_TO_TYPE[algo]
+        elif t is not None:
             detected = int(t)
+        else:
+            # "enable password <val>" with no type prefix = Type 0 (plaintext)
+            # "enable secret <val>" with no type prefix = implicit Type 5 on modern IOS
+            detected = 0 if kind == "password" else 5
         items.append((kind, detected, m.group(0).strip()))
     return items
 
@@ -404,10 +417,67 @@ def _check_ntp_authentication(cfg):
         return "PASS", "NTP authentication enabled", ""
     return "WARNING", "NTP configured without authentication", "Add: ntp authenticate / ntp authentication-key / ntp trusted-key"
 
+BANNER_RE = re.compile(
+    r"^banner\s+(?P<kind>motd|login|exec|incoming)\s+"
+    r"(?P<delim>\S)(?P<body>.*?)(?P=delim)",
+    re.MULTILINE | re.DOTALL,
+)
+
+BANNER_LEGAL_TOKENS = [
+    (re.compile(r"unauthori[sz]ed|no\s+trespass|private\s+system", re.I),
+     "authorization warning (e.g., 'Unauthorized access prohibited')"),
+    (re.compile(r"consent|monitor(?:ing|ed)?|recorded", re.I),
+     "monitoring/consent clause (e.g., 'activity may be monitored')"),
+    (re.compile(r"prosecut(?:ed|ion)|criminal|law\s+enforcement|civil\s+(?:and|or)\s+criminal", re.I),
+     "enforcement language (e.g., 'violators will be prosecuted')"),
+]
+
+BANNER_TEMPLATE = (
+    "banner motd ^\n"
+    "Unauthorized access to this system is prohibited.\n"
+    "All activity is monitored and recorded.\n"
+    "Violators may be subject to civil and criminal prosecution.\n"
+    "^"
+)
+
 def _check_banner(cfg):
-    if re.search(r"^banner (motd|login)", cfg, re.M):
-        return "PASS", "Login banner configured", ""
-    return "FAIL", "No login banner (legal/compliance requirement)", "Add: banner motd ^Unauthorized access prohibited^"
+    matches = list(BANNER_RE.finditer(cfg))
+    if not matches:
+        return (
+            "FAIL",
+            "No login/motd banner configured (legal/compliance requirement)",
+            f"Add:\n{BANNER_TEMPLATE}",
+        )
+    # Prefer motd/login banners for legal inspection (exec/incoming less relevant)
+    legal_banners = [m for m in matches if m.group("kind") in ("motd", "login")]
+    target = legal_banners[0] if legal_banners else matches[0]
+    body = target.group("body")
+    found = []
+    missing = []
+    for pattern, description in BANNER_LEGAL_TOKENS:
+        if pattern.search(body):
+            found.append(description)
+        else:
+            missing.append(description)
+    present_count = len(found)
+    if present_count >= 2:
+        return (
+            "PASS",
+            f"{target.group('kind').upper()} banner present with {present_count}/3 legal elements",
+            "",
+        )
+    if present_count == 1:
+        return (
+            "WARNING",
+            f"Banner present but missing: {'; '.join(missing)}",
+            f"Strengthen banner text. Template:\n{BANNER_TEMPLATE}",
+        )
+    return (
+        "WARNING",
+        f"Banner present but contains no authorization/monitoring/enforcement language "
+        f"(US v. Mullins 992 F.2d 1472 — explicit warnings preserve prosecution rights)",
+        f"Replace with template:\n{BANNER_TEMPLATE}",
+    )
 
 SNMP_COMMUNITY_RE = re.compile(
     r"^\s*snmp-server\s+community\s+(?P<name>\S+)"
@@ -465,22 +535,39 @@ def _check_snmpv3_priv(cfg):
         return "FAIL", "Using SNMPv2c instead of SNMPv3", "Migrate to SNMPv3 with priv"
     return "N/A", "SNMP not configured", ""
 
+SWITCHPORT_RE = re.compile(r"^\s*switchport\b", re.MULTILINE)
+
+def _has_switchports(cfg):
+    """True if any interface has switchport configuration.
+    L3-only routers (branch ISRs in routed mode) should skip L2 rules."""
+    return bool(SWITCHPORT_RE.search(cfg))
+
+_L2_NA_EVIDENCE = "No L2 switchports detected on this device; Layer 2 hardening rules not applicable"
+
 def _check_dhcp_snooping(cfg):
+    if not _has_switchports(cfg):
+        return "N/A", _L2_NA_EVIDENCE, ""
     if re.search(r"^ip dhcp snooping$", cfg, re.M):
         return "PASS", "DHCP snooping enabled", ""
     return "WARNING", "DHCP snooping not enabled", "Add: ip dhcp snooping"
 
 def _check_arp_inspection(cfg):
+    if not _has_switchports(cfg):
+        return "N/A", _L2_NA_EVIDENCE, ""
     if re.search(r"^ip arp inspection vlan", cfg, re.M):
         return "PASS", "Dynamic ARP inspection enabled", ""
     return "WARNING", "Dynamic ARP inspection not enabled", "Add: ip arp inspection vlan <vlans>"
 
 def _check_port_security(cfg):
+    if not _has_switchports(cfg):
+        return "N/A", _L2_NA_EVIDENCE, ""
     if re.search(r"switchport port-security", cfg, re.M):
         return "PASS", "Port security configured on some interfaces", ""
     return "WARNING", "No port security configured", "Consider: switchport port-security on access ports"
 
 def _check_stp_bpduguard(cfg):
+    if not _has_switchports(cfg):
+        return "N/A", _L2_NA_EVIDENCE, ""
     if re.search(r"spanning-tree portfast bpduguard default", cfg, re.M):
         return "PASS", "BPDU Guard enabled globally for portfast ports", ""
     if re.search(r"spanning-tree bpduguard enable", cfg, re.M):
@@ -488,6 +575,8 @@ def _check_stp_bpduguard(cfg):
     return "WARNING", "BPDU Guard not configured", "Add: spanning-tree portfast bpduguard default"
 
 def _check_stp_mode(cfg):
+    if not _has_switchports(cfg):
+        return "N/A", _L2_NA_EVIDENCE, ""
     if re.search(r"^spanning-tree mode rapid-pvst", cfg, re.M):
         return "PASS", "STP mode: rapid-pvst (recommended)", ""
     if re.search(r"^spanning-tree mode mst", cfg, re.M):
@@ -538,6 +627,8 @@ def _check_login_local(cfg):
     return "WARNING", "Login method not explicitly set on all VTY blocks", "Add: login local (or login authentication <list>)"
 
 def _check_ip_verify_source(cfg):
+    if not _has_switchports(cfg):
+        return "N/A", _L2_NA_EVIDENCE, ""
     if re.search(r"ip verify source", cfg, re.M):
         return "PASS", "IP Source Guard configured on some interfaces", ""
     return "WARNING", "IP Source Guard not configured", "Consider: ip verify source on access ports"
@@ -634,9 +725,18 @@ SEVERITY_WEIGHTS = {
 }
 
 def _calculate_score(results: List[AuditRule]) -> tuple:
-    """Calculate compliance score 0-100 and letter grade."""
+    """Calculate compliance score 0-100, letter grade, and score-capped flag.
+
+    Model (post CIS-010 refactor):
+    - N/A excluded from both numerator and denominator
+    - WARN worth 0.25 (reserved for rule-level ambiguity, not parser failures)
+    - Severity-weighted
+    - Hard ceiling 49% if any CRITICAL FAIL present — cannot market as "passing"
+      while a CRITICAL is open
+    """
     total_weight = 0
     earned_weight = 0
+    critical_fail = False
 
     for r in results:
         if r.result == "N/A":
@@ -646,36 +746,62 @@ def _calculate_score(results: List[AuditRule]) -> tuple:
         if r.result == "PASS":
             earned_weight += w
         elif r.result == "WARNING":
-            earned_weight += w * 0.5
+            earned_weight += w * 0.25
+        elif r.result == "FAIL" and r.severity == "critical":
+            critical_fail = True
 
-    score = (earned_weight / max(total_weight, 1)) * 100
+    raw_score = (earned_weight / max(total_weight, 1)) * 100
+    score_capped = False
+    if critical_fail and raw_score > 49.0:
+        raw_score = 49.0
+        score_capped = True
 
-    if score >= 90:
+    if raw_score >= 90:
         grade = "A"
-    elif score >= 75:
+    elif raw_score >= 75:
         grade = "B"
-    elif score >= 60:
+    elif raw_score >= 60:
         grade = "C"
-    elif score >= 40:
+    elif raw_score >= 40:
         grade = "D"
     else:
         grade = "F"
 
-    return round(score, 1), grade
+    return round(raw_score, 1), grade, score_capped
 
 
-def _generate_summary(results: List[AuditRule], score: float, grade: str) -> List[str]:
+def _parser_coverage(results: List[AuditRule]) -> float:
+    """% of rules that returned a definite result (PASS/FAIL/N/A).
+    WARN is counted as non-definite since historically it was the parser-
+    failure fallback. With the refactored parsers, legit WARNs are rare and
+    this metric should be close to 100% on clean configs.
+    """
+    if not results:
+        return 100.0
+    definite = sum(1 for r in results if r.result in ("PASS", "FAIL", "N/A"))
+    return round((definite / len(results)) * 100, 1)
+
+
+def _generate_summary(results: List[AuditRule], score: float, grade: str,
+                      score_capped: bool, parser_coverage: float) -> List[str]:
     summary = []
     passed = sum(1 for r in results if r.result == "PASS")
     failed = sum(1 for r in results if r.result == "FAIL")
     warnings = sum(1 for r in results if r.result == "WARNING")
+    na = sum(1 for r in results if r.result == "N/A")
 
     summary.append(f"CIS Compliance Score: {score}% (Grade {grade})")
-    summary.append(f"{passed} passed, {failed} failed, {warnings} warnings")
+    summary.append(f"{passed} passed, {failed} failed, {warnings} warnings, {na} N/A")
 
     critical_fails = [r for r in results if r.result == "FAIL" and r.severity == "critical"]
     if critical_fails:
         summary.append(f"CRITICAL failures ({len(critical_fails)}): {', '.join(r.title for r in critical_fails)}")
+
+    if score_capped:
+        summary.append("Score capped at 49% — CRITICAL FAIL present; cannot be marketed as 'passing' until closed.")
+
+    if parser_coverage < 95.0:
+        summary.append(f"Parser coverage {parser_coverage}% — {warnings} rule(s) returned WARN (ambiguous); score may understate or overstate true posture.")
 
     if score >= 90:
         summary.append("Excellent hardening. Minor improvements possible.")
@@ -745,14 +871,17 @@ def cis_audit(req: AuditRequest):
         ))
 
     # Score
-    score, grade = _calculate_score(all_results)
+    score, grade, score_capped = _calculate_score(all_results)
+    coverage = _parser_coverage(all_results)
 
     # Stats
     passed = sum(1 for r in all_results if r.result == "PASS")
     failed = sum(1 for r in all_results if r.result == "FAIL")
     warnings = sum(1 for r in all_results if r.result == "WARNING")
+    na = sum(1 for r in all_results if r.result == "N/A")
+    critical_fails = sum(1 for r in all_results if r.result == "FAIL" and r.severity == "critical")
 
-    summary = _generate_summary(all_results, score, grade)
+    summary = _generate_summary(all_results, score, grade, score_capped, coverage)
 
     return AuditResponse(
         hostname=hostname,
@@ -762,7 +891,11 @@ def cis_audit(req: AuditRequest):
         passed=passed,
         failed=failed,
         warnings=warnings,
+        not_applicable=na,
+        critical_fails=critical_fails,
         score=score,
         grade=grade,
+        score_capped=score_capped,
+        parser_coverage=coverage,
         summary=summary,
     )
