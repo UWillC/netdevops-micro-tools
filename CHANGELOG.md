@@ -4,6 +4,53 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.2] – 2026-04-19 (evening)
+
+### Fixed — CVE Analyzer v0.4 (engine 0.3.5)
+
+Post-CTO memo 3-platform testing revealed that the first round of fixes
+(commit 69c6856) cleared IOS XE issues but left ASA and RV Series queries
+with systemic false positives due to the PSIRT importer tagging all
+advisories as "IOS XE". This release adds a data-layer fix that detects
+true product families from CVE titles and strict-filters cross-family
+matches.
+
+- **Product-family taxonomy** (`services/platform_taxonomy.py`): new module
+  mapping CVE titles to canonical `ProductFamily` values (ASA, IOS XE,
+  IOS XR, NX-OS, RV Series, CUCM, Webex, SSM On-Prem, Meraki, etc.).
+  User input normalization + in-scope compatibility matrix.
+- **Strict family filter in `match()`**: CVEs whose title explicitly
+  names a different family are excluded from query results. Shared
+  advisories ("Cisco IOS, IOS XE, and IOS XR Software ...") still match
+  all mentioned families.
+- **Placeholder filter** (CTO memo P2.1): CVEs whose `fixed_in` is prose
+  ("Migrate to SNMPv3...", "Remove default community strings...") rather
+  than a version string are treated as hardening rules and excluded from
+  applicable-CVE lists.
+
+### Test results vs CTO memo 2026-04-19
+
+| Platform | Before | After | Change |
+|----------|--------|-------|--------|
+| IOS XE 17.9.1 | 110 matches | 104 matches | -6 (SSM/CUCM/AP false positives removed) |
+| ASA 9.8.1 | 74 matches | 13 matches | -61 (IOS-only cross-contamination eliminated) |
+| RV Series 1.4.2.22 | 8 matches | 4 matches | -4 (product-unclear L2 VLAN CVEs remain) |
+
+### Remaining (W19+ sprint, full CTO memo P0.1 refactor)
+
+- **Feed gaps:** CVE-2018-0101 (ASA Webvpn RCE, CVSS 10.0) and
+  CVE-2019-1652/1653 (RV Series command injection) not present in the
+  current local JSON dataset — pure data issue, requires importer
+  expansion or manual entry.
+- **PSIRT importer refactor** (P0.1): preserve `affected_products` from
+  advisory instead of defaulting to "IOS XE" — estimated 3-5 days.
+- **Severity transparency** (P1.3): CVSS score vs label escalation
+  reasoning — deferred for frontend work.
+- **EoL registry** (P1.2): RV Series EoL 2025-01 should flag before CVE
+  list — requires external data source.
+
+---
+
 ## [v0.6.1] – 2026-04-19
 
 ### Fixed

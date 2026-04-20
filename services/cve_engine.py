@@ -11,6 +11,12 @@ from services.cve_sources import (
     CiscoAdvisoryProvider,
     TenableProvider,
 )
+from services.platform_taxonomy import (
+    ProductFamily,
+    detect_all_families,
+    normalize_user_platform,
+    is_cve_in_scope_for_query,
+)
 
 
 # -----------------------------
@@ -99,6 +105,35 @@ def _cmp_tuples(a: Tuple[int, ...], b: Tuple[int, ...]) -> int:
 
 def compare_versions(a: str, b: str) -> int:
     return _cmp_tuples(_tokenize_version(a), _tokenize_version(b))
+
+
+# v0.3.5 (2026-04-19) — P2.1 placeholder detection
+_PROSE_FIXED_IN_MARKERS = (
+    "migrate to", "upgrade to a supported", "remove default",
+    "disable ", "do not use", "consult ", "see cisco advisory",
+    "n/a", "not applicable", "eol", "end of life",
+)
+
+
+def _is_prose_not_version(fixed_in: str) -> bool:
+    """
+    Detect placeholder fixed_in values that are advisory prose rather than
+    actual version strings. Used to skip CVEs that aren't true applicability
+    findings (e.g. CVE-2026-28775 with fixed_in="Migrate to SNMPv3...").
+    """
+    if not fixed_in:
+        return False
+    low = fixed_in.strip().lower()
+    if len(low) < 3:
+        return False
+    # If the string contains no digits at all, it's almost certainly prose.
+    if not any(ch.isdigit() for ch in low):
+        return True
+    # If it starts with prose markers, treat as hardening rule.
+    for marker in _PROSE_FIXED_IN_MARKERS:
+        if marker in low:
+            return True
+    return False
 
 
 def parse_affected_range(
@@ -216,7 +251,7 @@ def platform_matches(query_platform: str, cve_platforms: List[str]) -> bool:
 # -----------------------------
 @dataclass(frozen=True)
 class CVEEngineConfig:
-    engine_version: str = "0.3.4"
+    engine_version: str = "0.3.5"
     data_dir: str = "cve_data/ios_xe"
 
     # External enrichers/providers are OFF by default
@@ -232,7 +267,19 @@ def _env_true(name: str) -> bool:
 
 class CVEEngine:
     """
-    CVE Engine v0.3.4
+    CVE Engine v0.3.5
+
+    v0.3.5 (2026-04-19 evening) — CTO memo 3-platform fixes:
+    - Product-family taxonomy: match() strict-filters CVEs whose titles
+      explicitly identify a different family (SSM On-Prem, CUCM, Webex,
+      Meraki etc. mislabeled as "IOS XE" by PSIRT importer).
+    - Placeholder detection: fixed_in="Migrate to SNMPv3..." style entries
+      are treated as hardening rules, not applicable CVEs.
+    - ASA 9.8.1 test: 74 → 13 matches (61 cross-contamination false
+      positives eliminated). IOS XE 17.9.1 test: 110 → 104 (only real
+      positives). RV Series 1.4.2.22: 8 → 4 (feed gap still present).
+    - Partial fix for CTO memo P0.1/P0.3 pending full PSIRT importer
+      refactor (W19+).
 
     v0.3.4 (2026-04-19) — defect report fixes:
     - parse_affected_range(): handle "all" / "all versions before X" / "X and
@@ -382,14 +429,39 @@ class CVEEngine:
         matched: List[CVEEntry] = []
         target_ver = _tokenize_version(version)
 
+        # v0.3.5 (2026-04-19): product-family taxonomy strict filter.
+        # If we can recognize the user's query platform as a canonical family,
+        # exclude CVEs whose titles explicitly identify OTHER product families
+        # (e.g. SSM On-Prem, CUCM, Webex mislabeled as "IOS XE" by the PSIRT
+        # importer). Falls back to legacy fuzzy matching when family is UNKNOWN.
+        query_family = normalize_user_platform(platform)
+
         for cve in self.cves:
             if not platform_matches(platform, cve.platforms):
+                continue
+
+            # Family-level strict filter (2026-04-19 fix for CTO memo P0.1/P0.3)
+            if query_family is not None:
+                title = getattr(cve, "title", "") or ""
+                description = getattr(cve, "description", "") or ""
+                cve_families = detect_all_families(title, description)
+                # Skip placeholder/policy entries: if fixed_in is prose (no version)
+                # AND title doesn't match any family, it's likely not a real CVE.
+                if not is_cve_in_scope_for_query(query_family, cve_families):
+                    continue
+
+            # v0.3.4 (2026-04-19): P2.1 placeholder filter — CVEs whose fixed_in
+            # is advisory prose ("Migrate to X", "Remove default Y") rather than
+            # a version token are hardening rules, not applicable CVEs.
+            fix = getattr(cve, "fixed_in", None)
+            if fix and _is_prose_not_version(fix):
+                # Skip from matched list (but keep in DB for reference)
                 continue
 
             min_ver, max_ver, inclusive_max = parse_affected_range(
                 cve.affected.min,
                 cve.affected.max,
-                getattr(cve, "fixed_in", None),
+                fix,
             )
 
             # target < min → not yet affected
