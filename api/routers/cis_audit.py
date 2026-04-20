@@ -113,21 +113,78 @@ def _check_password_encryption(cfg):
         return "PASS", "service password-encryption found", ""
     return "FAIL", "service password-encryption NOT found", "Add: service password-encryption"
 
+ENABLE_PW_RE = re.compile(
+    r"^\s*enable\s+(?P<kind>secret|password)\s+"
+    r"(?:(?P<type>0|5|7|8|9)\s+)?"
+    r"(?P<val>\S+)",
+    re.MULTILINE,
+)
+
+def _classify_enable_pw(cfg):
+    """Return list of (kind, type_detected, raw_line) for all enable password/secret lines.
+    type_detected is: 0 (plaintext), 5 (MD5), 7 (Vigenere), 8 (PBKDF2), 9 (scrypt),
+    or None (secret without explicit type — implicit MD5 on older IOS)."""
+    items = []
+    for m in ENABLE_PW_RE.finditer(cfg):
+        kind = m.group("kind")
+        t = m.group("type")
+        # "enable password <val>" with no type prefix = Type 0 (plaintext)
+        # "enable secret <val>" with no type prefix = implicit Type 5 on modern IOS
+        if t is None:
+            detected = 0 if kind == "password" else 5
+        else:
+            detected = int(t)
+        items.append((kind, detected, m.group(0).strip()))
+    return items
+
 def _check_enable_secret(cfg):
-    if re.search(r"^enable secret\s+[89]\s+", cfg, re.M):
-        return "PASS", "enable secret with Type 8/9 (strong hash)", ""
-    if re.search(r"^enable secret\s+5\s+", cfg, re.M):
-        return "WARNING", "enable secret Type 5 (MD5) — acceptable but Type 9 preferred", "Upgrade to: enable algorithm-type scrypt secret <password>"
-    if re.search(r"^enable secret", cfg, re.M):
-        return "PASS", "enable secret configured", ""
-    if re.search(r"^enable password", cfg, re.M):
-        return "FAIL", "enable PASSWORD used (weak Type 7 encryption)", "Replace with: enable secret <password>"
-    return "FAIL", "No enable secret configured", "Add: enable secret <password>"
+    items = _classify_enable_pw(cfg)
+    secrets = [it for it in items if it[0] == "secret"]
+    if not secrets:
+        # No enable secret — but maybe enable password exists (handled by 1.1.2)
+        if any(it[0] == "password" for it in items):
+            return "FAIL", "enable password used without enable secret (weak auth for privilege escalation)", "Add: enable algorithm-type scrypt secret <password>"
+        return "FAIL", "No enable secret configured", "Add: enable algorithm-type scrypt secret <password>"
+    # Prefer strongest secret
+    types = sorted({it[1] for it in secrets}, reverse=True)
+    strongest = types[0]
+    if strongest == 9:
+        return "PASS", "enable secret Type 9 (scrypt)", ""
+    if strongest == 8:
+        return "PASS", "enable secret Type 8 (PBKDF2-SHA256)", ""
+    if strongest == 5:
+        return "WARNING", "enable secret Type 5 (MD5) — acceptable but Type 8/9 preferred", "Upgrade: enable algorithm-type scrypt secret <password>"
+    # Should not happen: secret with type 0 or 7 is rare, but classify
+    if strongest == 7:
+        return "FAIL", "enable secret Type 7 (Vigenère — trivially reversible)", "Replace with: enable algorithm-type scrypt secret <password>"
+    return "FAIL", "enable secret Type 0 (plaintext!)", "Replace with: enable algorithm-type scrypt secret <password>"
 
 def _check_no_enable_password(cfg):
-    if re.search(r"^enable password", cfg, re.M):
-        return "FAIL", "enable password found (weak Type 7)", "Remove: no enable password\nUse: enable secret <password>"
-    return "PASS", "No enable password (good)", ""
+    items = _classify_enable_pw(cfg)
+    passwords = [it for it in items if it[0] == "password"]
+    if not passwords:
+        return "PASS", "No enable password configured", ""
+    # Classify worst case
+    types = sorted({it[1] for it in passwords})
+    worst = types[0]  # lower = worse (0 plaintext < 7 Vigenere)
+    offending_line = next(it[2] for it in passwords if it[1] == worst)
+    if worst == 0:
+        return (
+            "FAIL",
+            f"enable password Type 0 (PLAINTEXT!): `{offending_line}`",
+            "Remove: no enable password\nUse: enable algorithm-type scrypt secret <password>",
+        )
+    if worst == 7:
+        return (
+            "FAIL",
+            f"enable password Type 7 (Vigenère — trivially reversible): `{offending_line}`",
+            "Remove: no enable password\nUse: enable algorithm-type scrypt secret <password>",
+        )
+    return (
+        "FAIL",
+        f"enable password found: `{offending_line}` — replace with enable secret",
+        "Remove: no enable password\nUse: enable algorithm-type scrypt secret <password>",
+    )
 
 def _check_aaa_new_model(cfg):
     if re.search(r"^aaa new-model", cfg, re.M):
@@ -151,11 +208,15 @@ def _check_aaa_accounting(cfg):
     return "FAIL", "No AAA accounting — no audit trail", "Add: aaa accounting exec default start-stop group tacacs+"
 
 def _check_ssh_version_2(cfg):
-    if re.search(r"^ip ssh version 2", cfg, re.M):
+    if re.search(r"^ip ssh version 2\b", cfg, re.M):
         return "PASS", "SSH version 2 enforced", ""
-    if re.search(r"^ip ssh version 1", cfg, re.M):
-        return "FAIL", "SSH version 1 (VULNERABLE)", "Change to: ip ssh version 2"
-    return "WARNING", "SSH version not explicitly set (defaults may allow v1)", "Add: ip ssh version 2"
+    if re.search(r"^ip ssh version 1\b", cfg, re.M):
+        return (
+            "FAIL",
+            "SSHv1 explicitly enabled (weaker than IOS default; CWE-326)",
+            "Change to: ip ssh version 2",
+        )
+    return "WARNING", "SSH version not pinned; verify platform default", "Add: ip ssh version 2"
 
 def _check_ssh_timeout(cfg):
     m = re.search(r"^ip ssh time-out\s+(\d+)", cfg, re.M)
@@ -267,15 +328,54 @@ def _check_tcp_keepalives(cfg):
         return "WARNING", "Only one direction of TCP keepalives", "Add both: service tcp-keepalives-in / service tcp-keepalives-out"
     return "FAIL", "TCP keepalives not enabled", "Add: service tcp-keepalives-in / service tcp-keepalives-out"
 
+LOG_BUF_RE = re.compile(
+    r"^\s*logging\s+buffered"
+    r"(?:\s+(?P<size>\d+))?"
+    r"(?:\s+(?P<sev>emergencies|alerts|critical|errors|warnings|notifications|informational|debugging|\d+))?"
+    r"\s*$",
+    re.MULTILINE,
+)
+
 def _check_logging_buffered(cfg):
-    if re.search(r"^logging buffered", cfg, re.M):
-        return "PASS", "Logging to buffer configured", ""
-    return "FAIL", "No buffered logging", "Add: logging buffered 64000 informational"
+    m = LOG_BUF_RE.search(cfg)
+    if not m:
+        return "FAIL", "No buffered logging", "Add: logging buffered 64000 informational"
+    size_str = m.group("size")
+    sev = m.group("sev")
+    issues = []
+    if size_str:
+        size = int(size_str)
+        if size < 16384:
+            issues.append(f"buffer {size} bytes too small (rolls over quickly)")
+    if sev and sev.lower() in ("debugging", "7"):
+        issues.append("severity=debugging is too verbose for production buffer")
+    if issues:
+        evidence = f"logging buffered {size_str or ''} {sev or ''}".strip() + " — " + "; ".join(issues)
+        return "WARNING", evidence, "Recommend: logging buffered 64000 informational"
+    evidence = "logging buffered configured"
+    if size_str:
+        evidence += f" ({size_str} bytes"
+        if sev:
+            evidence += f", {sev}"
+        evidence += ")"
+    return "PASS", evidence, ""
+
+LOG_HOST_RE = re.compile(
+    r"^\s*logging\s+(?:host\s+)?(?:vrf\s+\S+\s+)?"
+    r"(?P<dest>\d+\.\d+\.\d+\.\d+"
+    r"|[0-9a-fA-F:]+:[0-9a-fA-F:]*"
+    r"|[A-Za-z][A-Za-z0-9_.\-]*)"
+    r"(?:\s+transport\s+(?:tcp|udp)(?:\s+port\s+\d+)?)?\s*$",
+    re.MULTILINE,
+)
 
 def _check_logging_remote(cfg):
-    if re.search(r"^logging host\s+|^logging\s+\d+\.\d+\.\d+\.\d+", cfg, re.M):
-        return "PASS", "Remote syslog configured", ""
-    return "FAIL", "No remote syslog server", "Add: logging host <syslog-server-IP>"
+    hosts = [m.group("dest") for m in LOG_HOST_RE.finditer(cfg)
+             if m.group("dest") not in ("buffered", "console", "monitor", "trap", "source-interface",
+                                         "facility", "origin-id", "synchronous", "on")]
+    if hosts:
+        return "PASS", f"Remote syslog configured: {', '.join(hosts)}", ""
+    return "FAIL", "No remote syslog server", "Add: logging host <syslog-server-IP-or-FQDN>"
 
 def _check_logging_timestamps(cfg):
     if re.search(r"^service timestamps (log|debug)\s+datetime\s+msec", cfg, re.M):

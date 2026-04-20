@@ -4,6 +4,52 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.11] – 2026-04-20 (W17 Day 1 late evening)
+
+### Fixed — CIS Audit parser quality: CIS-002 / CIS-004 / CIS-005 / CIS-008
+
+Follow-up to v0.6.10. Closes 4 additional parser bugs from defect report §3.
+
+**CIS-002 — SSHv1 explicit = FAIL (Rule 1.2.1)**
+- Tri-state: `ip ssh version 2` → PASS, `ip ssh version 1` → FAIL with "CWE-326"
+  evidence, absent → WARN "SSH version not pinned".
+- Previously: v1 returned WARN "defaults may allow v1" — understated a
+  deliberate weakening of the device.
+
+**CIS-004 — Logging host parser (Rule 3.1.2)**
+- New `LOG_HOST_RE` accepts modern `logging host <ip|ipv6|fqdn>` form plus
+  legacy `logging <ip>`, optional `vrf <name>`, optional
+  `transport tcp|udp port N`.
+- Previously: `logging host 10.10.1.60` returned FAIL "No remote syslog".
+
+**CIS-005 — Logging buffered size+severity variants (Rule 3.1.1)**
+- New `LOG_BUF_RE` accepts `logging buffered [size] [severity]`.
+- Sub-findings: WARN when size < 16384 (rolls over quickly) or severity is
+  `debugging`/`7` (too verbose for production buffer). PASS with evidence
+  showing size + severity otherwise.
+- Previously: `logging buffered 4096 debugging` returned FAIL "No buffered
+  logging".
+
+**CIS-008 — Enable password Type 0 vs 7 classification (Rule 1.1.2 / 1.1.1)**
+- New `ENABLE_PW_RE` + `_classify_enable_pw` helper.
+- Classification table:
+  - `enable password <val>` (no prefix) → **Type 0 (PLAINTEXT!)** FAIL CRITICAL
+  - `enable password 7 <hash>` → Type 7 (Vigenère) FAIL HIGH
+  - `enable secret <val>` (no prefix) → implicit Type 5 (MD5) WARN
+  - `enable secret 5 <hash>` → Type 5 WARN
+  - `enable secret 8 <hash>` → Type 8 (PBKDF2) PASS
+  - `enable secret 9 <hash>` → Type 9 (scrypt) PASS
+- Evidence now cites the exact offending line.
+- Previously: `enable password cisco123` labeled "weak Type 7" — wrong by one
+  severity tier and wrong remediation.
+
+Version bump: app 0.6.10 → 0.6.11. CIS Audit UI badge v1.1 → v1.2.
+
+Status vs defect report unblock list (7 items): 6/7 now FIXED. XCUT-001
+(cross-tool correlation) remains as W19+ sprint item.
+
+---
+
 ## [v0.6.10] – 2026-04-20 (W17 Day 1 evening)
 
 ### Fixed — CIS Audit parser correctness (CIS-001, CIS-003, CIS-006)
