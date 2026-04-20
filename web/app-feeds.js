@@ -4,10 +4,10 @@
 // CRITICAL THREAT FEED (Home Dashboard)
 // =============================================
 
-const threatFeedList = document.getElementById("threat-feed-list");
-const threatFeedAge = document.getElementById("threat-feed-age");
-const threatFeedRefresh = document.getElementById("threat-feed-refresh");
-const threatFeedPlatform = document.getElementById("threat-feed-platform");
+const threatFeedList = document.getElementById("cisco-advisories-list");
+const threatFeedAge = document.getElementById("cisco-advisories-age");
+const threatFeedRefresh = document.getElementById("cisco-advisories-refresh");
+const threatFeedPlatform = document.getElementById("cisco-advisories-platform");
 
 async function loadThreatFeed() {
   if (!threatFeedList) return;
@@ -33,7 +33,7 @@ async function loadThreatFeed() {
 
     data.items.forEach(item => {
       const a = document.createElement("a");
-      a.className = "threat-feed-item";
+      a.className = "cisco-advisories-item";
       a.href = item.url || "#";
       a.target = "_blank";
       a.rel = "noopener";
@@ -42,11 +42,11 @@ async function loadThreatFeed() {
       const cvssText = item.cvss != null ? item.cvss.toFixed(1) : "—";
 
       a.innerHTML = `
-        <span class="threat-feed-cvss ${cvssClass}">${cvssText}</span>
-        <span class="threat-feed-cve">${item.cve_id}</span>
-        <span class="threat-feed-desc">${item.title}</span>
-        <span class="threat-feed-date">${item.updated ? item.updated.slice(0, 10) : ""}</span>
-        <span class="threat-feed-severity ${cvssClass}">${item.severity}</span>
+        <span class="cisco-advisories-cvss ${cvssClass}">${cvssText}</span>
+        <span class="cisco-advisories-cve">${item.cve_id}</span>
+        <span class="cisco-advisories-desc">${item.title}</span>
+        <span class="cisco-advisories-date">${item.updated ? item.updated.slice(0, 10) : ""}</span>
+        <span class="cisco-advisories-severity ${cvssClass}">${item.severity}</span>
       `;
 
       threatFeedList.appendChild(a);

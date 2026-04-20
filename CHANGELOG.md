@@ -4,6 +4,40 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.8] – 2026-04-19 (late evening)
+
+### Changed — Further cosmetic filter cleanup
+
+After v0.6.7 user reported Arc Shields popup still firing. Grep of initial
+DOM revealed more suspicious patterns matching ad-blocker cosmetic filters:
+
+- `.threat-feed-widget` / `#threat-feed-widget` — combines "feed" and
+  "widget" which some EasyList rules match.
+- `.score-widget*` family — "widget" alone can match certain rules.
+- `#golden-include-banner` / `#golden-custom-banner` — HTML id still had
+  "banner" even though the input `name` attribute (Cisco MOTD payload
+  field) is unchanged.
+
+Renames:
+- `threat-feed-widget` → `cisco-advisories-card` (index.html, style-home.css,
+  app-feeds.js — both in element and sub-element classes/ids).
+- `threat-feed` → `cisco-advisories` (broader rename for all sibling
+  elements like `threat-feed-header`, `threat-feed-list`, `threat-feed-age`,
+  `threat-feed-refresh`, `threat-feed-platform`, `threat-feed-select`).
+- `score-widget*` → `security-score-card*` (style-tools.css, index.html).
+- `id="golden-include-banner"` → `id="golden-include-motd"` (HTML id only;
+  input `name="include_banner"` preserved because backend API expects it).
+- `id="golden-custom-banner"` → `id="golden-custom-motd"` (same rationale).
+
+Version bump: app 0.6.7 → 0.6.8.
+
+If Arc popup STILL fires after this, the root cause is likely Arc's
+incognito-mode overzealous heuristic (fires on most sites with any API
+calls). DevTools → Network tab in incognito should reveal if any request
+is actually being blocked.
+
+---
+
 ## [v0.6.7] – 2026-04-19 (late evening)
 
 ### Changed — Rename "banner" CSS classes to avoid ad-blocker cosmetic filters

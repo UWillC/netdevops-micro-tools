@@ -451,23 +451,23 @@
 /* ----------------------------- */
 /* v0.4.0: Security Score Widget */
 /* ----------------------------- */
-.score-widget {
+.security-score-card {
   margin-bottom: 16px;
 }
 
-.score-widget-header {
+.security-score-card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 12px;
 }
 
-.score-widget-header h3 {
+.security-score-card-header h3 {
   margin: 0;
   font-size: 0.95rem;
 }
 
-.score-widget-actions {
+.security-score-card-actions {
   display: flex;
   gap: 8px;
 }

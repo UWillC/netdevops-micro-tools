@@ -156,14 +156,14 @@
         </div>
 
         <!-- Critical CVE Feed Widget -->
-        <div class="threat-feed-widget" id="threat-feed-widget">
-          <div class="threat-feed-header">
-            <div class="threat-feed-title">
-              <span class="threat-feed-icon">🔥</span>
+        <div class="cisco-advisories-card" id="cisco-advisories-card">
+          <div class="cisco-advisories-header">
+            <div class="cisco-advisories-title">
+              <span class="cisco-advisories-icon">🔥</span>
               <h2>Cisco — Latest Threats</h2>
             </div>
-            <div class="threat-feed-meta">
-              <select id="threat-feed-platform" class="threat-feed-select">
+            <div class="cisco-advisories-meta">
+              <select id="cisco-advisories-platform" class="cisco-advisories-select">
                 <option value="all">All Platforms</option>
                 <option value="iosxe">IOS XE</option>
                 <option value="ios">IOS</option>
@@ -171,11 +171,11 @@
                 <option value="asa">ASA</option>
                 <option value="ftd">Firepower / FTD</option>
               </select>
-              <span class="threat-feed-age" id="threat-feed-age"></span>
-              <button class="btn-secondary" id="threat-feed-refresh" style="padding:4px 10px; font-size:0.75rem;">Refresh</button>
+              <span class="cisco-advisories-age" id="cisco-advisories-age"></span>
+              <button class="btn-secondary" id="cisco-advisories-refresh" style="padding:4px 10px; font-size:0.75rem;">Refresh</button>
             </div>
           </div>
-          <div class="threat-feed-list" id="threat-feed-list">
+          <div class="cisco-advisories-list" id="cisco-advisories-list">
             <p class="summary-muted">Loading threat feed...</p>
           </div>
         </div>
@@ -1536,10 +1536,10 @@ Requires: archive config">show archive config differences</code>
           <!-- Banner -->
           <div class="form-row baseline-section">
             <label class="baseline-checkbox-label">
-              <input type="checkbox" name="include_banner" id="golden-include-banner" value="true" checked>
+              <input type="checkbox" name="include_banner" id="golden-include-motd" value="true" checked>
               <span>Include Banner</span>
             </label>
-            <textarea name="custom_banner" id="golden-custom-banner" rows="2" placeholder="Custom banner text (leave empty for default)"></textarea>
+            <textarea name="custom_banner" id="golden-custom-motd" rows="2" placeholder="Custom banner text (leave empty for default)"></textarea>
           </div>
 
           <!-- Logging -->
@@ -2984,10 +2984,10 @@ line vty 0 15
         <h2>Device Profiles (v2)</h2>
 
         <!-- v0.4.0: Security Score Widget -->
-        <div class="score-widget card">
-          <div class="score-widget-header">
+        <div class="security-score-card card">
+          <div class="security-score-card-header">
             <h3>Security Scores</h3>
-            <div class="score-widget-actions">
+            <div class="security-score-card-actions">
               <button id="score-refresh" class="btn-secondary">Refresh</button>
               <button id="score-export-pdf" class="btn-primary">Export PDF</button>
               <button id="score-export-json" class="btn-secondary">Export JSON</button>

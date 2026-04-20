@@ -274,7 +274,7 @@
 /* ----------------------------- */
 /* Threat Feed Widget */
 /* ----------------------------- */
-.threat-feed-widget {
+.cisco-advisories-card {
   background: var(--card);
   border: 1px solid rgba(239, 68, 68, 0.3);
   border-radius: var(--radius);
@@ -282,37 +282,37 @@
   margin-bottom: 16px;
 }
 
-.threat-feed-header {
+.cisco-advisories-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 12px;
 }
 
-.threat-feed-title {
+.cisco-advisories-title {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.threat-feed-title h2 {
+.cisco-advisories-title h2 {
   font-size: 0.95rem;
   font-weight: 600;
   margin: 0;
   color: var(--text);
 }
 
-.threat-feed-icon {
+.cisco-advisories-icon {
   font-size: 1.2rem;
 }
 
-.threat-feed-meta {
+.cisco-advisories-meta {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.threat-feed-select {
+.cisco-advisories-select {
   font-size: 0.75rem;
   padding: 3px 8px;
   border-radius: 4px;
@@ -322,18 +322,18 @@
   cursor: pointer;
 }
 
-.threat-feed-age {
+.cisco-advisories-age {
   font-size: 0.7rem;
   color: var(--muted);
 }
 
-.threat-feed-list {
+.cisco-advisories-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.threat-feed-item {
+.cisco-advisories-item {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -347,12 +347,12 @@
   color: inherit;
 }
 
-.threat-feed-item:hover {
+.cisco-advisories-item:hover {
   background: rgba(148, 163, 184, 0.12);
   border-color: rgba(148, 163, 184, 0.25);
 }
 
-.threat-feed-cvss {
+.cisco-advisories-cvss {
   font-size: 0.75rem;
   font-weight: 700;
   padding: 3px 8px;
@@ -362,17 +362,17 @@
   flex-shrink: 0;
 }
 
-.threat-feed-cvss.critical {
+.cisco-advisories-cvss.critical {
   background: rgba(239, 68, 68, 0.2);
   color: #ef4444;
 }
 
-.threat-feed-cvss.high {
+.cisco-advisories-cvss.high {
   background: rgba(251, 146, 60, 0.2);
   color: #fb923c;
 }
 
-.threat-feed-cve {
+.cisco-advisories-cve {
   font-size: 0.75rem;
   font-family: monospace;
   color: var(--accent);
@@ -380,7 +380,7 @@
   flex-shrink: 0;
 }
 
-.threat-feed-desc {
+.cisco-advisories-desc {
   font-size: 0.78rem;
   color: var(--text);
   flex: 1;
@@ -389,7 +389,7 @@
   white-space: nowrap;
 }
 
-.threat-feed-date {
+.cisco-advisories-date {
   font-size: 0.7rem;
   color: var(--muted);
   flex-shrink: 0;
@@ -397,7 +397,7 @@
   text-align: right;
 }
 
-.threat-feed-severity {
+.cisco-advisories-severity {
   font-size: 0.65rem;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -406,26 +406,26 @@
   flex-shrink: 0;
 }
 
-.threat-feed-severity.critical {
+.cisco-advisories-severity.critical {
   background: rgba(239, 68, 68, 0.15);
   color: #ef4444;
 }
 
-.threat-feed-severity.high {
+.cisco-advisories-severity.high {
   background: rgba(251, 146, 60, 0.15);
   color: #fb923c;
 }
 
 @media (max-width: 768px) {
-  .threat-feed-header {
+  .cisco-advisories-header {
     flex-direction: column;
     gap: 8px;
     align-items: flex-start;
   }
-  .threat-feed-cve {
+  .cisco-advisories-cve {
     min-width: auto;
   }
-  .threat-feed-desc {
+  .cisco-advisories-desc {
     display: none;
   }
 }
