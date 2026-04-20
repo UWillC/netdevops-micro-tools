@@ -4,6 +4,49 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.13] – 2026-04-20 (W17 Day 1 late night hotfix)
+
+### Fixed — CIS Audit: pasted-config leading-whitespace silently broke line-anchored parsers (CRITICAL)
+
+**Symptom.** User paste of a valid Cisco config with uniform 2-space leading
+indent (common when copying from chat windows, PDFs, or quoted forum posts)
+caused the following rules to silently misclassify:
+
+| Rule | Wrong output | Correct output |
+|------|-------------|----------------|
+| 2.1.1 No HTTP server | PASS "not configured" | **FAIL — HTTP server enabled** |
+| 1.2.1 SSHv2 | WARN "not pinned" | **FAIL — SSHv1 explicitly enabled** |
+| 1.2.4 No telnet VTY | N/A "no VTY lines" | **FAIL — telnet permitted** |
+| 1.2.5 Exec-timeout | N/A | **FAIL** |
+| 1.2.6 VTY access-class | N/A | **FAIL** |
+| 1.2.7 VTY login | N/A | **PASS** |
+| 4.1.1 Banner | FAIL "no banner" | **WARN — banner present, weak content** |
+
+Rule 2.1.1 returning PASS on `ip http server` is the worst case — same
+false-assurance pattern the v0.6.10+ refactor was meant to eliminate.
+
+**Root cause.** Most parsers use `^<cmd>` anchored to line start. With 2-space
+indent on every line, `^ip http server` doesn't match `  ip http server`.
+Rules using `^\s*` (SNMP, NTP, logging, enable password) worked; rules using
+bare `^` did not.
+
+**Fix.** Added `_normalize_config()` applied at endpoint entry. Uses
+`textwrap.dedent()` which strips the MAX COMMON leading whitespace from all
+lines. Preserves relative indentation inside VTY/interface blocks (sub-command
+lines keep their extra indent relative to their parent). Also normalizes
+`\r\n` / `\r` line endings to `\n`.
+
+Effect on the same indented config as user report:
+- Score 23.3% (Grade F, 4 CRITICAL FAILs) → **17.3% (Grade F, 7 CRITICAL FAILs)**
+- 11 FAIL → **15 FAIL**, 4 WARN → 4 WARN (content now meaningful, not parser gaps)
+
+No changes to individual rule regexes — one-line normalizer fixes the whole
+family of indent-sensitive rules.
+
+Version bump: app 0.6.12 → 0.6.13.
+
+---
+
 ## [v0.6.12] – 2026-04-20 (W17 Day 1 late night)
 
 ### Fixed — CIS Audit semantic layer: CIS-007 / CIS-009 / CIS-010

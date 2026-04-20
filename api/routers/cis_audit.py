@@ -9,12 +9,25 @@ Endpoints:
 """
 
 import re
+import textwrap
 from typing import List, Optional
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 router = APIRouter()
+
+
+def _normalize_config(cfg: str) -> str:
+    """Strip uniform leading whitespace (common when user pastes config with
+    forum/chat/terminal-added indent). Preserves relative indentation between
+    top-level commands and sub-commands (VTY/interface blocks)."""
+    # Normalize line endings first
+    cfg = cfg.replace("\r\n", "\n").replace("\r", "\n")
+    # textwrap.dedent removes the MAX common leading whitespace from all lines.
+    # If top-level commands have 0 leading ws, dedent is a no-op. If all lines
+    # have e.g. 2 leading spaces (chat paste), dedent strips those 2.
+    return textwrap.dedent(cfg)
 
 
 # ----------------------------
@@ -827,9 +840,15 @@ def cis_audit(req: AuditRequest):
 
     level = req.level if req.level in ("1", "2") else "1"
 
+    # Normalize pasted config: strip uniform leading whitespace (common when
+    # user pastes from a chat window / forum / terminal with indent). This
+    # preserves relative indentation of sub-commands inside line/interface
+    # blocks while making top-level commands line-anchored.
+    cfg_text = _normalize_config(req.config_text)
+
     # Detect hostname
     hostname = None
-    m = re.search(r"^hostname\s+(\S+)", req.config_text, re.MULTILINE)
+    m = re.search(r"^hostname\s+(\S+)", cfg_text, re.MULTILINE)
     if m:
         hostname = m.group(1)
 
@@ -840,7 +859,7 @@ def cis_audit(req: AuditRequest):
         if level == "1" and rule_level == "2":
             continue
 
-        result, evidence, remediation = check_fn(req.config_text)
+        result, evidence, remediation = check_fn(cfg_text)
         all_results.append(AuditRule(
             rule_id=rule_id,
             title=title,
