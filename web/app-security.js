@@ -50,6 +50,27 @@ if (cveForm && cveOutput) {
         return;
       }
 
+      // v0.6.16 CVE-007/010: severity transparency + bundle lookup.
+      const sevDetails = data.severity_details || {};
+      const bundles = data.bundles || {};
+
+      // Derive the severity the UI should display for each CVE. Prefer the
+      // backend-computed primary_severity (NVD CVSS bucket when score known);
+      // fall back to the legacy severity field for older API responses.
+      const displaySeverity = (cve) => {
+        const d = sevDetails[cve.cve_id];
+        if (d && d.primary_severity) return d.primary_severity;
+        return (cve.severity || "").toUpperCase();
+      };
+
+      // Recount summary based on primary severity so the breakdown matches
+      // what the badges show.
+      const primaryCounts = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0, NONE: 0, UNKNOWN: 0 };
+      data.matched.forEach((cve) => {
+        const sev = displaySeverity(cve);
+        if (primaryCounts[sev] !== undefined) primaryCounts[sev] += 1;
+      });
+
       // Text report output
       let out = "";
       out += `Platform: ${data.platform}\n`;
@@ -58,7 +79,13 @@ if (cveForm && cveOutput) {
 
       out += "Matched CVEs:\n";
       data.matched.forEach((cve) => {
-        out += `${cve.cve_id} [${(cve.severity || "").toUpperCase()}]\n`;
+        const primary = displaySeverity(cve);
+        const d = sevDetails[cve.cve_id] || {};
+        const bundle = bundles[cve.cve_id];
+        let line = `${cve.cve_id} [${primary}]`;
+        if (d.cisco_sir) line += ` [Cisco SIR: ${d.cisco_sir}]`;
+        if (bundle) line += ` [Bundle: ${bundle}]`;
+        out += line + "\n";
         out += `  Title: ${cve.title}\n`;
         out += `  Source: ${cve.source || "N/A"}\n`;
         out += `  CVSS: ${formatCvss(cve.cvss_score)}${
@@ -76,13 +103,17 @@ if (cveForm && cveOutput) {
         out += "\n";
       });
 
-      out += "Summary:\n";
-      Object.entries(data.summary || {}).forEach(([sev, count]) => {
-        out += `  ${sev}: ${count}\n`;
+      out += "Severity breakdown (NVD CVSS v3.x):\n";
+      ["CRITICAL", "HIGH", "MEDIUM", "LOW", "NONE", "UNKNOWN"].forEach((sev) => {
+        if (primaryCounts[sev] > 0) out += `  ${sev}: ${primaryCounts[sev]}\n`;
       });
 
       if (data.recommended_upgrade) {
         out += `\nRecommended upgrade target: ${data.recommended_upgrade}\n`;
+      }
+
+      if (data.severity_policy) {
+        out += `\nNote: ${data.severity_policy}\n`;
       }
 
       cveOutput.value = out;
@@ -94,13 +125,36 @@ if (cveForm && cveOutput) {
           if (s === "critical") return "severity-badge sev-critical";
           if (s === "high") return "severity-badge sev-high";
           if (s === "medium") return "severity-badge sev-medium";
-          return "severity-badge sev-low";
+          if (s === "low") return "severity-badge sev-low";
+          return "severity-badge sev-unknown";
         };
 
         cveCards.innerHTML = "";
         data.matched.forEach((cve) => {
           const card = document.createElement("div");
           card.className = "cve-item";
+
+          const primary = displaySeverity(cve);
+          const d = sevDetails[cve.cve_id] || {};
+          const bundle = bundles[cve.cve_id];
+
+          // Secondary tags (Cisco SIR, bundle, escalation reason)
+          const secondaryTags = [];
+          if (d.cisco_sir) {
+            secondaryTags.push(
+              `<span class="secondary-tag tag-cisco-sir" title="Cisco Security Impact Rating — separate scale from NVD CVSS">Cisco SIR: ${d.cisco_sir}</span>`
+            );
+          }
+          if (bundle) {
+            secondaryTags.push(
+              `<span class="secondary-tag tag-bundle" title="Part of Cisco semi-annual bundled publication">Bundle: ${bundle}</span>`
+            );
+          }
+          if (d.escalation_reason) {
+            secondaryTags.push(
+              `<span class="secondary-tag tag-escalation" title="Risk-escalation flag from feed metadata">${d.escalation_reason}</span>`
+            );
+          }
 
           const metaBits = [];
           metaBits.push(`Source: ${cve.source || "N/A"}`);
@@ -112,7 +166,8 @@ if (cveForm && cveOutput) {
             <div class="cve-item-header">
               <div>
                 <div class="cve-item-title">
-                  <span class="${badgeClass(cve.severity)}">${(cve.severity || "").toUpperCase()}</span>
+                  <span class="${badgeClass(primary)}">${primary}</span>
+                  ${secondaryTags.join("")}
                   ${cve.cve_id} — ${cve.title}
                 </div>
                 <div class="cve-item-meta">
@@ -157,13 +212,13 @@ if (cveForm && cveOutput) {
         });
       }
 
-      // Security posture summary (with Max CVSS)
+      // Security posture summary — counts derived from PRIMARY severity
+      // (NVD CVSS v3.x bucket) so the breakdown matches the badges.
       if (cveSummary) {
-        const s = data.summary || {};
-        const critical = s.critical || 0;
-        const high = s.high || 0;
-        const medium = s.medium || 0;
-        const low = s.low || 0;
+        const critical = primaryCounts.CRITICAL;
+        const high = primaryCounts.HIGH;
+        const medium = primaryCounts.MEDIUM;
+        const low = primaryCounts.LOW;
 
         const scores = (data.matched || [])
           .map((x) => Number(x.cvss_score))
@@ -171,9 +226,16 @@ if (cveForm && cveOutput) {
 
         const maxCvss = scores.length ? Math.max(...scores) : null;
 
+        // Count CVEs whose Cisco SIR diverges from CVSS bucket (CVE-007).
+        const sirDistinct = (data.matched || []).filter(
+          (cve) => (sevDetails[cve.cve_id] || {}).cisco_sir
+        ).length;
+        // Count CVEs marked as part of a Cisco semi-annual bundle (CVE-010).
+        const bundleCount = Object.values(bundles).filter((v) => v).length;
+
         cveSummary.innerHTML = `
           <h3>Security posture</h3>
-          <div class="summary-row"><span>Severity breakdown</span></div>
+          <div class="summary-row"><span>Severity breakdown (NVD CVSS v3.x)</span></div>
           <div class="summary-row">
             <span>
               <span class="severity-badge sev-critical">CRITICAL</span>
@@ -185,6 +247,16 @@ if (cveForm && cveOutput) {
           <div class="summary-row"><span>Counts</span><span>${critical} / ${high} / ${medium} / ${low}</span></div>
           <div class="summary-row"><span>Max CVSS</span><span>${formatCvss(maxCvss)}</span></div>
           ${
+            sirDistinct > 0
+              ? `<div class="summary-row summary-muted"><span>Cisco SIR ≠ CVSS</span><span>${sirDistinct} CVE(s)</span></div>`
+              : ""
+          }
+          ${
+            bundleCount > 0
+              ? `<div class="summary-row summary-muted"><span>In Cisco bundle</span><span>${bundleCount} CVE(s)</span></div>`
+              : ""
+          }
+          ${
             data.recommended_upgrade
               ? `<div class="summary-upgrade">
                    Recommended upgrade target:<br/>
@@ -193,6 +265,11 @@ if (cveForm && cveOutput) {
               : `<div class="summary-upgrade summary-muted">
                    No specific upgrade target recommended based on current CVEs.
                  </div>`
+          }
+          ${
+            data.severity_policy
+              ? `<div class="severity-policy-footer">${data.severity_policy}</div>`
+              : ""
           }
         `;
       }

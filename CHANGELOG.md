@@ -4,6 +4,49 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.17] – 2026-04-20 (W17 Day 1 — CVE Analyzer UI consumes new severity fields)
+
+### Added — CVE Analyzer UI renders primary severity + secondary tags
+
+Backend v0.6.16 returned `severity_details.primary_severity`,
+`severity_details.cisco_sir`, `bundles[cve_id]`, and `severity_policy` —
+but the UI still rendered from the legacy `cve.severity` field. This
+commit wires the UI through.
+
+**Changes (`web/app-security.js`, `web/style-tools.css`):**
+- Severity badge now reads `severity_details[cve_id].primary_severity`
+  (NVD CVSS v3.x bucket). Falls back to `cve.severity` if backend is older.
+- Cisco SIR rendered as a dashed secondary tag next to the badge when it
+  differs from the primary bucket.
+- Bundle ID rendered as a secondary tag when CVE is part of a Cisco
+  semi-annual bundled publication.
+- KEV / actively-exploited / zero-day flags rendered as red secondary tag
+  using `escalation_reason` (was previously buried in `tags` line only).
+- Severity breakdown counts in the right-rail summary now use primary
+  severity, so the "3 / 12 / 8 / 5" row matches the badges visible on
+  cards. Also adds optional rows: "Cisco SIR ≠ CVSS: N CVE(s)" and
+  "In Cisco bundle: N CVE(s)".
+- Right-rail footer renders the `severity_policy` explanation in italic.
+- Text report mirrors the same: `[MEDIUM] [Cisco SIR: High] [Bundle: 2025-09]`
+  per CVE line, and "Severity breakdown (NVD CVSS v3.x)" header.
+
+**New CSS classes:**
+- `.secondary-tag` — base style (dashed border, smaller, muted).
+- `.tag-cisco-sir` — purple accent.
+- `.tag-bundle` — sky-blue accent.
+- `.tag-escalation` — red accent for KEV/actively-exploited.
+- `.sev-unknown` — for CVEs without CVSS score.
+- `.severity-policy-footer` — italic muted footer.
+
+Tooltips on each secondary tag explain what it means (Cisco SIR is a
+separate scale, bundle = patch together, escalation = risk flag).
+
+CVE Analyzer UI badge: v0.5 → v0.6.
+
+Version bump: app 0.6.16 → 0.6.17.
+
+---
+
 ## [v0.6.16] – 2026-04-20 (W17 Day 1 — CVE-007 + CVE-010)
 
 ### Fixed — Severity canonicalization (CVE-007)
