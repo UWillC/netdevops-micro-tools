@@ -162,8 +162,8 @@ homeButton.addEventListener("click", () => {
   homeTab.classList.add("active");
 });
 
-// Home tool cards - navigate to tool (with gate check)
-document.querySelectorAll(".home-tool-card").forEach(card => {
+// Home tool cards + Quickstart tools - navigate to tool (with gate check)
+document.querySelectorAll(".home-tool-card, .quickstart-tool").forEach(card => {
   card.addEventListener("click", () => {
     const tab = card.dataset.tab;
 
