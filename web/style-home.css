@@ -1,6 +1,98 @@
 /* ----------------------------- */
 /* Home Page Content */
 /* ----------------------------- */
+
+/* Quickstart Banner */
+.quickstart-banner {
+  background: linear-gradient(135deg, rgba(88, 166, 255, 0.1) 0%, rgba(188, 140, 255, 0.05) 100%);
+  border: 1px solid rgba(88, 166, 255, 0.3);
+  border-radius: 12px;
+  padding: 20px 24px;
+  margin-bottom: 28px;
+}
+
+.quickstart-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.quickstart-header .quickstart-icon {
+  font-size: 1.4rem;
+}
+
+.quickstart-header h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text);
+}
+
+.quickstart-header .quickstart-note {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-weight: 400;
+  margin-left: auto;
+}
+
+.quickstart-tools {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.quickstart-tool {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 14px 16px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+  font-family: inherit;
+  color: var(--text);
+}
+
+.quickstart-tool:hover {
+  background: rgba(88, 166, 255, 0.15);
+  border-color: rgba(88, 166, 255, 0.6);
+  transform: translateY(-1px);
+}
+
+.quickstart-tool .tool-icon {
+  font-size: 1.4rem;
+  margin-bottom: 2px;
+}
+
+.quickstart-tool .tool-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.quickstart-tool .tool-hint {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+@media (max-width: 700px) {
+  .quickstart-tools {
+    grid-template-columns: 1fr;
+  }
+
+  .quickstart-header .quickstart-note {
+    width: 100%;
+    margin-left: 0;
+  }
+}
+
 .home-hero {
   text-align: center;
   padding: 20px 0 30px;
