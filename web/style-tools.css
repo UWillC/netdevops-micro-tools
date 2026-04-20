@@ -142,6 +142,105 @@
   text-decoration: underline;
 }
 
+/* v0.6.19 — XCUT-002 provenance footer (collapsible chain-of-custody
+ * block at the bottom of the CVE report). Muted by default so it does
+ * not compete with the findings, but an auditor can expand it. */
+.provenance-block {
+  margin-top: 18px;
+  padding: 10px 12px;
+  border: 1px dashed rgba(148, 163, 184, 0.35);
+  border-radius: var(--radius);
+  background: rgba(2, 6, 23, 0.4);
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.provenance-block summary {
+  cursor: pointer;
+  user-select: none;
+  font-style: italic;
+}
+
+.provenance-block summary:hover {
+  color: rgba(226, 232, 240, 0.9);
+}
+
+.provenance-body {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(148, 163, 184, 0.2);
+  line-height: 1.5;
+}
+
+.prov-meta {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.72rem;
+  margin-bottom: 8px;
+  color: rgba(148, 163, 184, 0.85);
+}
+
+.prov-section {
+  margin-top: 8px;
+}
+
+.prov-section-title {
+  font-weight: 600;
+  color: rgba(203, 213, 225, 0.85);
+  margin-bottom: 4px;
+}
+
+.prov-row {
+  margin-top: 6px;
+  padding-left: 6px;
+  border-left: 2px solid rgba(148, 163, 184, 0.25);
+}
+
+.prov-name {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: rgba(226, 232, 240, 0.95);
+  margin-right: 6px;
+}
+
+.prov-fresh {
+  color: rgba(134, 239, 172, 0.85);
+  font-size: 0.72rem;
+}
+
+.prov-missing {
+  color: rgba(252, 165, 165, 0.7);
+  font-style: italic;
+  font-size: 0.72rem;
+}
+
+.prov-desc {
+  font-size: 0.72rem;
+  color: rgba(148, 163, 184, 0.7);
+}
+
+.prov-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.prov-pill {
+  display: inline-flex;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.7rem;
+}
+
+.prov-note {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(148, 163, 184, 0.2);
+  font-style: italic;
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
 .summary-upgrade {
   margin-top: 8px;
   font-size: 0.8rem;

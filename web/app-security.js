@@ -9,6 +9,7 @@ const cveOutput = document.getElementById("cve-output");
 const cveSummary = document.getElementById("cve-summary");
 const cveCards = document.getElementById("cve-cards");
 const cveEolBanner = document.getElementById("cve-eol-banner");
+const cveProvenance = document.getElementById("cve-provenance");
 
 function formatCvss(score) {
   if (score === null || score === undefined) return "N/A";
@@ -25,6 +26,7 @@ if (cveForm && cveOutput) {
     cveOutput.value = "Analyzing CVEs...";
     if (cveCards) cveCards.innerHTML = "";
     if (cveEolBanner) cveEolBanner.innerHTML = "";
+    if (cveProvenance) cveProvenance.innerHTML = "";
 
     const formData = new FormData(cveForm);
     const payload = {
@@ -156,6 +158,26 @@ if (cveForm && cveOutput) {
 
       if (data.severity_policy) {
         out += `\nNote: ${data.severity_policy}\n`;
+      }
+
+      if (data.provenance && Object.keys(data.provenance).length) {
+        const p = data.provenance;
+        out += "\n--- Provenance ---\n";
+        out += `Tool: ${p.tool_version || "?"}  Engine: ${p.cve_engine_version || "?"}  Ruleset: ${p.ruleset_version || "?"}\n`;
+        out += `Generated: ${p.report_generated || "?"}\n`;
+        if (p.source_distribution) {
+          const dist = Object.entries(p.source_distribution)
+            .map(([k, v]) => `${k}=${v}`)
+            .join(", ");
+          out += `Source distribution: ${dist}\n`;
+        }
+        (p.sources || []).forEach((s) => {
+          if (s.available) {
+            out += `  ${s.name}: ${s.last_refreshed} (${s.age_hours}h ago, ${s.file_count} files)\n`;
+          } else {
+            out += `  ${s.name}: not present\n`;
+          }
+        });
       }
 
       cveOutput.value = out;
@@ -313,6 +335,39 @@ if (cveForm && cveOutput) {
               ? `<div class="severity-policy-footer">${data.severity_policy}</div>`
               : ""
           }
+        `;
+      }
+
+      // v0.6.19 XCUT-002: provenance footer (collapsible). Establishes
+      // chain of custody so the CVE report is usable as audit evidence.
+      if (cveProvenance && data.provenance && Object.keys(data.provenance).length) {
+        const p = data.provenance;
+        const sourceRows = (p.sources || [])
+          .map((s) => {
+            const status = s.available
+              ? `<span class="prov-fresh">${s.last_refreshed} (${s.age_hours}h ago, ${s.file_count} file${s.file_count === 1 ? "" : "s"})</span>`
+              : `<span class="prov-missing">not present</span>`;
+            return `<div class="prov-row"><span class="prov-name">${s.name}</span> ${status}<div class="prov-desc">${s.description}</div></div>`;
+          })
+          .join("");
+        const distRows = Object.entries(p.source_distribution || {})
+          .map(([src, n]) => `<span class="prov-pill">${src}: ${n}</span>`)
+          .join(" ");
+        cveProvenance.innerHTML = `
+          <details class="provenance-block">
+            <summary>Provenance & sourcing — tool ${p.tool_version || "?"} • ruleset ${p.ruleset_version || "?"} • generated ${p.report_generated || "?"}</summary>
+            <div class="provenance-body">
+              <div class="prov-meta">
+                Engine ${p.cve_engine_version || "?"} • Tool ${p.tool_version || "?"} • Ruleset ${p.ruleset_version || "?"}
+              </div>
+              ${distRows ? `<div class="prov-section"><div class="prov-section-title">Source distribution across matched CVEs</div><div class="prov-pills">${distRows}</div></div>` : ""}
+              <div class="prov-section">
+                <div class="prov-section-title">Data sources</div>
+                ${sourceRows}
+              </div>
+              ${p.policy_note ? `<div class="prov-note">${p.policy_note}</div>` : ""}
+            </div>
+          </details>
         `;
       }
     } catch (err) {

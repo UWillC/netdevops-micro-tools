@@ -10,6 +10,28 @@ from pydantic import BaseModel
 
 from services.cve_engine import CVEEngine, CVEEngineConfig, severity_info, detect_bundle
 from services.eol_registry import detect_eol
+from services.provenance import cve_provenance
+
+
+# Read once at module load so the response footer matches the running build.
+def _read_app_version() -> str:
+    """Read app version from api/main.py without importing it (avoids
+    circular import). Picks the LAST `version="..."` literal — that's the
+    canonical /meta/version value, after the FastAPI(version=...) declaration."""
+    try:
+        main_path = os.path.join(os.path.dirname(__file__), "..", "main.py")
+        last = None
+        with open(main_path, "r") as f:
+            for line in f:
+                stripped = line.strip()
+                if stripped.startswith("version=\""):
+                    last = stripped.split("\"")[1]
+        return last or "unknown"
+    except Exception:
+        return "unknown"
+
+
+_APP_VERSION = _read_app_version()
 from services.cve_sources import NvdEnricherProvider, CiscoAdvisoryProvider, CISCO_CACHE_DIR
 from models.cve_model import CVEEntry
 
@@ -45,6 +67,11 @@ class CVEAnalyzeResponse(BaseModel):
     # "no patches available; replace the hardware". The recommendation
     # engine output below is informational on EoL platforms.
     eol_status: Optional[dict] = None
+    # v0.6.19 XCUT-002: provenance / audit-trail metadata. Carries tool +
+    # engine + ruleset versions, per-source freshness (ISO + age_hours),
+    # and the source distribution across matched CVEs. Rendered as a
+    # collapsible footer in the UI; required for compliance evidence use.
+    provenance: dict = {}
     # Policy note for the report footer.
     severity_policy: str = (
         "Primary severity uses the NVD CVSS v3.x qualitative scale "
@@ -122,6 +149,13 @@ def analyze_cve(req: CVEAnalyzeRequest):
     # populated even when matched is empty).
     eol_status = detect_eol(req.platform, req.version)
 
+    # v0.6.19 XCUT-002: provenance footer.
+    provenance = cve_provenance(
+        tool_version=_APP_VERSION,
+        cve_engine_version="0.3.7",
+        matched_cves=matched,
+    )
+
     return CVEAnalyzeResponse(
         platform=req.platform,
         version=req.version,
@@ -131,6 +165,7 @@ def analyze_cve(req: CVEAnalyzeRequest):
         severity_details=severity_details,
         bundles=bundles,
         eol_status=eol_status,
+        provenance=provenance,
         timestamp=datetime.datetime.utcnow().isoformat() + "Z",
     )
 

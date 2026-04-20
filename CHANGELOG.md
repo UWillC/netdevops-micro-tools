@@ -4,6 +4,82 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.19] – 2026-04-20 (W17 Day 1 — XCUT-002 provenance footer)
+
+### Added — Provenance / audit-trail footer (XCUT-002)
+
+Per defect report §5 XCUT-002. Tool was producing CVE reports with no chain
+of custody — reader couldn't tell which provider supplied each finding,
+when that source was last refreshed, or which tool/dataset version produced
+the report. Required for any report consumed as compliance evidence (risk
+committee packet, regulatory audit, internal change-management).
+
+**Added:**
+- `services/provenance.py` — assembles per-request metadata block.
+  Filesystem-based (cache mtimes for refresh dates, recursive walk for
+  newest-mtime, deterministic ruleset ID from local-json mtime). No external
+  dependencies.
+- `CVEAnalyzeResponse.provenance` field carries:
+  - `tool_version` (read from api/main.py at module load)
+  - `cve_engine_version`
+  - `ruleset_version` (deterministic, format `local-json-YYYYMMDD`)
+  - `report_generated` (ISO-8601 UTC)
+  - `sources[]` — uniform shape per provider with name, description,
+    available bool, last_refreshed ISO, age_hours, file_count
+  - `source_distribution{}` — count of CVEs per provider
+  - `policy_note` — explainer text for the audit reader
+- UI: collapsible `<details>` block at the bottom of CVE report.
+  Summary line shows tool + ruleset + generated timestamp; expanding
+  reveals source distribution pills, per-source freshness rows
+  (green = fresh, red italic = not present), and the policy note.
+- Text report ("Copy" output): `--- Provenance ---` section at the end
+  with the same data in plain-text form for paste-into-ticket use.
+
+**Concrete provenance shape on a real IOS XE 17.9.4 query:**
+```
+tool_version: "0.6.19"
+cve_engine_version: "0.3.7"
+ruleset_version: "local-json-20260420"
+sources:
+  local-json:        last_refreshed=...01:07:37Z, age=26.5h, 142 files
+  cisco-psirt-import: last_refreshed=...21:59:14Z, age=917.7h, 2 files
+  nvd-enrichment:    not present (24h TTL — populated on demand)
+source_distribution:
+  local-json: 4
+  cisco-psirt-import: 100
+```
+
+**Tests:** 10 new in `tests/test_provenance.py` — top-level keys present,
+sources have uniform shape, source distribution counts per provider,
+unknown source bucketed, ruleset version format, missing-path handling
+(available=false with nulls but UI-safe), recursive mtime walk, ISO UTC
+report timestamp parseable, policy note mentions audit / compliance use.
+
+Full suite: **62 passing** (was 52).
+
+**Bonus fix.** `_read_app_version()` in `api/routers/cve.py` was reading
+the FIRST `version="..."` literal in `api/main.py` — that's the FastAPI
+constructor (0.6.0), not the canonical `/meta/version` value. Fixed to
+pick the LAST occurrence.
+
+CVE Analyzer UI badge: v0.7 → v0.8.
+
+Version: app 0.6.18 → 0.6.19.
+
+### Scorecard update (defect report 2026-04-19)
+
+```
+CIS    10/10 CLOSED
+CVE     6/10 CLOSED  (-009 + -010 + -007 + -001 + -002 + -008)
+XCUT    2/3  CLOSED  (-003 + -002)
+Total  18/23 CLOSED  (78%)
+```
+
+Remaining: CVE-003/004/005 (platform taxonomy refactor — ASA/RV unblock,
+4d), CVE-006 PSIRT import closure, XCUT-001 (cross-tool correlation, 5d).
+
+---
+
 ## [v0.6.18] – 2026-04-20 (W17 Day 1 — CVE-009 EoL platform banner)
 
 ### Added — End-of-Life platform detection (CVE-009)

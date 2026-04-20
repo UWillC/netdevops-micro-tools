@@ -1585,7 +1585,7 @@ Requires: archive config">show archive config differences</code>
 
       <!-- CVE TAB -->
       <section id="tab-cve" class="tab-content">
-        <h2>CVE Analyzer <span class="version-badge">v0.7 — EoL platform detection</span></h2>
+        <h2>CVE Analyzer <span class="version-badge">v0.8 — Provenance audit trail</span></h2>
         <form id="cve-form" class="card">
           <div class="form-row">
             <label>Platform</label>
@@ -1626,6 +1626,12 @@ Requires: archive config">show archive config differences</code>
 
             <!-- Collapsible CVE cards -->
             <div id="cve-cards"></div>
+
+            <!-- v0.6.19 XCUT-002: provenance / audit-trail footer.
+                 Collapsed by default; click to expand. Shows tool +
+                 ruleset versions, per-source freshness, and source
+                 distribution across matched CVEs. -->
+            <div id="cve-provenance"></div>
           </div>
 
           <div class="summary-card" id="cve-summary">
