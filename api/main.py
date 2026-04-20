@@ -81,6 +81,16 @@ def serve_js(filename: str):
         return FileResponse(os.path.join(WEB_DIR, f"{filename}.js"), media_type="application/javascript")
     return FileResponse(os.path.join(WEB_DIR, "app-core.js"), media_type="application/javascript")
 
+@app.get("/favicon.svg")
+def favicon_svg():
+    """Serve favicon SVG"""
+    return FileResponse(os.path.join(WEB_DIR, "favicon.svg"), media_type="image/svg+xml")
+
+@app.get("/favicon.ico")
+def favicon_ico():
+    """Serve favicon SVG as fallback for .ico requests (browsers ask for /favicon.ico by default)"""
+    return FileResponse(os.path.join(WEB_DIR, "favicon.svg"), media_type="image/svg+xml")
+
 @app.get("/api")
 def api_root():
     """API status endpoint"""
