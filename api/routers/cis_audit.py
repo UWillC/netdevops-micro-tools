@@ -18,6 +18,48 @@ router = APIRouter()
 
 
 # ----------------------------
+# Block extractors (shared)
+# ----------------------------
+
+VTY_HEADER_RE = re.compile(r"^line vty\s+(\d+)(?:\s+(\d+))?\s*$", re.MULTILINE)
+CON_HEADER_RE = re.compile(r"^line con(?:sole)?\s+(\d+)(?:\s+(\d+))?\s*$", re.MULTILINE)
+
+def _extract_blocks(cfg: str, header_re: re.Pattern) -> List[str]:
+    """Return list of block bodies. A block starts at a header line and ends at
+    the next top-level line (first char not whitespace) or end of text.
+
+    Robust to:
+    - range syntax ("line vty 0 4", "line vty 5 15")
+    - trailing whitespace on header
+    - interleaved "!" separators and other top-level commands
+    """
+    blocks = []
+    headers = list(header_re.finditer(cfg))
+    for i, m in enumerate(headers):
+        start = m.end()
+        # Find next top-level line (line starts with a non-whitespace char).
+        # The block body is indented (leading space/tab).
+        end = len(cfg)
+        pos = start
+        while pos < len(cfg):
+            # Find next newline
+            nl = cfg.find("\n", pos)
+            if nl == -1:
+                break
+            next_line_start = nl + 1
+            if next_line_start >= len(cfg):
+                break
+            ch = cfg[next_line_start]
+            if ch not in (" ", "\t", "\n", "\r"):
+                # Top-level line — block ends here
+                end = next_line_start
+                break
+            pos = next_line_start
+        blocks.append(cfg[m.start():end])
+    return blocks
+
+
+# ----------------------------
 # Models
 # ----------------------------
 
@@ -134,36 +176,54 @@ def _check_ssh_retries(cfg):
     return "WARNING", "SSH retries not set (default 3)", ""
 
 def _check_no_telnet(cfg):
-    vty_blocks = re.findall(r"^line vty.*?(?=^line|\Z)", cfg, re.M | re.S)
-    for block in vty_blocks:
-        if re.search(r"transport input\s+ssh\s*$", block, re.M):
-            continue
-        if re.search(r"transport input\s+.*telnet", block, re.M) or re.search(r"transport input\s+all", block, re.M):
-            return "FAIL", "Telnet enabled on VTY lines", "Set: transport input ssh"
-        if not re.search(r"transport input", block, re.M):
-            return "WARNING", "No transport input specified (telnet may be allowed by default)", "Add: transport input ssh"
+    vty_blocks = _extract_blocks(cfg, VTY_HEADER_RE)
     if not vty_blocks:
-        return "WARNING", "No VTY configuration found", ""
+        return "N/A", "No VTY lines configured — inbound VTY management disabled", ""
+    offending = []
+    missing_transport = False
+    for block in vty_blocks:
+        # Find transport input lines (ignoring comments)
+        transport_lines = re.findall(r"^\s*transport input\s+(.+?)\s*$", block, re.M)
+        if not transport_lines:
+            missing_transport = True
+            continue
+        for ti in transport_lines:
+            tokens = ti.split()
+            # "transport input all" permits everything including telnet
+            if "all" in tokens or "telnet" in tokens:
+                offending.append(f"transport input {ti}")
+    if offending:
+        evidence = "; ".join(sorted(set(offending)))
+        return "FAIL", f"Telnet permitted on VTY: {evidence}", "Set: transport input ssh"
+    if missing_transport:
+        return "WARNING", "No transport input specified on some VTY lines (telnet may be allowed by default)", "Add: transport input ssh"
     return "PASS", "VTY lines restricted to SSH only", ""
 
 def _check_exec_timeout(cfg):
-    vty_blocks = re.findall(r"^line vty.*?(?=^line|\Z)", cfg, re.M | re.S)
-    con_blocks = re.findall(r"^line con.*?(?=^line|\Z)", cfg, re.M | re.S)
+    vty_blocks = _extract_blocks(cfg, VTY_HEADER_RE)
+    con_blocks = _extract_blocks(cfg, CON_HEADER_RE)
     all_blocks = vty_blocks + con_blocks
+    if not all_blocks:
+        return "N/A", "No VTY/console lines configured", ""
     for block in all_blocks:
-        m = re.search(r"exec-timeout\s+0\s+0", block)
-        if m:
+        if re.search(r"^\s*exec-timeout\s+0\s+0\b", block, re.M):
             return "FAIL", "exec-timeout 0 0 found (NEVER timeout)", "Set: exec-timeout 10 0 (10 minutes)"
-    if not any(re.search(r"exec-timeout", block) for block in all_blocks):
-        return "WARNING", "exec-timeout not explicitly set on all lines", "Add: exec-timeout 10 0"
-    return "PASS", "exec-timeout configured on management lines", ""
+    # At least one block missing exec-timeout → FAIL (management line without idle timeout)
+    missing = [b for b in all_blocks if not re.search(r"^\s*exec-timeout\b", b, re.M)]
+    if missing:
+        return "FAIL", f"exec-timeout not set on {len(missing)} of {len(all_blocks)} management line block(s)", "Add: exec-timeout 10 0"
+    return "PASS", "exec-timeout configured on all management lines", ""
 
 def _check_access_class(cfg):
-    vty_blocks = re.findall(r"^line vty.*?(?=^line|\Z)", cfg, re.M | re.S)
-    for block in vty_blocks:
-        if re.search(r"access-class\s+\S+\s+in", block, re.M):
-            return "PASS", "VTY access restricted by ACL", ""
-    return "FAIL", "No access-class on VTY lines — anyone can SSH", "Add: access-class <ACL> in"
+    vty_blocks = _extract_blocks(cfg, VTY_HEADER_RE)
+    if not vty_blocks:
+        return "N/A", "No VTY lines configured", ""
+    unprotected = [b for b in vty_blocks if not re.search(r"^\s*access-class\s+\S+\s+in\b", b, re.M)]
+    if not unprotected:
+        return "PASS", "All VTY blocks restricted by access-class ACL", ""
+    if len(unprotected) == len(vty_blocks):
+        return "FAIL", "No access-class on any VTY lines — anyone routable can attempt SSH", "Add: access-class <ACL> in"
+    return "FAIL", f"access-class missing on {len(unprotected)} of {len(vty_blocks)} VTY block(s)", "Add: access-class <ACL> in"
 
 def _check_no_http_server(cfg):
     if re.search(r"^no ip http server", cfg, re.M):
@@ -224,15 +284,23 @@ def _check_logging_timestamps(cfg):
         return "WARNING", "Timestamps present but may lack milliseconds", "Set: service timestamps log datetime msec localtime show-timezone"
     return "FAIL", "No service timestamps configured", "Add: service timestamps log datetime msec localtime show-timezone"
 
+NTP_SERVER_RE = re.compile(
+    r"^\s*ntp\s+server\s+(?:vrf\s+\S+\s+)?(?P<host>\S+)"
+    r"(?P<modifiers>(?:\s+(?:prefer|key\s+\d+|source\s+\S+|version\s+\d+|iburst|minpoll\s+\d+|maxpoll\s+\d+))*)\s*$",
+    re.MULTILINE,
+)
+
 def _check_ntp_configured(cfg):
-    if re.search(r"^ntp server\s+\S+", cfg, re.M):
-        return "PASS", "NTP server configured", ""
-    return "FAIL", "No NTP server configured", "Add: ntp server <NTP-server-IP>"
+    servers = [m.group("host") for m in NTP_SERVER_RE.finditer(cfg)]
+    if servers:
+        evidence = f"NTP server(s) configured: {', '.join(servers)}"
+        return "PASS", evidence, ""
+    return "FAIL", "No NTP server configured", "Add: ntp server <NTP-server-IP-or-FQDN>"
 
 def _check_ntp_authentication(cfg):
-    if not re.search(r"^ntp server", cfg, re.M):
+    if not NTP_SERVER_RE.search(cfg):
         return "N/A", "No NTP configured — skipping", ""
-    if re.search(r"^ntp authenticate", cfg, re.M):
+    if re.search(r"^ntp authenticate\b", cfg, re.M):
         return "PASS", "NTP authentication enabled", ""
     return "WARNING", "NTP configured without authentication", "Add: ntp authenticate / ntp authentication-key / ntp trusted-key"
 
@@ -241,18 +309,59 @@ def _check_banner(cfg):
         return "PASS", "Login banner configured", ""
     return "FAIL", "No login banner (legal/compliance requirement)", "Add: banner motd ^Unauthorized access prohibited^"
 
+SNMP_COMMUNITY_RE = re.compile(
+    r"^\s*snmp-server\s+community\s+(?P<name>\S+)"
+    r"(?:\s+(?P<access>RO|RW))?"
+    r"(?:\s+(?P<acl>\S+))?\s*$",
+    re.MULTILINE | re.IGNORECASE,
+)
+
+DEFAULT_COMMUNITIES = {"public", "private", "cisco", "admin", "manager", "netman", "secret"}
+
 def _check_no_snmpv2(cfg):
-    if re.search(r"^snmp-server community", cfg, re.M):
-        communities = re.findall(r"^snmp-server community\s+(\S+)", cfg, re.M)
-        return "FAIL", f"SNMPv2c community string(s): {', '.join(communities)}", "Remove SNMPv2c, use SNMPv3: snmp-server group <name> v3 priv"
-    return "PASS", "No SNMPv2c community strings", ""
+    matches = list(SNMP_COMMUNITY_RE.finditer(cfg))
+    if not matches:
+        return "PASS", "No SNMPv2c community strings", ""
+    defaults = []
+    rw_any = []
+    all_communities = []
+    for m in matches:
+        name = m.group("name")
+        access = (m.group("access") or "RO").upper()
+        acl = m.group("acl")
+        all_communities.append(f"{name} ({access}{', ACL='+acl if acl else ''})")
+        if name.lower() in DEFAULT_COMMUNITIES:
+            defaults.append(f"{name}/{access}")
+        if access == "RW":
+            rw_any.append(name)
+    # Severity escalation is enforced via the rule severity at registration
+    # (critical). Evidence reflects worst condition.
+    if defaults and rw_any and any(n.lower() in DEFAULT_COMMUNITIES for n in rw_any):
+        evidence = (
+            f"DEFAULT + RW community string(s): {', '.join(defaults)}. "
+            f"Equivalent to unauthenticated admin access. "
+            f"All: {', '.join(all_communities)}"
+        )
+        remediation = (
+            "IMMEDIATE: no snmp-server community " + rw_any[0] + "\n"
+            "Then migrate to SNMPv3 authPriv: snmp-server group <grp> v3 priv"
+        )
+        return "FAIL", evidence, remediation
+    if defaults:
+        evidence = f"Default community string(s): {', '.join(defaults)}. All: {', '.join(all_communities)}"
+        return "FAIL", evidence, "Remove default communities; migrate to SNMPv3 authPriv"
+    if rw_any:
+        evidence = f"SNMPv2c RW community: {', '.join(rw_any)}. All: {', '.join(all_communities)}"
+        return "FAIL", evidence, "Remove RW SNMPv2c; migrate to SNMPv3 authPriv"
+    evidence = f"SNMPv2c community string(s): {', '.join(all_communities)}"
+    return "FAIL", evidence, "Remove SNMPv2c; migrate to SNMPv3: snmp-server group <grp> v3 priv"
 
 def _check_snmpv3_priv(cfg):
     if re.search(r"^snmp-server group\s+\S+\s+v3\s+priv", cfg, re.M):
         return "PASS", "SNMPv3 with priv (auth+encryption)", ""
     if re.search(r"^snmp-server group\s+\S+\s+v3\s+(auth|noauth)", cfg, re.M):
         return "WARNING", "SNMPv3 without encryption", "Use: snmp-server group <name> v3 priv"
-    if re.search(r"^snmp-server community", cfg, re.M):
+    if SNMP_COMMUNITY_RE.search(cfg):
         return "FAIL", "Using SNMPv2c instead of SNMPv3", "Migrate to SNMPv3 with priv"
     return "N/A", "SNMP not configured", ""
 
@@ -304,15 +413,29 @@ def _check_rsa_key_size(cfg):
     return "N/A", "RSA key size not visible in config (check: show crypto key mypubkey rsa)", ""
 
 def _check_login_local(cfg):
-    vty_blocks = re.findall(r"^line vty.*?(?=^line|\Z)", cfg, re.M | re.S)
-    for block in vty_blocks:
-        if re.search(r"login\s+(local|authentication)", block, re.M):
-            return "PASS", "VTY lines require authentication", ""
-        if re.search(r"no login", block, re.M):
-            return "FAIL", "VTY lines: no login required!", "Add: login local"
+    vty_blocks = _extract_blocks(cfg, VTY_HEADER_RE)
     if not vty_blocks:
-        return "WARNING", "No VTY configuration found", ""
-    return "WARNING", "Login method not explicitly set on VTY", "Add: login local (or login authentication <list>)"
+        return "N/A", "No VTY lines configured", ""
+    has_aaa = bool(re.search(r"^aaa new-model", cfg, re.M))
+    any_no_login = False
+    all_have_login = True
+    for block in vty_blocks:
+        if re.search(r"^\s*no login\b", block, re.M):
+            any_no_login = True
+        # "login local", "login authentication <list>" → authenticated.
+        # Bare "login" on a block with "password <pwd>" is weak but present;
+        # when aaa new-model is on, bare "login" inherits the default list.
+        has_login_strong = bool(re.search(r"^\s*login\s+(local|authentication)\b", block, re.M))
+        has_login_bare = bool(re.search(r"^\s*login\s*$", block, re.M))
+        if not (has_login_strong or has_login_bare):
+            all_have_login = False
+    if any_no_login:
+        return "FAIL", "VTY block(s) configured with 'no login' — no authentication required", "Add: login local (or login authentication <list>)"
+    if all_have_login:
+        if has_aaa:
+            return "PASS", "VTY lines require authentication", ""
+        return "PASS", "VTY lines have login configured", ""
+    return "WARNING", "Login method not explicitly set on all VTY blocks", "Add: login local (or login authentication <list>)"
 
 def _check_ip_verify_source(cfg):
     if re.search(r"ip verify source", cfg, re.M):
@@ -320,11 +443,13 @@ def _check_ip_verify_source(cfg):
     return "WARNING", "IP Source Guard not configured", "Consider: ip verify source on access ports"
 
 def _check_console_password(cfg):
-    con_blocks = re.findall(r"^line con.*?(?=^line|\Z)", cfg, re.M | re.S)
+    con_blocks = _extract_blocks(cfg, CON_HEADER_RE)
+    if not con_blocks:
+        return "N/A", "No console line configured in running-config", ""
     for block in con_blocks:
-        if re.search(r"login\s+(local|authentication)", block, re.M):
+        if re.search(r"^\s*login\s+(local|authentication)\b", block, re.M):
             return "PASS", "Console line requires authentication", ""
-        if re.search(r"password", block, re.M) and re.search(r"^login\s*$", block, re.M):
+        if re.search(r"^\s*password\b", block, re.M) and re.search(r"^\s*login\s*$", block, re.M):
             return "WARNING", "Console uses line password (weak)", "Use: login local with username/secret"
     return "WARNING", "Console authentication not verified", "Ensure: login local on line con 0"
 

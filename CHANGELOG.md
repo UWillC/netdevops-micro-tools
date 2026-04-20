@@ -4,6 +4,71 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.10] – 2026-04-20 (W17 Day 1 evening)
+
+### Fixed — CIS Audit parser correctness (CIS-001, CIS-003, CIS-006)
+
+Per defect report 2026-04-19 §3. Three parsers rewritten for robustness against
+real-world Cisco IOS/IOS-XE configs.
+
+**CIS-001 — VTY block parser + telnet CRITICAL FAIL (Rules 1.2.4 / 1.2.5 / 1.2.6 / 1.2.7)**
+- New block extractor (`_extract_blocks` + `VTY_HEADER_RE`) slices VTY blocks
+  from a header matching `line vty N [M]` to the next top-level line.
+  Handles range syntax (`line vty 0 4`, `line vty 5 15`) and trailing whitespace.
+- Rule 1.2.4 (no telnet): scans each VTY block for `transport input` lines and
+  emits FAIL with the exact offending line as evidence when any line permits
+  `telnet` or `all`. Severity is CRITICAL at registration.
+- Rule 1.2.5 (exec-timeout): FAIL (not WARN) when exec-timeout missing on any
+  VTY/console block. FAIL on `exec-timeout 0 0`.
+- Rule 1.2.6 (access-class): FAIL when any VTY block lacks `access-class ... in`.
+  Evidence enumerates how many blocks are unprotected.
+- Rule 1.2.7 (login): PASS when `login`, `login local`, or `login authentication`
+  is present on all blocks. FAIL on `no login`. Previously WARN on bare `login`.
+- N/A (score-neutral) when no VTY lines are configured.
+
+**CIS-003 — SNMP community parser rewrite (Rules 5.1.1 / 5.1.2)**
+- New `SNMP_COMMUNITY_RE` captures name, RO/RW, and optional ACL.
+- `DEFAULT_COMMUNITIES` set: public, private, cisco, admin, manager, netman, secret.
+- Escalated evidence tiers:
+  - default community + RW → evidence flags "equivalent to unauthenticated admin"
+  - default community (RO) → flagged as default string
+  - non-default RW → flagged as RW
+  - any SNMPv2c → FAIL
+- Previously: tool returned PASS "No SNMPv2c community strings" on configs
+  containing `snmp-server community public RO` / `private RW`. Unfit-for-purpose
+  bug fixed.
+
+**CIS-006 — NTP parser (Rule 3.1.4 / 3.1.5)**
+- New `NTP_SERVER_RE` accepts FQDN, IPv4/v6, optional `vrf`, and modifiers:
+  `prefer`, `key N`, `source IF`, `version N`, `iburst`, `minpoll N`, `maxpoll N`.
+- Evidence now enumerates configured servers, e.g. `10.10.1.70, 0.pool.ntp.org`.
+- 3.1.5 NTP authentication gated on presence of any NTP server (new regex).
+
+**Console parser (1.2.8)** migrated to same block extractor for consistency.
+
+### Regression test (defect report TC-CIS-01/02/03)
+
+Branch router test config (two VTY blocks with `transport input telnet ssh`,
+`snmp-server community public RO` / `private RW`, `ntp server <FQDN>`):
+
+| Rule | Before | After |
+|------|--------|-------|
+| 1.2.4 | WARN "No VTY config" | **FAIL** — "Telnet permitted on VTY: transport input telnet ssh" |
+| 1.2.5 | WARN | **FAIL** — "exec-timeout not set on 2 of 2 management line block(s)" |
+| 1.2.6 | FAIL | FAIL (with per-block count) |
+| 1.2.7 | WARN | **PASS** — "VTY lines have login configured" |
+| 5.1.1 | PASS | **FAIL** — "DEFAULT + RW community string(s): public/RO, private/RW. Equivalent to unauthenticated admin access." |
+| 3.1.4 | FAIL | **PASS** — "NTP server(s) configured: 10.10.1.70, 0.pool.ntp.org" |
+
+TC-CIS-02 (empty VTY blocks): WARN (no transport specified).
+TC-CIS-03 (no VTY at all): N/A (score-neutral).
+Hardened baseline (ssh-only, access-class, exec-timeout, SNMPv3 priv, NTP+auth):
+all PASS.
+
+Version bump: app 0.6.9 → 0.6.10. CIS Audit UI badge v1.0 → v1.1.
+
+---
+
 ## [v0.6.9] – 2026-04-20 (W17 Day 1)
 
 ### Fixed — UI-001: Copy + Download buttons in CIS Audit and Config Drift
