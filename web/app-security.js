@@ -8,6 +8,7 @@ const cveForm = document.getElementById("cve-form");
 const cveOutput = document.getElementById("cve-output");
 const cveSummary = document.getElementById("cve-summary");
 const cveCards = document.getElementById("cve-cards");
+const cveEolBanner = document.getElementById("cve-eol-banner");
 
 function formatCvss(score) {
   if (score === null || score === undefined) return "N/A";
@@ -23,6 +24,7 @@ if (cveForm && cveOutput) {
     e.preventDefault();
     cveOutput.value = "Analyzing CVEs...";
     if (cveCards) cveCards.innerHTML = "";
+    if (cveEolBanner) cveEolBanner.innerHTML = "";
 
     const formData = new FormData(cveForm);
     const payload = {
@@ -37,7 +39,21 @@ if (cveForm && cveOutput) {
       const data = await postJSON("/analyze/cve", payload);
 
       if (!data.matched || data.matched.length === 0) {
-        cveOutput.value = "No CVEs matched for this platform/version.\n";
+        // Even with zero CVE matches, EoL platforms get the banner —
+        // an EoL device with no listed CVEs is more dangerous, not less.
+        if (cveEolBanner && data.eol_status && data.eol_status.is_eol) {
+          cveEolBanner.innerHTML = `
+            <div class="eol-banner">
+              <div class="eol-banner-title">⚠ End-of-Life platform detected</div>
+              <div class="eol-banner-body">${data.eol_status.banner_text}</div>
+            </div>
+          `;
+        }
+        let header = "";
+        if (data.eol_status && data.eol_status.is_eol) {
+          header = `EoL platform: ${data.eol_status.banner_text}\n\n`;
+        }
+        cveOutput.value = header + "No CVEs from current dataset matched this platform/version.\n";
 
         if (cveSummary) {
           cveSummary.innerHTML = `
@@ -48,6 +64,27 @@ if (cveForm && cveOutput) {
           `;
         }
         return;
+      }
+
+      // v0.6.18 CVE-009: render EoL banner above CVE list when platform
+      // is past end-of-vulnerability-security-support. Operator must see
+      // this BEFORE wasting time on per-CVE remediation steps.
+      if (cveEolBanner && data.eol_status && data.eol_status.is_eol) {
+        const hw = data.eol_status.hardware;
+        const train = data.eol_status.ios_train;
+        const links = [];
+        if (hw && hw.bulletin_url) {
+          links.push(
+            `<a href="${hw.bulletin_url}" target="_blank" rel="noopener">Hardware EoL bulletin</a>`
+          );
+        }
+        cveEolBanner.innerHTML = `
+          <div class="eol-banner">
+            <div class="eol-banner-title">⚠ End-of-Life platform detected</div>
+            <div class="eol-banner-body">${data.eol_status.banner_text}</div>
+            ${links.length ? `<div class="eol-banner-links">${links.join(" • ")}</div>` : ""}
+          </div>
+        `;
       }
 
       // v0.6.16 CVE-007/010: severity transparency + bundle lookup.
@@ -76,6 +113,11 @@ if (cveForm && cveOutput) {
       out += `Platform: ${data.platform}\n`;
       out += `Version: ${data.version}\n`;
       out += `Timestamp: ${data.timestamp}\n\n`;
+
+      if (data.eol_status && data.eol_status.is_eol) {
+        out += "*** END-OF-LIFE PLATFORM ***\n";
+        out += data.eol_status.banner_text + "\n\n";
+      }
 
       out += "Matched CVEs:\n";
       data.matched.forEach((cve) => {

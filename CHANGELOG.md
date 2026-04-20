@@ -4,6 +4,71 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.18] – 2026-04-20 (W17 Day 1 — CVE-009 EoL platform banner)
+
+### Added — End-of-Life platform detection (CVE-009)
+
+Per defect report §3 CVE-009. Tool was returning a normal CVE list and an
+"upgrade to fix" recommendation for platforms that cannot be patched
+because Cisco no longer ships software updates. Operators reading 12
+"upgrade" entries on a Cisco 2900 Series ISR running 15.7(3)M5 (the Run 1
+test case) burn engineering cycles trying to follow remediation steps that
+do not exist.
+
+**Added.**
+- `services/eol_registry.py` — hardcoded EoX (End-of-X) lookup table.
+  Hardware: ISR 1900/2900/3900 G2, Catalyst 6500/4500/3650/3850, ASA
+  5505/5510-5550, RV Series legacy. IOS classic trains: 15.7(3)M, 15.x M,
+  12.x. Ten entries + train data covering the most-asked branch / SMB
+  platforms.
+- `detect_eol(platform, version)` returns a warning dict with hardware /
+  IOS train EoX dates, replacement suggestion, and a fully-formatted
+  banner text. None for current platforms (zero false positives in tests).
+- `CVEAnalyzeResponse.eol_status` field carries the warning to the UI.
+- UI: red top-banner above the CVE card list with the warning text and a
+  link to the Cisco EoL bulletin. Also rendered when zero CVEs match —
+  an EoL device with no listed CVEs is more dangerous, not less.
+- Text report includes a `*** END-OF-LIFE PLATFORM ***` header above the
+  CVE list when applicable.
+
+**Anchor case (defect-report Run 1) verified.**
+Platform: `Cisco 2900 Series ISR`, Version: `15.7(3)M5` →
+- `eol_status.is_eol` = True
+- Banner: "Cisco 2900 Series ISR (Generation 2) reached
+  end-of-vulnerability-security-support on 2022-12-31. IOS Classic
+  15.7(3)M reached end-of-vulnerability-security-support on 2022-12-31.
+  No software updates are available for new CVEs on this platform.
+  Remediation path is hardware replacement, not patching. Suggested
+  replacement: ISR 4000 series (4321/4331/4351/4451) or Catalyst 8200
+  series."
+
+**Tests:** 11 new in `tests/test_eol_registry.py` covering the anchor
+case, substring matching variants (operators paste platform strings in
+many forms), Cat 6500/ASA 5510/RV Series EoL, current platforms (no
+false-positive banner), IOS classic 12.x legacy detection without
+hardware match, unknown platforms returning None, and banner text content
+checks (dates and replacements present).
+
+Full suite: **52 passing** (was 41 — 11 new EoL tests).
+
+CVE Analyzer UI badge: v0.6 → v0.7.
+
+### Scope notes
+
+This is the mini-version per the W17 defect-report sprint plan. Full
+CVE-009 (per defect report estimate: 2 days) would also include:
+- Live PSIRT EoX API integration with daily refresh
+- Per-PID (product ID) granularity instead of family-level matching
+- More platforms (NX-OS Nexus 7000, ACS, etc.)
+
+The hardcoded table is sufficient to fire the correct banner on the
+defect-report anchor case and the most common branch / SMB platforms
+operators ask about. Live API integration is a W19+ task.
+
+Version: app 0.6.17 → 0.6.18.
+
+---
+
 ## [v0.6.17] – 2026-04-20 (W17 Day 1 — CVE Analyzer UI consumes new severity fields)
 
 ### Added — CVE Analyzer UI renders primary severity + secondary tags

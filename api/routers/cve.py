@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from services.cve_engine import CVEEngine, CVEEngineConfig, severity_info, detect_bundle
+from services.eol_registry import detect_eol
 from services.cve_sources import NvdEnricherProvider, CiscoAdvisoryProvider, CISCO_CACHE_DIR
 from models.cve_model import CVEEntry
 
@@ -39,6 +40,11 @@ class CVEAnalyzeResponse(BaseModel):
     # (e.g. "2025-09" for Cisco's September 2025 semi-annual bundle).
     # Keyed by CVE ID; value None if CVE is not part of a bundle.
     bundles: dict = {}
+    # v0.6.18 CVE-009: end-of-life status for the queried platform.
+    # When non-null, the UI renders a top-banner above the CVE list:
+    # "no patches available; replace the hardware". The recommendation
+    # engine output below is informational on EoL platforms.
+    eol_status: Optional[dict] = None
     # Policy note for the report footer.
     severity_policy: str = (
         "Primary severity uses the NVD CVSS v3.x qualitative scale "
@@ -112,6 +118,9 @@ def analyze_cve(req: CVEAnalyzeRequest):
     severity_details = {cve.cve_id: severity_info(cve) for cve in matched}
     # v0.6.16 CVE-010: bundled-publication lookup per CVE.
     bundles = {cve.cve_id: detect_bundle(cve) for cve in matched}
+    # v0.6.18 CVE-009: EoL platform check (independent of CVE matches —
+    # populated even when matched is empty).
+    eol_status = detect_eol(req.platform, req.version)
 
     return CVEAnalyzeResponse(
         platform=req.platform,
@@ -121,6 +130,7 @@ def analyze_cve(req: CVEAnalyzeRequest):
         recommended_upgrade=recommendation,
         severity_details=severity_details,
         bundles=bundles,
+        eol_status=eol_status,
         timestamp=datetime.datetime.utcnow().isoformat() + "Z",
     )
 

@@ -108,6 +108,40 @@
   line-height: 1.4;
 }
 
+/* v0.6.18 — CVE-009 EoL banner. Red, prominent, top-of-list. Operator
+ * must read this before scanning per-CVE remediation. */
+.eol-banner {
+  margin: 12px 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(248, 113, 113, 0.7);
+  border-left: 4px solid rgba(248, 113, 113, 0.95);
+  border-radius: var(--radius);
+  background: rgba(127, 29, 29, 0.18);
+  color: rgba(254, 226, 226, 0.95);
+}
+
+.eol-banner-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  margin-bottom: 6px;
+  color: rgba(252, 165, 165, 1);
+}
+
+.eol-banner-body {
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.eol-banner-links {
+  margin-top: 8px;
+  font-size: 0.78rem;
+}
+
+.eol-banner-links a {
+  color: rgba(252, 165, 165, 0.95);
+  text-decoration: underline;
+}
+
 .summary-upgrade {
   margin-top: 8px;
   font-size: 0.8rem;

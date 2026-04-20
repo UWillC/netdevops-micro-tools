@@ -1585,7 +1585,7 @@ Requires: archive config">show archive config differences</code>
 
       <!-- CVE TAB -->
       <section id="tab-cve" class="tab-content">
-        <h2>CVE Analyzer <span class="version-badge">v0.6 — NVD CVSS canonical + Cisco SIR secondary</span></h2>
+        <h2>CVE Analyzer <span class="version-badge">v0.7 — EoL platform detection</span></h2>
         <form id="cve-form" class="card">
           <div class="form-row">
             <label>Platform</label>
@@ -1618,6 +1618,11 @@ Requires: archive config">show archive config differences</code>
               </div>
             </div>
             <textarea id="cve-output" class="output-text" readonly></textarea>
+
+            <!-- v0.6.18 CVE-009: EoL banner (rendered when platform is past
+                 end-of-vulnerability-security-support). Above CVE list so it
+                 is the first thing the operator reads. -->
+            <div id="cve-eol-banner"></div>
 
             <!-- Collapsible CVE cards -->
             <div id="cve-cards"></div>
