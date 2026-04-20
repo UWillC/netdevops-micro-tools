@@ -47,9 +47,14 @@ def _normalize_config(cfg: str) -> str:
     if not indented_prefixes:
         return cfg
     min_indent = min(indented_prefixes)
-    # Only strip if it's plausibly a paste artifact (1-8 leading chars).
-    # Beyond 8 it's probably legitimate nested indentation we shouldn't touch.
-    if min_indent == 0 or min_indent > 8:
+    # Key heuristic: Cisco running-config sub-commands are exactly 1 space
+    # indented relative to their parent block header. If MIN indent among
+    # indented lines is >= 2, something outside Cisco's convention added
+    # leading whitespace (chat paste, forum quote, PDF copy). Strip that.
+    # If min_indent == 1, that IS the normal Cisco sub-command indent —
+    # stripping it would break VTY/interface block extraction.
+    # Upper bound (>8) avoids touching heavily-nested output from other tools.
+    if min_indent < 2 or min_indent > 8:
         return cfg
     stripped_lines = []
     for ln in lines:

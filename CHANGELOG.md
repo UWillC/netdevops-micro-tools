@@ -4,6 +4,67 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.15] – 2026-04-20 (W17 Day 1 — XCUT-003 harness + normalize fix)
+
+### Added — Golden-output regression test harness (XCUT-003)
+
+Per defect report §3 XCUT-003. No fixture or test harness existed — every
+bug in the 2026-04-19 report could have been caught by a single golden-output
+run in CI.
+
+**Harness:**
+- `tests/test_cis_goldens.py` — pytest parametrize over every `.cfg` fixture
+  × Level 1 / Level 2. Diffs engine output vs checked-in `.expected.json`.
+  Drift → test fail with compact rule-level diff.
+- `UPDATE_GOLDENS=1` env flag regenerates expectations (deliberate,
+  PR-reviewed).
+- `tests/goldens/README.md` — add-a-case and update-expectation workflow.
+
+**Initial fixture set (4 configs × 2 levels = 8 goldens):**
+- `branch-router-01.cfg` — defect-report §2 verbatim. Anchors CIS-001…010.
+  L1: 17.3% Grade F, 7 CRITICAL FAILs.
+- `indented-paste.cfg` — same content + 2-space chat-paste indent. Anchors
+  the v0.6.13/v0.6.14 normalize-config fix. Output must match
+  branch-router-01 exactly (tested explicitly).
+- `hardened-baseline.cfg` — fully-hardened IOS-XE config. L1: 100% Grade A,
+  all 23 rules PASS. Guards against false-FAIL drift.
+- `l3-only-router.cfg` — pure L3 router with no switchport tokens. Anchors
+  CIS-009 — all 6.1.x rules must return N/A, not WARN.
+
+### Fixed — Normalize-config false-dedent on zero-indent configs (CRITICAL)
+
+While generating goldens, discovered that v0.6.14 smart-dedent would STRIP
+single-space Cisco sub-command indent from already-normal configs. A config
+like `branch-router-01.cfg` (zero-indent top-level, 1-space sub-commands)
+had its VTY block bodies flattened to zero indent, breaking the
+`_extract_blocks()` termination ("next non-whitespace line").
+
+**Symptom.** branch-router-01.cfg scored 14.0% with 6 CRITICAL FAILs while
+its indented-paste twin scored 17.3% with 7 CRITICAL FAILs. Same config,
+different answers.
+
+**Root cause.** Condition was `if min_indent == 0: return`. For a config
+where the minimum indent of *any indented line* was 1 (normal Cisco sub-
+command indent), the normalizer stripped that 1 char — breaking VTY and
+console block extraction.
+
+**Fix.** Condition tightened to `if min_indent < 2 or min_indent > 8`.
+Cisco sub-commands are exactly 1-space indented relative to parent; anything
+≥ 2 is a paste artefact. Only paste artefacts get stripped.
+
+**Verified.** branch-router-01 and indented-paste now produce byte-identical
+AuditResponse output. Both goldens agree on 17.3% / 7 CRITICAL / 3 PASS /
+15 FAIL / 4 WARN / 1 N/A.
+
+### Added — GitHub Actions CI
+
+`.github/workflows/tests.yml` runs `pytest tests/` on every PR and push to
+main. Golden drift fails the check and blocks merge.
+
+Version bump: app 0.6.14 → 0.6.15.
+
+---
+
 ## [v0.6.14] – 2026-04-20 (W17 Day 1 hotfix #2)
 
 ### Fixed — v0.6.13 dedent was insufficient on mixed-indent paste

@@ -1,0 +1,484 @@
+{
+  "categories": [
+    {
+      "failed": 0,
+      "name": "Management Plane",
+      "passed": 6,
+      "rules": [
+        {
+          "category": "Management Plane",
+          "cis_ref": "CIS Cisco IOS Benchmark 1.1.1",
+          "description": "CIS Benchmark 1.1.1",
+          "evidence": "enable secret Type 9 (scrypt)",
+          "remediation": "",
+          "result": "PASS",
+          "rule_id": "1.1.1",
+          "severity": "critical",
+          "title": "Enable secret"
+        },
+        {
+          "category": "Management Plane",
+          "cis_ref": "CIS Cisco IOS Benchmark 1.1.2",
+          "description": "CIS Benchmark 1.1.2",
+          "evidence": "No enable password configured",
+          "remediation": "",
+          "result": "PASS",
+          "rule_id": "1.1.2",
+          "severity": "critical",
+          "title": "No enable password"
+        },
+        {
+          "category": "Management Plane",
+          "cis_ref": "CIS Cisco IOS Benchmark 1.1.3",
+          "description": "CIS Benchmark 1.1.3",
+          "evidence": "service password-encryption found",
+          "remediation": "",
+          "result": "PASS",
+          "rule_id": "1.1.3",
+          "severity": "high",
+          "title": "Password encryption"
+        },
+        {
+          "category": "Management Plane",
+          "cis_ref": "CIS Cisco IOS Benchmark 1.1.4",
+          "description": "CIS Benchmark 1.1.4",
+          "evidence": "aaa new-model enabled",
+          "remediation": "",
+          "result": "PASS",
+          "rule_id": "1.1.4",
+          "severity": "critical",
+          "title": "AAA new-model"
+        },
+        {
+          "category": "Management Plane",
+          "cis_ref": "CIS Cisco IOS Benchmark 1.1.5",
+          "description": "CIS Benchmark 1.1.5",
+          "evidence": "AAA authentication via TACACS+/RADIUS with fallback",
+          "remediation": "",
+          "result": "PASS",
+          "rule_id": "1.1.5",
+          "severity": "high",
+          "title": "AAA authentication"
+        },
+        {
+          "category": "Management Plane",
+          "cis_ref": "CIS Cisco IOS Benchmark 1.1.6",
+          "description": "CIS Benchmark 1.1.6",
+          "evidence": "AAA accounting configured",
+          "remediation": "",
+          "result": "PASS",
+          "rule_id": "1.1.6",
+          "severity": "medium",
+          "title": "AAA accounting"
+        }
+      ],
+      "warnings": 0
+    },
+    {
+      "failed": 0,
+      "name": "Access",
+      "passed": 9,
+      "rules": [
+        {
+          "category": "Access",
+          "cis_ref": "CIS Cisco IOS Benchmark 1.2.1",
+          "description": "CIS Benchmark 1.2.1",
+          "evidence": "SSH version 2 enforced",
+          "remediation": "",
+          "result": "PASS",
+          "rule_id": "1.2.1",
+          "severity": "critical",
+          "title": "SSH version 2"
+        },
+        {
+          "category": "Access",
+          "cis_ref": "CIS Cisco IOS Benchmark 1.2.2",
+          "description": "CIS Benchmark 1.2.2",
+          "evidence": "SSH timeout: 60 seconds",
+          "remediation": "",
+          "result": "PASS",
+          "rule_id": "1.2.2",
+          "severity": "medium",
+          "title": "SSH timeout"
+        },
+        {
+          "category": "Access",
+          "cis_ref": "CIS Cisco IOS Benchmark 1.2.3",
+          "description": "CIS Benchmark 1.2.3",
+          "evidence": "SSH retries: 3",
+          "remediation": "",
+          "result": "PASS",
+          "rule_id": "1.2.3",
+          "severity": "low",
+          "title": "SSH retries"
+        },
+        {
+          "category": "Access",
+          "cis_ref": "CIS Cisco IOS Benchmark 1.2.4",
+          "description": "CIS Benchmark 1.2.4",
+          "evidence": "VTY lines restricted to SSH only",
+          "remediation": "",
+          "result": "PASS",
+          "rule_id": "1.2.4",
+          "severity": "critical",
+          "title": "No telnet on VTY"
+        },
+        {
+          "category": "Access",
+          "cis_ref": "CIS Cisco IOS Benchmark 1.2.5",
+          "description": "CIS Benchmark 1.2.5",
+          "evidence": "exec-timeout configured on all management lines",
+          "remediation": "",
+          "result": "PASS",
+          "rule_id": "1.2.5",
+          "severity": "high",
+          "title": "Exec-timeout"
+        },
+        {
+          "category": "Access",
+          "cis_ref": "CIS Cisco IOS Benchmark 1.2.6",
+          "description": "CIS Benchmark 1.2.6",
+          "evidence": "All VTY blocks restricted by access-class ACL",
+          "remediation": "",
+          "result": "PASS",
+          "rule_id": "1.2.6",
+          "severity": "high",
+          "title": "VTY access-class"
+        },
+        {
+          "category": "Access",
+          "cis_ref": "CIS Cisco IOS Benchmark 1.2.7",
+          "description": "CIS Benchmark 1.2.7",
+          "evidence": "VTY lines require authentication",
+          "remediation": "",
+          "result": "PASS",
+          "rule_id": "1.2.7",
+          "severity": "critical",
+          "title": "VTY login required"
+        },
+        {
+          "category": "Access",
+          "cis_ref": "CIS Cisco IOS Benchmark 1.2.8",
+          "description": "CIS Benchmark 1.2.8",
+          "evidence": "Console line requires authentication",
+          "remediation": "",
+          "result": "PASS",
+          "rule_id": "1.2.8",
+          "severity": "high",
+          "title": "Console authentication"
+        },
+        {
+          "category": "Access",
+          "cis_ref": "CIS Cisco IOS Benchmark 1.2.9",
+          "description": "CIS Benchmark 1.2.9",
+          "evidence": "Domain name configured (required for SSH keys)",
+          "remediation": "",
+          "result": "PASS",
+          "rule_id": "1.2.9",
+          "severity": "low",
+          "title": "Domain name"
+        }
+      ],
+      "warnings": 0
+    },
+    {
+      "failed": 0,
+      "name": "Services",
+      "passed": 7,
+      "rules": [
+        {
+          "category": "Services",
+          "cis_ref": "CIS Cisco IOS Benchmark 2.1.1",
+          "description": "CIS Benchmark 2.1.1",
+          "evidence": "HTTP server disabled",
+          "remediation": "",
+          "result": "PASS",
+          "rule_id": "2.1.1",
+          "severity": "critical",
+          "title": "No HTTP server"
+        },
+        {
+          "category": "Services",
+          "cis_ref": "CIS Cisco IOS Benchmark 2.1.2",
+          "description": "CIS Benchmark 2.1.2",
+          "evidence": "HTTPS server not enabled",
+          "remediation": "Consider: ip http secure-server (if web management needed)",
+          "result": "WARNING",
+          "rule_id": "2.1.2",
+          "severity": "medium",
+          "title": "HTTPS server"
+        },
+        {
+          "category": "Services",
+          "cis_ref": "CIS Cisco IOS Benchmark 2.1.3",
+          "description": "CIS Benchmark 2.1.3",
+          "evidence": "IP source routing disabled",
+          "remediation": "",
+          "result": "PASS",
+          "rule_id": "2.1.3",
+          "severity": "high",
+          "title": "No source routing"
+        },
+        {
+          "category": "Services",
+          "cis_ref": "CIS Cisco IOS Benchmark 2.1.4",
+          "description": "CIS Benchmark 2.1.4",
+          "evidence": "PAD service disabled",
+          "remediation": "",
+          "result": "PASS",
+          "rule_id": "2.1.4",
+          "severity": "medium",
+          "title": "No PAD service"
+        },
+        {
+          "category": "Services",
+          "cis_ref": "CIS Cisco IOS Benchmark 2.1.5",
+          "description": "CIS Benchmark 2.1.5",
+          "evidence": "TCP keepalives enabled (in + out)",
+          "remediation": "",
+          "result": "PASS",
+          "rule_id": "2.1.5",
+          "severity": "medium",
+          "title": "TCP keepalives"
+        },
+        {
+          "category": "Services",
+          "cis_ref": "CIS Cisco IOS Benchmark 2.1.6",
+          "description": "CIS Benchmark 2.1.6",
+          "evidence": "CDP disabled globally",
+          "remediation": "",
+          "result": "PASS",
+          "rule_id": "2.1.6",
+          "severity": "medium",
+          "title": "No CDP globally"
+        },
+        {
+          "category": "Services",
+          "cis_ref": "CIS Cisco IOS Benchmark 2.1.7",
+          "description": "CIS Benchmark 2.1.7",
+          "evidence": "BOOTP server disabled",
+          "remediation": "",
+          "result": "PASS",
+          "rule_id": "2.1.7",
+          "severity": "low",
+          "title": "No BOOTP server"
+        },
+        {
+          "category": "Services",
+          "cis_ref": "CIS Cisco IOS Benchmark 2.1.8",
+          "description": "CIS Benchmark 2.1.8",
+          "evidence": "Gratuitous ARPs disabled",
+          "remediation": "",
+          "result": "PASS",
+          "rule_id": "2.1.8",
+          "severity": "low",
+          "title": "No gratuitous ARPs"
+        }
+      ],
+      "warnings": 1
+    },
+    {
+      "failed": 0,
+      "name": "Logging & NTP",
+      "passed": 5,
+      "rules": [
+        {
+          "category": "Logging & NTP",
+          "cis_ref": "CIS Cisco IOS Benchmark 3.1.1",
+          "description": "CIS Benchmark 3.1.1",
+          "evidence": "logging buffered configured (64000 bytes, informational)",
+          "remediation": "",
+          "result": "PASS",
+          "rule_id": "3.1.1",
+          "severity": "high",
+          "title": "Logging to buffer"
+        },
+        {
+          "category": "Logging & NTP",
+          "cis_ref": "CIS Cisco IOS Benchmark 3.1.2",
+          "description": "CIS Benchmark 3.1.2",
+          "evidence": "Remote syslog configured: 10.10.1.60",
+          "remediation": "",
+          "result": "PASS",
+          "rule_id": "3.1.2",
+          "severity": "high",
+          "title": "Remote syslog"
+        },
+        {
+          "category": "Logging & NTP",
+          "cis_ref": "CIS Cisco IOS Benchmark 3.1.3",
+          "description": "CIS Benchmark 3.1.3",
+          "evidence": "Log timestamps with datetime msec",
+          "remediation": "",
+          "result": "PASS",
+          "rule_id": "3.1.3",
+          "severity": "medium",
+          "title": "Log timestamps"
+        },
+        {
+          "category": "Logging & NTP",
+          "cis_ref": "CIS Cisco IOS Benchmark 3.1.4",
+          "description": "CIS Benchmark 3.1.4",
+          "evidence": "NTP server(s) configured: 10.10.1.70, 2001:db8::1",
+          "remediation": "",
+          "result": "PASS",
+          "rule_id": "3.1.4",
+          "severity": "high",
+          "title": "NTP configured"
+        },
+        {
+          "category": "Logging & NTP",
+          "cis_ref": "CIS Cisco IOS Benchmark 3.1.5",
+          "description": "CIS Benchmark 3.1.5",
+          "evidence": "NTP authentication enabled",
+          "remediation": "",
+          "result": "PASS",
+          "rule_id": "3.1.5",
+          "severity": "medium",
+          "title": "NTP authentication"
+        }
+      ],
+      "warnings": 0
+    },
+    {
+      "failed": 0,
+      "name": "Banner & Info",
+      "passed": 1,
+      "rules": [
+        {
+          "category": "Banner & Info",
+          "cis_ref": "CIS Cisco IOS Benchmark 4.1.1",
+          "description": "CIS Benchmark 4.1.1",
+          "evidence": "MOTD banner present with 3/3 legal elements",
+          "remediation": "",
+          "result": "PASS",
+          "rule_id": "4.1.1",
+          "severity": "medium",
+          "title": "Login banner"
+        }
+      ],
+      "warnings": 0
+    },
+    {
+      "failed": 0,
+      "name": "SNMP",
+      "passed": 2,
+      "rules": [
+        {
+          "category": "SNMP",
+          "cis_ref": "CIS Cisco IOS Benchmark 5.1.1",
+          "description": "CIS Benchmark 5.1.1",
+          "evidence": "No SNMPv2c community strings",
+          "remediation": "",
+          "result": "PASS",
+          "rule_id": "5.1.1",
+          "severity": "critical",
+          "title": "No SNMPv2c"
+        },
+        {
+          "category": "SNMP",
+          "cis_ref": "CIS Cisco IOS Benchmark 5.1.2",
+          "description": "CIS Benchmark 5.1.2",
+          "evidence": "SNMPv3 with priv (auth+encryption)",
+          "remediation": "",
+          "result": "PASS",
+          "rule_id": "5.1.2",
+          "severity": "high",
+          "title": "SNMPv3 with priv"
+        }
+      ],
+      "warnings": 0
+    },
+    {
+      "failed": 0,
+      "name": "Layer 2 Security",
+      "passed": 0,
+      "rules": [
+        {
+          "category": "Layer 2 Security",
+          "cis_ref": "CIS Cisco IOS Benchmark 6.1.1",
+          "description": "CIS Benchmark 6.1.1",
+          "evidence": "No L2 switchports detected on this device; Layer 2 hardening rules not applicable",
+          "remediation": "",
+          "result": "N/A",
+          "rule_id": "6.1.1",
+          "severity": "high",
+          "title": "DHCP snooping"
+        },
+        {
+          "category": "Layer 2 Security",
+          "cis_ref": "CIS Cisco IOS Benchmark 6.1.2",
+          "description": "CIS Benchmark 6.1.2",
+          "evidence": "No L2 switchports detected on this device; Layer 2 hardening rules not applicable",
+          "remediation": "",
+          "result": "N/A",
+          "rule_id": "6.1.2",
+          "severity": "high",
+          "title": "ARP inspection"
+        },
+        {
+          "category": "Layer 2 Security",
+          "cis_ref": "CIS Cisco IOS Benchmark 6.1.3",
+          "description": "CIS Benchmark 6.1.3",
+          "evidence": "No L2 switchports detected on this device; Layer 2 hardening rules not applicable",
+          "remediation": "",
+          "result": "N/A",
+          "rule_id": "6.1.3",
+          "severity": "medium",
+          "title": "Port security"
+        },
+        {
+          "category": "Layer 2 Security",
+          "cis_ref": "CIS Cisco IOS Benchmark 6.1.4",
+          "description": "CIS Benchmark 6.1.4",
+          "evidence": "No L2 switchports detected on this device; Layer 2 hardening rules not applicable",
+          "remediation": "",
+          "result": "N/A",
+          "rule_id": "6.1.4",
+          "severity": "medium",
+          "title": "IP Source Guard"
+        },
+        {
+          "category": "Layer 2 Security",
+          "cis_ref": "CIS Cisco IOS Benchmark 6.1.5",
+          "description": "CIS Benchmark 6.1.5",
+          "evidence": "No L2 switchports detected on this device; Layer 2 hardening rules not applicable",
+          "remediation": "",
+          "result": "N/A",
+          "rule_id": "6.1.5",
+          "severity": "high",
+          "title": "BPDU Guard"
+        },
+        {
+          "category": "Layer 2 Security",
+          "cis_ref": "CIS Cisco IOS Benchmark 6.1.6",
+          "description": "CIS Benchmark 6.1.6",
+          "evidence": "No L2 switchports detected on this device; Layer 2 hardening rules not applicable",
+          "remediation": "",
+          "result": "N/A",
+          "rule_id": "6.1.6",
+          "severity": "medium",
+          "title": "STP mode"
+        }
+      ],
+      "warnings": 0
+    }
+  ],
+  "critical_fails": 0,
+  "failed": 0,
+  "grade": "A",
+  "hostname": "GOOD-RTR",
+  "level": "2",
+  "not_applicable": 6,
+  "parser_coverage": 97.3,
+  "passed": 30,
+  "score": 98.4,
+  "score_capped": false,
+  "summary": [
+    "CIS Compliance Score: 98.4% (Grade A)",
+    "30 passed, 0 failed, 1 warnings, 6 N/A",
+    "Excellent hardening. Minor improvements possible."
+  ],
+  "total_rules": 37,
+  "warnings": 1
+}
