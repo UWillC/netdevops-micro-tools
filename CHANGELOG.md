@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.6] – 2026-04-19 (late evening)
+
+### Changed
+
+- **Route rename to avoid ad-blocker false positive**:
+  `/analyze/critical-feed` → `/analyze/advisories`.
+  Arc / Brave / uBlock Origin heuristics flagged the old endpoint because
+  "critical-feed" matches ad/tracking feed naming conventions (e.g.
+  `criteo.com/critical-feed`, Brave triggered on the suffix). The new
+  endpoint uses neutral "advisories" language which is standard security
+  terminology and doesn't match blocker patterns. Old route kept as
+  deprecated alias for backward compat.
+- Frontend (`web/app-feeds.js`) updated to call `/analyze/advisories`.
+
+Version bump: app 0.6.5 → 0.6.6.
+
+---
+
 ## [v0.6.5] – 2026-04-19 (late evening)
 
 ### Changed — Quickstart banner UX

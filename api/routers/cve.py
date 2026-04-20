@@ -311,13 +311,8 @@ def _merge_advisories(*sources: list) -> list:
     return merged
 
 
-@router.get("/critical-feed", response_model=CriticalFeedResponse)
-def get_critical_feed(platform: str = "all"):
-    """
-    Returns latest CVEs from Cisco PSIRT (all platforms).
-    Optional filter: ?platform=iosxe|ios|nxos|asa|ftd|all
-    Auto-fetches from API on first call.
-    """
+def _get_advisories_feed(platform: str = "all"):
+    """Shared implementation for advisories endpoints."""
     advisories, cache_age_hours = _load_latest_cache()
 
     # No cache? Fetch from API
@@ -354,3 +349,23 @@ def get_critical_feed(platform: str = "all"):
         cache_age_hours=cache_age_hours,
         timestamp=datetime.datetime.utcnow().isoformat() + "Z",
     )
+
+
+# v0.6.6 (2026-04-19) — route rename to avoid ad-blocker false positive.
+# Arc / Brave / uBlock Origin heuristics flagged "/analyze/critical-feed"
+# because the "critical-feed" suffix pattern matches ad/tracking feed naming
+# conventions. The new route uses neutral "advisories" language. The old
+# route is kept as an alias for any cached browser clients.
+@router.get("/advisories", response_model=CriticalFeedResponse)
+def get_advisories(platform: str = "all"):
+    """
+    Returns latest Cisco PSIRT security advisories.
+    Optional filter: ?platform=iosxe|ios|nxos|asa|ftd|all
+    """
+    return _get_advisories_feed(platform)
+
+
+@router.get("/critical-feed", response_model=CriticalFeedResponse, deprecated=True)
+def get_critical_feed_alias(platform: str = "all"):
+    """DEPRECATED: use /advisories instead. Kept for backward compat."""
+    return _get_advisories_feed(platform)

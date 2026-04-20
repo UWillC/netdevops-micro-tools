@@ -16,7 +16,7 @@ async function loadThreatFeed() {
   const platform = threatFeedPlatform?.value || "all";
 
   try {
-    const resp = await fetch(`/analyze/critical-feed?platform=${platform}`);
+    const resp = await fetch(`/analyze/advisories?platform=${platform}`);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
 
