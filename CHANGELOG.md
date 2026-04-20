@@ -4,6 +4,39 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.14] – 2026-04-20 (W17 Day 1 hotfix #2)
+
+### Fixed — v0.6.13 dedent was insufficient on mixed-indent paste
+
+**Bug in the v0.6.13 fix.** `textwrap.dedent()` strips the MAX COMMON leading
+whitespace across *all* non-empty lines. Real paste samples have the first
+`hostname` line at **zero indent** while subsequent lines carry chat indent
+(2 spaces). Common prefix = 0 → dedent is a no-op → indent bug persists.
+
+**Symptom (user report).** Score stayed at 23.3% Grade F with 4 CRITICAL
+FAILs — identical to v0.6.12. Rules 1.2.4 / 2.1.1 / 1.2.1 still silently
+misclassifying.
+
+**Fix.** `_normalize_config()` rewritten:
+1. Compute MIN indent across *indented* non-empty lines only (ignore
+   zero-indent lines when calculating common prefix).
+2. Strip that MIN indent from every line that has at least that many leading
+   spaces/tabs. Zero-indent lines untouched.
+3. Safety bound: only strip 1–8 leading chars (beyond 8 = legitimate nested
+   indentation in other tools' output, don't touch).
+
+**Verified result** on identical user paste:
+- Score 23.3% (4 CRITICAL) → **17.3% (7 CRITICAL), Grade F**
+- 2.1.1 HTTP server: PASS "not configured" → **FAIL "HTTP server enabled"**
+- 1.2.1 SSHv1: WARN → **FAIL CRITICAL**
+- 1.2.4 telnet VTY: N/A → **FAIL CRITICAL**
+- 1.2.5/6 VTY: N/A → FAIL
+- 4.1.1 banner: FAIL "no banner" → WARN "weak content"
+
+Version: app 0.6.13 → 0.6.14.
+
+---
+
 ## [v0.6.13] – 2026-04-20 (W17 Day 1 late night hotfix)
 
 ### Fixed — CIS Audit: pasted-config leading-whitespace silently broke line-anchored parsers (CRITICAL)

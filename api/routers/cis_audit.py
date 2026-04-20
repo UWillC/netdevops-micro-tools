@@ -19,15 +19,48 @@ router = APIRouter()
 
 
 def _normalize_config(cfg: str) -> str:
-    """Strip uniform leading whitespace (common when user pastes config with
-    forum/chat/terminal-added indent). Preserves relative indentation between
-    top-level commands and sub-commands (VTY/interface blocks)."""
-    # Normalize line endings first
+    """Strip leading whitespace added by chat/forum/PDF paste while preserving
+    relative indentation inside VTY/interface blocks.
+
+    textwrap.dedent() is NOT sufficient on its own: real paste samples mix
+    zero-indent lines (e.g., first `hostname` line without whitespace) with
+    indented lines (remainder with 2-space chat indent). dedent would pick
+    common prefix = 0 and skip the work.
+
+    Strategy:
+    1. Normalize line endings.
+    2. Compute MIN indent across *indented* non-empty lines (ignore zero-indent
+       lines when computing common prefix).
+    3. Strip that MIN indent from every line that has at least that much
+       leading whitespace; leave zero-indent lines untouched.
+    """
     cfg = cfg.replace("\r\n", "\n").replace("\r", "\n")
-    # textwrap.dedent removes the MAX common leading whitespace from all lines.
-    # If top-level commands have 0 leading ws, dedent is a no-op. If all lines
-    # have e.g. 2 leading spaces (chat paste), dedent strips those 2.
-    return textwrap.dedent(cfg)
+    lines = cfg.split("\n")
+    indented_prefixes = []
+    for ln in lines:
+        if not ln.strip():
+            continue
+        stripped = ln.lstrip(" \t")
+        indent_len = len(ln) - len(stripped)
+        if indent_len > 0:
+            indented_prefixes.append(indent_len)
+    if not indented_prefixes:
+        return cfg
+    min_indent = min(indented_prefixes)
+    # Only strip if it's plausibly a paste artifact (1-8 leading chars).
+    # Beyond 8 it's probably legitimate nested indentation we shouldn't touch.
+    if min_indent == 0 or min_indent > 8:
+        return cfg
+    stripped_lines = []
+    for ln in lines:
+        # Strip up to min_indent leading chars, but only if the line has that
+        # many leading spaces/tabs (never break a zero-indent line).
+        prefix = ln[:min_indent]
+        if prefix == " " * min_indent or prefix == "\t" * min_indent:
+            stripped_lines.append(ln[min_indent:])
+        else:
+            stripped_lines.append(ln)
+    return "\n".join(stripped_lines)
 
 
 # ----------------------------
