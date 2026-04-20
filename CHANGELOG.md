@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.5] – 2026-04-19 (late evening)
+
+### Changed — Quickstart banner UX
+
+User feedback: "New here?" banner helpful for first-time visitors,
+noise for returning users who already know the tools.
+
+- **Manual dismiss button** (×) in top-right of banner. Click persists
+  via `localStorage['netdevops_quickstart_dismissed']`.
+- **Auto-hide after 3 visits**. Counter
+  `localStorage['netdevops_visit_count']` increments on each page
+  load. Visit 4+ → banner hidden.
+- Counter resets if user clears localStorage (re-onboarding is cheap).
+- Hidden state uses `display: none` via `.hidden` class; zero layout
+  impact when removed.
+
+Version bump: app 0.6.4 → 0.6.5.
+
+---
+
 ## [v0.6.4] – 2026-04-19 (late evening)
 
 ### Added — CVE Analyzer severity transparency (engine 0.3.7, backend only)

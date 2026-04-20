@@ -179,6 +179,49 @@ document.querySelectorAll(".home-tool-card, .quickstart-tool").forEach(card => {
 });
 
 // -----------------------------
+// Quickstart banner — auto-hide for returning users
+// -----------------------------
+// UX rule (v0.6.5, 2026-04-19): first-time visitors see the "New here?"
+// banner; returning users (3+ visits OR who manually dismissed) don't.
+// Counter resets if localStorage is cleared — that's fine (re-onboarding
+// is cheap).
+(function initQuickstartBanner() {
+  const banner = document.getElementById("quickstart-banner");
+  if (!banner) return;
+
+  const DISMISS_KEY = "netdevops_quickstart_dismissed";
+  const COUNT_KEY = "netdevops_visit_count";
+  const HIDE_AFTER_VISITS = 3;
+
+  // Manual dismiss — persistent
+  const dismissed = localStorage.getItem(DISMISS_KEY) === "true";
+  if (dismissed) {
+    banner.classList.add("hidden");
+    return;
+  }
+
+  // Visit counter — auto-hide after HIDE_AFTER_VISITS
+  let visitCount = parseInt(localStorage.getItem(COUNT_KEY) || "0", 10);
+  if (isNaN(visitCount)) visitCount = 0;
+  visitCount += 1;
+  localStorage.setItem(COUNT_KEY, String(visitCount));
+
+  if (visitCount > HIDE_AFTER_VISITS) {
+    banner.classList.add("hidden");
+    return;
+  }
+
+  // Wire up dismiss button
+  const dismissBtn = document.getElementById("quickstart-dismiss");
+  if (dismissBtn) {
+    dismissBtn.addEventListener("click", () => {
+      localStorage.setItem(DISMISS_KEY, "true");
+      banner.classList.add("hidden");
+    });
+  }
+})();
+
+// -----------------------------
 // Nav Group Toggle (collapsible sections)
 // -----------------------------
 const navGroupHeaders = document.querySelectorAll(".nav-group-header");

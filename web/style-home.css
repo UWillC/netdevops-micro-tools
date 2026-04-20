@@ -4,11 +4,41 @@
 
 /* Quickstart Banner */
 .quickstart-banner {
+  position: relative;
   background: linear-gradient(135deg, rgba(88, 166, 255, 0.1) 0%, rgba(188, 140, 255, 0.05) 100%);
   border: 1px solid rgba(88, 166, 255, 0.3);
   border-radius: 12px;
   padding: 20px 24px;
   margin-bottom: 28px;
+  transition: opacity 0.3s ease, max-height 0.3s ease;
+}
+
+.quickstart-banner.hidden {
+  display: none;
+}
+
+.quickstart-dismiss {
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  font-size: 1.2rem;
+  line-height: 1;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.quickstart-dismiss:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.15);
 }
 
 .quickstart-header {
