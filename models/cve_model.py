@@ -45,3 +45,15 @@ class CVEEntry(BaseModel):
     # patching one bundle item usually want to patch the rest in the same
     # bundle. None for non-bundled advisories.
     bundle: Optional[str] = None  # e.g. "2025-09", "2025-03"
+
+    # v0.6.24 (CVE-003 Phase 3) — canonical platform family taxonomy.
+    # Populated by _parse_advisory via normalize_cisco_product_names() on new
+    # PSIRT imports. Values are ProductFamily enum string values ("ios-xe",
+    # "ios", "nx-os", ...). Empty list on legacy local-json records (matcher
+    # falls back to `platforms` field for those).
+    product_families: List[str] = Field(default_factory=list)
+
+    # v0.6.24 (CVE-003 Phase 3) — raw PSIRT productNames (first 50 entries,
+    # truncated for storage). Display / debugging only — matching MUST use
+    # product_families + affected.min/max, never this field directly.
+    affected_versions_raw: List[str] = Field(default_factory=list)
