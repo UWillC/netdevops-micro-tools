@@ -15,8 +15,9 @@ let the matcher enforce per-family strict matching.
 Reference: projects/netdevops/cve-analyzer-cto-memo-2026-04-19.md
 """
 
+import re
 from enum import Enum
-from typing import List, Optional, Tuple
+from typing import List, Optional, Set, Tuple
 
 
 # -----------------------------
@@ -271,3 +272,81 @@ def is_cve_in_scope_for_query(query_family: ProductFamily, cve_families: List[Pr
         return True  # query family unknown — fall back to legacy
 
     return any(fam in in_scope for fam in cve_families)
+
+
+# -----------------------------
+# PSIRT productNames → canonical families (CVE-003 Phase 2)
+# -----------------------------
+# PSIRT API returns `productNames` as a flat list of concrete software-version
+# strings (e.g. "Cisco IOS XE Software 17.9.4"). A single advisory can contain
+# hundreds or thousands of entries. We collapse them to the canonical family set
+# so storage stays bounded and the matcher operates on a 6-8 item vocabulary.
+#
+# Order matters: IOS XR and IOS XE patterns must match BEFORE bare "Cisco IOS"
+# because "Cisco IOS" is a prefix of both. First match wins per name.
+_PRODUCT_NAME_FAMILY_PATTERNS: List[Tuple[ProductFamily, re.Pattern]] = [
+    # IOS XR — most specific, matches "Cisco IOS XR Software ..."
+    (ProductFamily.IOS_XR, re.compile(r"Cisco\s+IOS\s+XR\b", re.I)),
+    # IOS XE variants (SD-WAN and WLC are MORE specific than bare IOS XE)
+    (ProductFamily.IOS_XE_SDWAN, re.compile(r"Cisco\s+IOS\s+XE\s+Catalyst\s+SD-WAN|Catalyst\s+SD-WAN", re.I)),
+    (ProductFamily.IOS_XE_WLC, re.compile(r"Catalyst\s+9800|IOS\s+XE\s+Wireless\s+Controller", re.I)),
+    (ProductFamily.IOS_XE, re.compile(r"Cisco\s+IOS\s+XE\b", re.I)),
+    # IOS classic — negative lookahead guards against "IOS XE" / "IOS XR"
+    (ProductFamily.IOS, re.compile(r"Cisco\s+IOS\b(?!\s+(XE|XR))", re.I)),
+    # Network OS
+    (ProductFamily.NX_OS, re.compile(r"Cisco\s+NX[-\s]?OS\b|Cisco\s+Nexus", re.I)),
+    # Firewall / security (FTD before ASA because "Cisco Secure Firewall ASA"
+    # and "Cisco Secure Firewall Threat Defense" share prefix)
+    (ProductFamily.FTD, re.compile(r"Firepower\s+Threat\s+Defense|Cisco\s+Secure\s+Firewall\s+Threat\s+Defense|\bFTD\b", re.I)),
+    (ProductFamily.FXOS, re.compile(r"Firepower\s+eXtensible|Firepower\s+Extensible|\bFXOS\b", re.I)),
+    (ProductFamily.ASA, re.compile(r"Adaptive\s+Security\s+Appliance|Cisco\s+Secure\s+Firewall\s+Adaptive|Cisco\s+Secure\s+Firewall\s+ASA|Cisco\s+ASA\b", re.I)),
+    # Small business / SOHO
+    (ProductFamily.RV_SERIES, re.compile(r"\bRV\d+\b|Small\s+Business\s+(RV|Router)|Cisco\s+RV\s+Series", re.I)),
+    # WLC (pre-IOS-XE / aIOS on controllers) — maps to IOS_XE_WLC enum bucket
+    # per existing taxonomy, which already covers Catalyst 9800 line.
+    (ProductFamily.IOS_XE_WLC, re.compile(r"Wireless\s+LAN\s+Controller|\bWLC\b", re.I)),
+    # AP firmware
+    (ProductFamily.AP_SOFTWARE, re.compile(r"Access\s+Point\s+Software|Aironet|Catalyst\s+9(100|115|120)", re.I)),
+    # Meraki
+    (ProductFamily.MERAKI, re.compile(r"Meraki\b", re.I)),
+    # Collaboration
+    (ProductFamily.CUCM, re.compile(r"Unified\s+Communications\s+Manager", re.I)),
+    (ProductFamily.UCCX, re.compile(r"Unified\s+Contact\s+Center", re.I)),
+    (ProductFamily.WEBEX, re.compile(r"\bWebex\b", re.I)),
+    (ProductFamily.FINESSE, re.compile(r"\bFinesse\b", re.I)),
+    # Management / identity
+    (ProductFamily.SSM_ON_PREM, re.compile(r"Smart\s+Software\s+Manager|SSM\s+On[-\s]?Prem", re.I)),
+    (ProductFamily.DNA_CENTER, re.compile(r"DNA\s+Center|Catalyst\s+Center", re.I)),
+    (ProductFamily.ISE, re.compile(r"Identity\s+Services\s+Engine|Cisco\s+ISE\b", re.I)),
+]
+
+
+def normalize_cisco_product_names(product_names: List[str]) -> Set[ProductFamily]:
+    """
+    Collapse a PSIRT `productNames` list to the canonical ProductFamily set.
+
+    Input: list of raw strings like:
+      ["Cisco IOS XE Software 17.9.4", "Cisco IOS 12.2(55)SE", "Cisco NX-OS Software"]
+    Output: {IOS_XE, IOS, NX_OS}
+
+    Design decisions:
+    - First pattern match per name wins (ordered most-specific → most-general).
+    - Empty / None input returns {UNKNOWN} (never an empty set — caller should
+      always have at least one family to match against).
+    - Names that match no pattern are silently dropped; if NO names match anything,
+      we return {UNKNOWN} so the matcher falls back to legacy (permissive) behavior.
+    - The function is pure / stateless — safe to call during PSIRT import hot path.
+    """
+    if not product_names:
+        return {ProductFamily.UNKNOWN}
+
+    families: Set[ProductFamily] = set()
+    for name in product_names:
+        if not name or not isinstance(name, str):
+            continue
+        for family, pattern in _PRODUCT_NAME_FAMILY_PATTERNS:
+            if pattern.search(name):
+                families.add(family)
+                break  # first match wins
+
+    return families or {ProductFamily.UNKNOWN}
