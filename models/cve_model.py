@@ -1,10 +1,24 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 
 class CVEAffectedRange(BaseModel):
     min: str
     max: str
+
+
+class CVEFirstFixed(BaseModel):
+    """First fixed version keyed by ProductFamily enum value.
+
+    Flat map: {"ios-xe": "17.9.4a", "ios": "15.2(7)E8", "asa": "9.18.4"}
+
+    CVE-006 Phase 3. Populated by _parse_advisory from PSIRT advisory-detail
+    endpoint (`firstFixed` per productName). Multi-family advisories carry
+    one fix version per affected family path — e.g. CVE-2025-20363 is
+    unauth on ASA, auth on IOS XE, with different fix versions per family.
+    Single scalar `CVEEntry.fixed_in` loses this distinction.
+    """
+    fixes: Dict[str, str] = Field(default_factory=dict)
 
 
 class CVEEntry(BaseModel):
@@ -57,3 +71,9 @@ class CVEEntry(BaseModel):
     # truncated for storage). Display / debugging only — matching MUST use
     # product_families + affected.min/max, never this field directly.
     affected_versions_raw: List[str] = Field(default_factory=list)
+
+    # v0.6.24 (CVE-006 Phase 3) — per-family first-fixed version. Populated
+    # by PSIRT advisory-detail fetch. When present, matcher prefers the
+    # family-specific fix over the scalar `fixed_in` field. None on legacy
+    # local-json records — matcher falls back to `fixed_in` + `affected.max`.
+    first_fixed_version: Optional[CVEFirstFixed] = None
