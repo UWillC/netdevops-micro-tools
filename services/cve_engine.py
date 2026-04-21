@@ -271,19 +271,37 @@ def data_confidence(cve: "CVEEntry") -> Dict[str, Optional[str]]:
     pending the full CVE-006 PSIRT closure in the W19+ sprint.
 
     Levels (highest to lowest confidence):
-      verified   — `fixed_in` populated with a concrete version (curated
-                   local-JSON records with human-entered fix version).
+      verified   — EITHER `first_fixed_version.fixes` carries per-family fix
+                   versions from PSIRT advisory-detail (v0.6.24 CVE-006 path),
+                   OR scalar `fixed_in` is populated with a concrete version
+                   (curated local-JSON records with human-entered fix).
                    Match logic uses exact-version comparison.
-      max-bound  — `fixed_in` missing but `affected.max` populated. This
+      max-bound  — fix version missing but `affected.max` populated. This
                    is the PSIRT-import case: matching uses `max` as last
                    tested vulnerable version, not a guaranteed fix point.
                    May show false positives on versions released well
                    after the real fix. Full fix in CVE-006 sprint.
-      uncertain  — neither `fixed_in` nor bounded `affected.max`. Match
+      uncertain  — neither fix version nor bounded `affected.max`. Match
                    is range-unbounded — essentially "CVE touches this
                    platform family at some point in history". Lowest
                    confidence; treat as informational only.
     """
+    # v0.6.24 (CVE-006 Phase 3) — strongest signal: per-family fixes from
+    # PSIRT advisory-detail fetch. Richer than scalar fixed_in because it
+    # preserves multi-family nuance (e.g. different fix per ASA vs IOS XE).
+    ff = getattr(cve, "first_fixed_version", None)
+    if ff is not None:
+        fixes = getattr(ff, "fixes", None) or {}
+        if fixes:
+            families = ", ".join(sorted(fixes.keys()))
+            return {
+                "confidence": "verified",
+                "rationale": (
+                    f"Per-family fix versions from PSIRT advisory-detail "
+                    f"({families}); exact-version comparison per platform path."
+                ),
+            }
+
     fix = (getattr(cve, "fixed_in", None) or "").strip()
     if fix and not _is_prose_not_version(fix):
         return {

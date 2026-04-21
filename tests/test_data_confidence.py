@@ -5,11 +5,11 @@ Tests the data_confidence() helper that classifies each CVE record by how
 reliable its version-range matching is. This is a transparency layer
 shipped while the full CVE-006 PSIRT closure is parked for W19+ sprint.
 """
-from models.cve_model import CVEAffectedRange, CVEEntry
+from models.cve_model import CVEAffectedRange, CVEEntry, CVEFirstFixed
 from services.cve_engine import data_confidence
 
 
-def _make(cve_id="CVE-X", fixed_in=None, aff_min="", aff_max=""):
+def _make(cve_id="CVE-X", fixed_in=None, aff_min="", aff_max="", first_fixed_version=None):
     return CVEEntry(
         cve_id=cve_id,
         title="t",
@@ -18,6 +18,7 @@ def _make(cve_id="CVE-X", fixed_in=None, aff_min="", aff_max=""):
         affected=CVEAffectedRange(min=aff_min, max=aff_max),
         fixed_in=fixed_in,
         description="d",
+        first_fixed_version=first_fixed_version,
     )
 
 
@@ -82,3 +83,56 @@ def test_rationale_explains_cve_006_context():
     cve = _make(fixed_in=None, aff_max="17.11.99")
     rationale = data_confidence(cve)["rationale"].lower()
     assert "cve-006" in rationale or "w19" in rationale or "full correction" in rationale
+
+
+# ---------------------------------------------------------------------------
+# v0.6.24 — first_fixed_version integration (CVE-006 Phase 3)
+# ---------------------------------------------------------------------------
+
+def test_verified_when_first_fixed_version_populated():
+    """Richest data path: per-family fixes from PSIRT advisory-detail."""
+    cve = _make(
+        fixed_in=None,
+        aff_max="17.11.99",  # would normally trigger max-bound
+        first_fixed_version=CVEFirstFixed(fixes={"ios-xe": "17.9.4a"}),
+    )
+    result = data_confidence(cve)
+    assert result["confidence"] == "verified"
+    assert "ios-xe" in result["rationale"]
+    assert "per-family" in result["rationale"].lower() or "advisory-detail" in result["rationale"]
+
+
+def test_first_fixed_beats_scalar_fixed_in():
+    """When BOTH are populated, rationale should cite per-family path
+    (the richer signal) — both paths agree on 'verified' confidence."""
+    cve = _make(
+        fixed_in="17.9.4a",
+        first_fixed_version=CVEFirstFixed(fixes={"ios-xe": "17.9.4a", "ios": "15.2(7)E8"}),
+    )
+    result = data_confidence(cve)
+    assert result["confidence"] == "verified"
+    # Multi-family rationale preferred over scalar
+    assert "ios-xe" in result["rationale"] and "ios" in result["rationale"]
+
+
+def test_empty_first_fixed_falls_through():
+    """first_fixed_version present but with empty fixes dict → fall through
+    to existing logic. Should not short-circuit to 'verified'."""
+    cve = _make(
+        fixed_in=None,
+        aff_max="17.11.99",
+        first_fixed_version=CVEFirstFixed(fixes={}),
+    )
+    assert data_confidence(cve)["confidence"] == "max-bound"
+
+
+def test_multi_family_fixes_in_rationale():
+    """Multi-family advisories (e.g. CVE-2025-20363 unauth-on-ASA + auth-on-IOS-XE)
+    should surface all family paths in the rationale for transparency."""
+    cve = _make(
+        first_fixed_version=CVEFirstFixed(fixes={"asa": "9.18.4", "ios-xe": "17.9.4a", "ftd": "7.4.2"}),
+    )
+    rationale = data_confidence(cve)["rationale"]
+    assert "asa" in rationale
+    assert "ios-xe" in rationale
+    assert "ftd" in rationale
