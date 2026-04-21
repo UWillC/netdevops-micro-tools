@@ -152,6 +152,19 @@ if (cveForm && cveOutput) {
         if (primaryCounts[sev] > 0) out += `  ${sev}: ${primaryCounts[sev]}\n`;
       });
 
+      // v0.6.23: data-quality breakdown in text report
+      const dqMapTxt = data.data_quality || {};
+      const dqCountsTxt = { verified: 0, "max-bound": 0, uncertain: 0 };
+      Object.values(dqMapTxt).forEach((v) => {
+        const c = v && v.confidence;
+        if (dqCountsTxt[c] !== undefined) dqCountsTxt[c]++;
+      });
+      if ((dqCountsTxt["max-bound"] + dqCountsTxt["uncertain"]) > 0) {
+        out += `\nData quality: ${dqCountsTxt.verified} verified / ${dqCountsTxt["max-bound"]} PSIRT max-bound`;
+        if (dqCountsTxt.uncertain > 0) out += ` / ${dqCountsTxt.uncertain} uncertain`;
+        out += "\n(PSIRT max-bound = matched by affected.max only, less reliable than curated fix_version. CVE-006 W19+ sprint closes gap.)\n";
+      }
+
       if (data.recommended_upgrade) {
         const label = data.eol_status && data.eol_status.is_eol ? "Remediation" : "Recommended upgrade target";
         out += `\n${label}: ${data.recommended_upgrade}\n`;
@@ -316,6 +329,13 @@ if (cveForm && cveOutput) {
         ).length;
         // Count CVEs marked as part of a Cisco semi-annual bundle (CVE-010).
         const bundleCount = Object.values(bundles).filter((v) => v).length;
+        // v0.6.23: Count CVEs by data-quality confidence level.
+        const dqMap = data.data_quality || {};
+        const dqCounts = { verified: 0, "max-bound": 0, uncertain: 0 };
+        Object.values(dqMap).forEach((v) => {
+          const c = v && v.confidence;
+          if (dqCounts[c] !== undefined) dqCounts[c]++;
+        });
 
         cveSummary.innerHTML = `
           <h3>Security posture</h3>
@@ -333,6 +353,11 @@ if (cveForm && cveOutput) {
           ${
             sirDistinct > 0
               ? `<div class="summary-row summary-muted"><span>Cisco SIR ≠ CVSS</span><span>${sirDistinct} CVE(s)</span></div>`
+              : ""
+          }
+          ${
+            (dqCounts["max-bound"] + dqCounts["uncertain"]) > 0
+              ? `<div class="summary-row summary-muted" title="Data-quality confidence. PSIRT-import records match via affected.max (less reliable than curated fix_version). Full fix in CVE-006 W19+ sprint."><span>Data quality</span><span>${dqCounts.verified} verified / ${dqCounts["max-bound"]} PSIRT max-bound${dqCounts.uncertain ? ` / ${dqCounts.uncertain} uncertain` : ""}</span></div>`
               : ""
           }
           ${
