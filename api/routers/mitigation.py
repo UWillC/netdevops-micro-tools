@@ -42,24 +42,39 @@ async def get_mitigation(cve_id: str) -> MitigationResponse:
 @router.post(
     "/cve",
     response_model=MitigationResponse,
-    summary="Get mitigation with optional platform/version filtering",
-    description="Get mitigation for a CVE with optional platform and version context."
+    summary="Get mitigation with platform/version applicability check",
+    description=(
+        "Get mitigation for a CVE with optional platform and version "
+        "context. When both are supplied, the response includes an "
+        "`applicability` field (`applicable` / `not_applicable` / "
+        "`unknown`) derived from the CVE engine, so the UI can flag "
+        "whether the mitigation actually applies to the target device."
+    )
 )
 async def get_mitigation_filtered(request: MitigationRequest) -> MitigationResponse:
     """
-    Get mitigation with optional platform/version filtering.
+    Get mitigation with platform/version applicability check.
 
-    Future: Will filter workarounds based on platform and version.
-    Currently returns full mitigation regardless of filters.
+    v0.6.22: Cross-references the CVE engine to determine whether the
+    CVE actually affects the target (platform, version). Full mitigation
+    is always returned when found, but with `applicability` annotation:
+
+    - `applicable`: CVE engine confirms the target is vulnerable → act.
+    - `not_applicable`: CVE engine does NOT match → informational only.
+    - `unknown`: engine call failed / no context supplied → treat as info.
+
+    Rationale: operators sometimes look up a mitigation for a CVE that
+    applies to a different platform than theirs (e.g., Cat 9300 operator
+    looking up an ASA CVE for reference). Without applicability, they may
+    apply the ACL to their device and create more problems. With the
+    annotation, the UI can render "NOT APPLICABLE" prominently.
     """
     service = get_mitigation_service()
-    response = service.get_mitigation(request.cve_id)
-
-    # TODO: Filter workarounds based on platform/version
-    # if request.platform and response.found:
-    #     response.mitigation = filter_by_platform(response.mitigation, request.platform)
-
-    return response
+    return service.get_mitigation_for_platform(
+        cve_id=request.cve_id,
+        platform=request.platform,
+        version=request.version,
+    )
 
 
 @router.get(

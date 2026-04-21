@@ -90,3 +90,11 @@ class MitigationResponse(BaseModel):
     cve_id: str
     mitigation: Optional[CVEMitigation] = None
     message: Optional[str] = None
+    # v0.6.22 — platform/version applicability (populated only when the
+    # filtered POST /cve endpoint is used with platform+version context).
+    # Values: "applicable" (CVE affects this device), "not_applicable"
+    # (CVE does not match this platform/version — mitigation informational
+    # only), "unknown" (insufficient data to decide). Null on the
+    # unfiltered GET /cve/{cve_id} endpoint.
+    applicability: Optional[str] = None
+    applicability_reason: Optional[str] = None

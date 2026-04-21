@@ -4,6 +4,61 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.22] – 2026-04-21 (W17 Day 2 — CVE Mitigation platform/version applicability)
+
+### Fixed — Closes `api/routers/mitigation.py:58` TODO (quality debt)
+
+The `POST /mitigate/cve` endpoint accepted `platform` and `version` in the
+request model since creation, but the handler discarded them — the TODO
+comment had been sitting there unresolved. Operators looking up a CVE
+mitigation for a device that isn't affected by that CVE (e.g., Cat 9300
+operator referencing an ASA-only CVE) would receive the full mitigation
+package with no hint that it doesn't apply. Apply-first-ask-questions-
+later risk.
+
+**Fix.** New `MitigationService.get_mitigation_for_platform()` cross-
+references the CVE engine to determine whether the CVE actually matches
+the `(platform, version)` tuple. The full mitigation is still returned
+(informational reading is valid) but the response now carries:
+
+- `applicability`: `"applicable"` / `"not_applicable"` / `"unknown"` / `null`
+- `applicability_reason`: one-sentence explanation for the UI
+
+Values:
+- **applicable** — CVE engine confirms the target is vulnerable. UI should
+  render mitigation prominently ("Apply the mitigation below.")
+- **not_applicable** — CVE engine does not match. UI should render the
+  mitigation greyed / demoted ("Informational only — may not apply to
+  your device. Verify against the Cisco PSIRT advisory before acting.")
+- **unknown** — engine call failed. UI should treat as informational.
+- **null** — endpoint called without `platform`/`version` context (both
+  omitted), or via the unfiltered `GET /mitigate/cve/{id}` path.
+
+**Architecture:**
+- Separate `_cve_engine_instance` singleton in `mitigation_service.py`
+  (lazy-initialized on first `get_mitigation_for_platform()` call).
+  Not shared with the per-request engines the `/analyze/cve` endpoint
+  creates — keeps the mitigation endpoint's cold-start cost low without
+  coupling to the cve.py router lifecycle.
+- `get_mitigation()` (GET endpoint path) is **unchanged** — zero CVE
+  engine overhead on that path.
+
+### Added — 6 unit tests in `tests/test_mitigation_applicability.py`
+
+Covers:
+1. Applicable CVE on vulnerable version (CVE-2023-20198 + IOS XE 17.9.4).
+2. Not applicable on patched version (CVE-2023-20198 + IOS XE 17.15.4a).
+3. No context (both platform+version null) → skip check, return unfiltered.
+4. Not-found CVE → no applicability annotation, standard not-found shape.
+5. Partial context (platform only, no version) → check still triggered.
+6. GET /cve/{id} path unaffected (applicability fields must be null).
+
+Full suite: **68 passing** (was 62 — 6 new mitigation tests).
+
+Version bump: app 0.6.21 → 0.6.22.
+
+---
+
 ## [v0.6.21] – 2026-04-20 (W17 Day 1 — EoL upgrade-rec override)
 
 ### Fixed — Recommended upgrade target on EoL platforms (CVE-009 follow-up)
