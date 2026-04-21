@@ -211,7 +211,7 @@ if (cveForm && cveOutput) {
           const d = sevDetails[cve.cve_id] || {};
           const bundle = bundles[cve.cve_id];
 
-          // Secondary tags (Cisco SIR, bundle, escalation reason)
+          // Secondary tags (Cisco SIR, bundle, escalation reason, data quality)
           const secondaryTags = [];
           if (d.cisco_sir) {
             secondaryTags.push(
@@ -221,6 +221,17 @@ if (cveForm && cveOutput) {
           if (bundle) {
             secondaryTags.push(
               `<span class="secondary-tag tag-bundle" title="Part of Cisco semi-annual bundled publication">Bundle: ${bundle}</span>`
+            );
+          }
+          // v0.6.23: data-quality badge (only render when not "verified")
+          const dq = (data.data_quality || {})[cve.cve_id];
+          if (dq && dq.confidence && dq.confidence !== "verified") {
+            const label = dq.confidence === "max-bound" ? "PSIRT max-bound"
+                        : dq.confidence === "uncertain"  ? "Coverage uncertain"
+                        : dq.confidence;
+            const tip = (dq.rationale || "").replace(/"/g, "&quot;");
+            secondaryTags.push(
+              `<span class="secondary-tag tag-quality-${dq.confidence}" title="${tip}">${label}</span>`
             );
           }
           if (d.escalation_reason) {

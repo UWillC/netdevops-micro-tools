@@ -8,7 +8,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from services.cve_engine import CVEEngine, CVEEngineConfig, severity_info, detect_bundle
+from services.cve_engine import CVEEngine, CVEEngineConfig, severity_info, detect_bundle, data_confidence
 from services.eol_registry import detect_eol
 from services.provenance import cve_provenance
 
@@ -68,6 +68,13 @@ class CVEAnalyzeResponse(BaseModel):
     # (e.g. "2025-09" for Cisco's September 2025 semi-annual bundle).
     # Keyed by CVE ID; value None if CVE is not part of a bundle.
     bundles: dict = {}
+    # v0.6.23 CVE-006 transparency: per-CVE data quality annotation.
+    # Values: "verified" / "max-bound" / "uncertain". Keyed by CVE ID.
+    # Shows operators which records have a concrete fix version (verified)
+    # vs. PSIRT-import records matched only by `affected.max` (less
+    # reliable, may show false positives on post-fix versions). Pending
+    # full CVE-006 closure in W19+ sprint.
+    data_quality: dict = {}
     # v0.6.18 CVE-009: end-of-life status for the queried platform.
     # When non-null, the UI renders a top-banner above the CVE list:
     # "no patches available; replace the hardware". The recommendation
@@ -151,6 +158,8 @@ def analyze_cve(req: CVEAnalyzeRequest):
     severity_details = {cve.cve_id: severity_info(cve) for cve in matched}
     # v0.6.16 CVE-010: bundled-publication lookup per CVE.
     bundles = {cve.cve_id: detect_bundle(cve) for cve in matched}
+    # v0.6.23: per-CVE data-quality confidence (verified/max-bound/uncertain).
+    data_quality = {cve.cve_id: data_confidence(cve) for cve in matched}
     # v0.6.18 CVE-009: EoL platform check (independent of CVE matches —
     # populated even when matched is empty).
     eol_status = detect_eol(req.platform, req.version)
@@ -187,6 +196,7 @@ def analyze_cve(req: CVEAnalyzeRequest):
         original_engine_recommendation=original_recommendation,
         severity_details=severity_details,
         bundles=bundles,
+        data_quality=data_quality,
         eol_status=eol_status,
         provenance=provenance,
         timestamp=datetime.datetime.utcnow().isoformat() + "Z",

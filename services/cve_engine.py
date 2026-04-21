@@ -264,6 +264,56 @@ _BUNDLE_TITLE_RE = re.compile(
 )
 
 
+def data_confidence(cve: "CVEEntry") -> Dict[str, Optional[str]]:
+    """Return per-CVE data-quality annotation (v0.6.23 CVE-006 transparency).
+
+    Indicates how reliable the version-range matching is for this record,
+    pending the full CVE-006 PSIRT closure in the W19+ sprint.
+
+    Levels (highest to lowest confidence):
+      verified   — `fixed_in` populated with a concrete version (curated
+                   local-JSON records with human-entered fix version).
+                   Match logic uses exact-version comparison.
+      max-bound  — `fixed_in` missing but `affected.max` populated. This
+                   is the PSIRT-import case: matching uses `max` as last
+                   tested vulnerable version, not a guaranteed fix point.
+                   May show false positives on versions released well
+                   after the real fix. Full fix in CVE-006 sprint.
+      uncertain  — neither `fixed_in` nor bounded `affected.max`. Match
+                   is range-unbounded — essentially "CVE touches this
+                   platform family at some point in history". Lowest
+                   confidence; treat as informational only.
+    """
+    fix = (getattr(cve, "fixed_in", None) or "").strip()
+    if fix and not _is_prose_not_version(fix):
+        return {
+            "confidence": "verified",
+            "rationale": f"Fix version '{fix}' populated; target-version comparison is exact.",
+        }
+
+    aff = getattr(cve, "affected", None)
+    mx = (getattr(aff, "max", "") or "").strip().lower() if aff else ""
+    if mx and mx not in ("all", "any", "none", "*", ""):
+        return {
+            "confidence": "max-bound",
+            "rationale": (
+                "Fix version not in record. Matching uses `affected.max` "
+                "as last tested vulnerable version (PSIRT-import default). "
+                "May show false positives on versions released after the "
+                "real fix. Full correction in CVE-006 W19+ sprint."
+            ),
+        }
+
+    return {
+        "confidence": "uncertain",
+        "rationale": (
+            "Neither fix version nor bounded version range in record. "
+            "Treat as informational only; manual review against Cisco "
+            "PSIRT advisory recommended."
+        ),
+    }
+
+
 def detect_bundle(cve: "CVEEntry") -> Optional[str]:
     """
     Return a canonical bundle identifier (e.g. "2025-09") if the CVE is part

@@ -4,6 +4,75 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.23] – 2026-04-21 (W17 Day 2 evening — CVE data-quality transparency badge)
+
+### Added — Per-CVE data-quality badge (CVE-006 transparency, not yet closure)
+
+Data audit 2026-04-21: 100/104 matched CVEs in IOS XE 17.9.4 query come
+from PSIRT import path and lack a `fixed_in` field. They match the target
+version only via `affected.max` (last tested vulnerable version, not a
+guaranteed fix point). Only 4/104 are curated local-JSON records with a
+verified concrete fix version.
+
+The full correction is CVE-006 (PSIRT advisory detail fetch + Cisco
+version comparator), parked as a W19+ sprint task (see
+`projects/netdevops/CVE-006-PSIRT-VERSION-RANGE-DESIGN.md`). Until that
+ships, the user should know which records are less reliable.
+
+**Added.**
+- `data_confidence(cve)` helper in `services/cve_engine.py`. Classifies
+  each record:
+  - **`verified`** — `fixed_in` populated with a concrete version.
+    Matching uses exact comparison.
+  - **`max-bound`** — only `affected.max` populated (PSIRT import).
+    Matching uses max as last tested; may false-positive on post-fix
+    versions.
+  - **`uncertain`** — neither fix nor bounded max. Informational only.
+- `CVEAnalyzeResponse.data_quality`: dict keyed by CVE ID with
+  `{confidence, rationale}`. Populated on every match.
+- UI badge in CVE card header (dashed, amber for max-bound, orange for
+  uncertain, no badge for verified). Tooltip shows rationale including
+  W19+ roadmap pointer.
+- Non-red/non-green color palette — these badges signal DATA reliability,
+  not CVE severity. Keeps them visually separate from Cisco SIR /
+  escalation tags.
+
+**Visible impact on `IOS XE 17.9.4` query:**
+- 4 CVEs render without data-quality badge (verified — local-JSON
+  curated: CVE-2023-20198, CVE-2025-20352, CVE-2025-20188, CVE-2023-20273)
+- 100 CVEs render with amber "PSIRT max-bound" badge + rationale
+  explaining this is a known gap being fixed in CVE-006 W19+.
+- 0 CVEs render uncertain (nothing in current corpus lacks both fields).
+
+### Testing
+
+`tests/test_data_confidence.py` — 8 new unit tests covering:
+- Concrete `fixed_in` → verified.
+- Full-text fixed_in ("IOS XE 17.15.4a") → verified.
+- PSIRT case (no fix, bounded max) → max-bound.
+- Empty string fixed_in treated as None.
+- No bounds at all → uncertain.
+- Unbounded keywords ("all"/"any"/"*"/"none") → uncertain.
+- Prose fixed_in ("Migrate to SNMPv3") falls through correctly.
+- Rationale cites W19+ / CVE-006 / "full correction" so users know
+  this is an actively tracked gap, not a permanent state.
+
+Full suite: **76 passing** (was 68 — 8 new data-confidence tests).
+
+Version bump: app 0.6.22 → 0.6.23.
+
+### Honest-builder note
+
+This is a transparency feature, not a fix. The matching logic is
+unchanged — same records returned, same counts, same severity
+assignments. The only difference is the UI now tells the user "these
+100 records are matched less rigorously; we're aware, full fix in
+W19+." Users of federal / regulated environments can now make informed
+calls about which findings to treat as hard evidence vs. starting
+points for manual review.
+
+---
+
 ## [v0.6.22] – 2026-04-21 (W17 Day 2 — CVE Mitigation platform/version applicability)
 
 ### Fixed — Closes `api/routers/mitigation.py:58` TODO (quality debt)

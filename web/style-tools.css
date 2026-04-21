@@ -98,6 +98,19 @@
   color: rgba(248, 113, 113, 0.95);
 }
 
+/* v0.6.23 — CVE-006 transparency data-quality badges.
+ * Non-red/non-green palette to avoid implying threat or safety; these
+ * badges signal DATA reliability, not CVE severity. */
+.tag-quality-max-bound {
+  border-color: rgba(251, 191, 36, 0.6);
+  color: rgba(251, 191, 36, 0.95);
+}
+
+.tag-quality-uncertain {
+  border-color: rgba(251, 146, 60, 0.6);
+  color: rgba(251, 146, 60, 0.95);
+}
+
 .severity-policy-footer {
   margin-top: 12px;
   padding-top: 8px;
