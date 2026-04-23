@@ -353,6 +353,133 @@ def coverage_uncertain_ids(matched: List["CVEEntry"]) -> List[str]:
     return out
 
 
+# -----------------------------
+# CVE-006 Phase 6 — Published-date safety heuristic
+# -----------------------------
+
+# Loaded lazily on first use. Module-level cache (immutable dict after load).
+_VERSION_RELEASE_DATES: Optional[Dict[str, Dict[str, str]]] = None
+
+# Family name → key in the release-dates JSON. We translate user platform
+# strings through the existing ProductFamily taxonomy where possible.
+_FAMILY_TO_DATES_KEY = {
+    "ios-xe": "IOS_XE",
+    "ios": "IOS",
+}
+
+# How old a CVE must be (relative to target-version release) to trigger the
+# heuristic. 3 years matches the design doc.
+_STALE_CVE_YEARS = 3
+
+
+def _load_version_release_dates() -> Dict[str, Dict[str, str]]:
+    """Load cve_data/_version_release_dates.json once, cache module-level.
+
+    Returns empty dict on IO/parse error — heuristic silently degrades to
+    no-op. Safe to call repeatedly.
+    """
+    global _VERSION_RELEASE_DATES
+    if _VERSION_RELEASE_DATES is not None:
+        return _VERSION_RELEASE_DATES
+
+    import json
+    from pathlib import Path
+
+    path = Path(__file__).parent.parent / "cve_data" / "_version_release_dates.json"
+    try:
+        with path.open() as f:
+            raw = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        _VERSION_RELEASE_DATES = {}
+        return _VERSION_RELEASE_DATES
+
+    # Drop _meta, keep only family data
+    _VERSION_RELEASE_DATES = {
+        k: v for k, v in raw.items() if not k.startswith("_") and isinstance(v, dict)
+    }
+    return _VERSION_RELEASE_DATES
+
+
+def _query_version_release_date(family_key: str, version: str) -> Optional[str]:
+    """Look up major.minor release date for a target version. Returns ISO date
+    string (YYYY-MM-DD) or None if not found."""
+    dates = _load_version_release_dates().get(family_key, {})
+    # Reduce "17.9.4a" → "17.9" for lookup. Robust to prefixes like "IOS XE 17.9".
+    import re
+    m = re.search(r"(\d+)\.(\d+)", version or "")
+    if not m:
+        return None
+    key = f"{m.group(1)}.{m.group(2)}"
+    return dates.get(key)
+
+
+def _cve_published_is_stale(
+    cve_published: Optional[str],
+    target_release_date: Optional[str],
+    years: int = _STALE_CVE_YEARS,
+) -> bool:
+    """True if CVE was published more than `years` before the target version
+    was released. Returns False on missing/malformed dates (heuristic never
+    raises — it's a best-effort safety layer)."""
+    if not cve_published or not target_release_date:
+        return False
+    try:
+        import datetime
+        # Both are ISO YYYY-MM-DD (cve.published may have time suffix stripped
+        # by _parse_advisory; normalize defensively).
+        pub = datetime.date.fromisoformat(cve_published[:10])
+        rel = datetime.date.fromisoformat(target_release_date[:10])
+    except (ValueError, TypeError):
+        return False
+    # 3-year threshold: roughly 365*3 = 1095 days, use date diff.
+    return (rel - pub).days > years * 365
+
+
+def published_date_demoted_ids(
+    matched: List["CVEEntry"],
+    query_platform: str,
+    query_version: str,
+) -> List[str]:
+    """CVE-006 Phase 6: flag CVEs that are VERY OLD relative to the queried
+    version AND lack a per-family fix version. These are almost certainly
+    patched in some intermediate release — showing as high-confidence match
+    is misleading.
+
+    Rules:
+      - Heuristic only fires when `first_fixed_version` is None/empty
+        (verified per-family fix is trusted over the heuristic).
+      - Requires both CVE.published AND target version release date to be
+        known — missing data disables the check (fail-open).
+      - 3-year threshold per design doc.
+
+    Returns list of CVE IDs, order preserved from input. Safe to combine
+    with coverage_uncertain_ids() via set union to build the final bucket.
+    """
+    from services.platform_taxonomy import normalize_user_platform
+
+    # Map query platform to the dates-file key via existing taxonomy.
+    family = normalize_user_platform(query_platform)
+    if family is None:
+        return []
+    family_key = _FAMILY_TO_DATES_KEY.get(family.value)
+    if family_key is None:
+        return []
+
+    target_release = _query_version_release_date(family_key, query_version)
+    if not target_release:
+        return []
+
+    out: List[str] = []
+    for cve in matched:
+        # Skip if already has per-family fix — verified is verified.
+        ff = getattr(cve, "first_fixed_version", None)
+        if ff is not None and getattr(ff, "fixes", None):
+            continue
+        if _cve_published_is_stale(getattr(cve, "published", None), target_release):
+            out.append(cve.cve_id)
+    return out
+
+
 def detect_bundle(cve: "CVEEntry") -> Optional[str]:
     """
     Return a canonical bundle identifier (e.g. "2025-09") if the CVE is part

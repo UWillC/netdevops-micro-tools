@@ -8,7 +8,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from services.cve_engine import CVEEngine, CVEEngineConfig, severity_info, detect_bundle, data_confidence, coverage_uncertain_ids
+from services.cve_engine import CVEEngine, CVEEngineConfig, severity_info, detect_bundle, data_confidence, coverage_uncertain_ids, published_date_demoted_ids
 from services.eol_registry import detect_eol
 from services.provenance import cve_provenance
 
@@ -170,7 +170,20 @@ def analyze_cve(req: CVEAnalyzeRequest):
     # v0.6.24 CVE-006 Phase 5: flag subset of CVE IDs with uncertain coverage
     # (anything NOT "verified"). Pure post-process, additive, zero impact on
     # `matched` semantics.
-    coverage_uncertain_list = coverage_uncertain_ids(matched)
+    # v0.6.24 CVE-006 Phase 6: union with published-date heuristic — CVEs
+    # published >3 years before the target version release date AND without
+    # a per-family fix are likely patched in intermediate releases. Flag them
+    # as uncertain so the UI can render informationally.
+    _base_uncertain = coverage_uncertain_ids(matched)
+    _stale_ids = published_date_demoted_ids(matched, req.platform, req.version)
+    # Dedupe while preserving order: base list first, then stale IDs not
+    # already present. Deterministic for snapshot tests.
+    _seen = set(_base_uncertain)
+    coverage_uncertain_list = list(_base_uncertain)
+    for cid in _stale_ids:
+        if cid not in _seen:
+            coverage_uncertain_list.append(cid)
+            _seen.add(cid)
     # v0.6.18 CVE-009: EoL platform check (independent of CVE matches —
     # populated even when matched is empty).
     eol_status = detect_eol(req.platform, req.version)
