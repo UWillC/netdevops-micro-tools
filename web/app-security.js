@@ -165,6 +165,16 @@ if (cveForm && cveOutput) {
         out += "\n(PSIRT max-bound = matched by affected.max only, less reliable than curated fix_version. CVE-006 W19+ sprint closes gap.)\n";
       }
 
+      // v0.6.24 CVE-006 Phase 5+6: coverage-uncertain bucket in text report.
+      // Union of non-verified data_quality results + published-date heuristic.
+      const cuIds = Array.isArray(data.coverage_uncertain) ? data.coverage_uncertain : [];
+      if (cuIds.length > 0) {
+        const totalMatched = (data.matched || []).length;
+        out += `\nCoverage uncertain: ${cuIds.length} / ${totalMatched} CVE(s) flagged for lower confidence`;
+        out += `\n(Either PSIRT max-bound match OR published >3 years before target version release.`;
+        out += `\n Treat as informational; manual PSIRT advisory review recommended for critical decisions.)\n`;
+      }
+
       if (data.recommended_upgrade) {
         const label = data.eol_status && data.eol_status.is_eol ? "Remediation" : "Recommended upgrade target";
         out += `\n${label}: ${data.recommended_upgrade}\n`;
@@ -358,6 +368,11 @@ if (cveForm && cveOutput) {
           ${
             (dqCounts["max-bound"] + dqCounts["uncertain"]) > 0
               ? `<div class="summary-row summary-muted" title="Data-quality confidence. PSIRT-import records match via affected.max (less reliable than curated fix_version). Full fix in CVE-006 W19+ sprint."><span>Data quality</span><span>${dqCounts.verified} verified / ${dqCounts["max-bound"]} PSIRT max-bound${dqCounts.uncertain ? ` / ${dqCounts.uncertain} uncertain` : ""}</span></div>`
+              : ""
+          }
+          ${
+            (Array.isArray(data.coverage_uncertain) && data.coverage_uncertain.length > 0)
+              ? `<div class="summary-row summary-muted" title="Coverage uncertain = matched via PSIRT max-bound OR published >3 years before target version release. Treat as informational. CVE-006 Phase 5+6 transparency layer."><span>Coverage uncertain</span><span>${data.coverage_uncertain.length} / ${(data.matched || []).length} CVE(s)</span></div>`
               : ""
           }
           ${
