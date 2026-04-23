@@ -332,6 +332,27 @@ def data_confidence(cve: "CVEEntry") -> Dict[str, Optional[str]]:
     }
 
 
+def coverage_uncertain_ids(matched: List["CVEEntry"]) -> List[str]:
+    """CVE-006 Phase 5: return CVE IDs whose coverage is uncertain.
+
+    A CVE is "uncertain" when its data_confidence classification is anything
+    other than "verified" — i.e. matched via PSIRT `affected.max` only (no
+    curated or per-family fix version).
+
+    The returned IDs are a SUBSET of the input `matched` list. Callers keep
+    the full `matched` list for backward compat; this helper just flags
+    which subset deserves lower confidence in the UI.
+
+    Order preserved from input (deterministic for snapshot tests).
+    """
+    out: List[str] = []
+    for cve in matched:
+        dq = data_confidence(cve)
+        if dq.get("confidence") != "verified":
+            out.append(cve.cve_id)
+    return out
+
+
 def detect_bundle(cve: "CVEEntry") -> Optional[str]:
     """
     Return a canonical bundle identifier (e.g. "2025-09") if the CVE is part

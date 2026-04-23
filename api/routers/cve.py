@@ -8,7 +8,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from services.cve_engine import CVEEngine, CVEEngineConfig, severity_info, detect_bundle, data_confidence
+from services.cve_engine import CVEEngine, CVEEngineConfig, severity_info, detect_bundle, data_confidence, coverage_uncertain_ids
 from services.eol_registry import detect_eol
 from services.provenance import cve_provenance
 
@@ -75,6 +75,13 @@ class CVEAnalyzeResponse(BaseModel):
     # reliable, may show false positives on post-fix versions). Pending
     # full CVE-006 closure in W19+ sprint.
     data_quality: dict = {}
+    # v0.6.24 CVE-006 Phase 5: CVE IDs whose coverage is uncertain —
+    # matched by PSIRT max-bound only (no verified fix version). UI may
+    # render these in a collapsed secondary section. IDs are a SUBSET of
+    # `matched`; `matched` still contains the full list for backward
+    # compat with existing clients. Empty list when all matches are
+    # verified (local-json path with curated fix_version).
+    coverage_uncertain: List[str] = []
     # v0.6.18 CVE-009: end-of-life status for the queried platform.
     # When non-null, the UI renders a top-banner above the CVE list:
     # "no patches available; replace the hardware". The recommendation
@@ -160,6 +167,10 @@ def analyze_cve(req: CVEAnalyzeRequest):
     bundles = {cve.cve_id: detect_bundle(cve) for cve in matched}
     # v0.6.23: per-CVE data-quality confidence (verified/max-bound/uncertain).
     data_quality = {cve.cve_id: data_confidence(cve) for cve in matched}
+    # v0.6.24 CVE-006 Phase 5: flag subset of CVE IDs with uncertain coverage
+    # (anything NOT "verified"). Pure post-process, additive, zero impact on
+    # `matched` semantics.
+    coverage_uncertain_list = coverage_uncertain_ids(matched)
     # v0.6.18 CVE-009: EoL platform check (independent of CVE matches —
     # populated even when matched is empty).
     eol_status = detect_eol(req.platform, req.version)
@@ -197,6 +208,7 @@ def analyze_cve(req: CVEAnalyzeRequest):
         severity_details=severity_details,
         bundles=bundles,
         data_quality=data_quality,
+        coverage_uncertain=coverage_uncertain_list,
         eol_status=eol_status,
         provenance=provenance,
         timestamp=datetime.datetime.utcnow().isoformat() + "Z",
