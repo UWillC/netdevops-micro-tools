@@ -16,6 +16,11 @@ from services.http_client import (
     HttpTimeoutError,
     HttpConnectionError,
 )
+from services.platform_taxonomy import (
+    ProductFamily,
+    normalize_user_platform,
+)
+from services.cisco_version import parse_cisco_version
 
 # Cache configuration
 NVD_CACHE_DIR = os.path.join(os.path.dirname(__file__), "..", "cache", "nvd")
@@ -367,6 +372,81 @@ class CiscoAdvisoryProvider(CVEProvider):
                 json.dump({"cached_at": time.time(), "detail": detail}, f)
         except Exception as e:
             print(f"[WARN] Failed to cache Cisco advisory detail {advisory_id}: {e}")
+
+    @staticmethod
+    def _extract_fix_versions(detail: Dict[str, Any]) -> Dict[str, str]:
+        """Parse `firstFixed` field from PSIRT advisory detail.
+
+        CVE-006 Phase 4 helper. Maps each detected ProductFamily to its first-
+        fixed version string. Multi-family advisories produce multiple entries
+        (e.g. CVE-2025-20363: ASA + IOS XE with different fix versions per
+        family). First occurrence per family wins; advisory may list multiple
+        rebuilds for the same family — we keep the first as conservative.
+
+        Returns flat dict keyed by ProductFamily.value (lowercase string) ->
+        version string (raw, exactly as PSIRT supplied minus product prefix).
+        Returns empty dict if firstFixed is missing/empty/all-unparseable.
+
+        Example input (PSIRT detail response):
+            detail["firstFixed"] = [
+                "Cisco IOS XE Software 17.9.4a",
+                "Cisco IOS Software 15.2(7)E8",
+                "Cisco ASA Software 9.18.4",
+            ]
+        Example output:
+            {"ios-xe": "17.9.4a", "ios": "15.2(7)E8", "asa": "9.18.4"}
+
+        Skips:
+        - non-list firstFixed (defensive against schema drift)
+        - empty / non-string entries
+        - entries where family cannot be detected
+        - entries where version substring cannot be extracted
+        - duplicate family entries (first wins)
+        """
+        fixes: Dict[str, str] = {}
+        first_fixed_list = detail.get("firstFixed", [])
+
+        if not isinstance(first_fixed_list, list):
+            return fixes
+
+        for entry in first_fixed_list:
+            if not isinstance(entry, str) or not entry.strip():
+                continue
+
+            family = normalize_user_platform(entry)
+            if family is None or family == ProductFamily.UNKNOWN:
+                continue
+
+            family_key = family.value
+            if family_key in fixes:
+                continue  # First wins; preserve advisory order
+
+            # Extract version substring: trailing digit-led token.
+            # Handles "Cisco IOS XE Software 17.9.4a" -> "17.9.4a"
+            #         "Cisco IOS Software 15.2(7)E8" -> "15.2(7)E8"
+            #         "IOS XE 17.9.4.s1"             -> "17.9.4.s1"
+            version_match = re.search(r"(\d[\d.()a-zA-Z]*)\s*$", entry.strip())
+            if not version_match:
+                continue
+
+            version_str = version_match.group(1).strip()
+            if not version_str:
+                continue
+
+            # Sanity check: round-trip through parser. If unparseable as
+            # Cisco version, accept anyway (curated firstFixed values may
+            # use formats parser does not yet cover - e.g. ASA 9.x doesn't
+            # fit IOS XE / IOS classic regexes). Storage is opaque; matcher
+            # in Phase 5 handles fallback.
+            #
+            # parse_cisco_version returning None is INFORMATIONAL only here:
+            # we still record the string so curated CVE entries with ASA-
+            # style versions don't drop on the floor.
+            _ = parse_cisco_version(version_str)  # parse-result not used
+
+            fixes[family_key] = version_str
+
+        return fixes
 
     def _fetch_advisory_detail(self, advisory_id: str) -> Optional[Dict[str, Any]]:
         """Fetch single advisory detail from PSIRT /advisory/{id} endpoint.
