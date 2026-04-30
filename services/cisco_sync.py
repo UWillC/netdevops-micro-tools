@@ -3,12 +3,18 @@ Auto-sync: import NEW Cisco PSIRT CVEs into local data + mitigations.
 
 Called by CVEEngine after load_all() when Cisco provider is active.
 Only creates files for CVEs that don't exist locally yet.
+
+CVE-006 Phase 4a (added 2026-04-30): one-time migration helper to enrich
+legacy `source=cisco-psirt-import` records with `first_fixed_version` +
+`product_families` + `affected_versions_raw` from PSIRT advisory detail
+endpoint.
 """
 
 import json
 import os
 import re
-from typing import Any, Dict, List, Tuple
+import time
+from typing import Any, Dict, List, Optional, Tuple
 
 from models.cve_model import CVEEntry
 
@@ -287,3 +293,179 @@ def auto_sync_new_cves(cached_advisories: List[Dict[str, Any]]) -> int:
         print(f"[SYNC] Auto-imported {imported} new CVEs from Cisco PSIRT to local database")
 
     return imported
+
+
+# =============================================================================
+# CVE-006 Phase 4a: one-time migration of legacy cisco-psirt-import records
+# =============================================================================
+
+# Advisory URL pattern, e.g.
+#   https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-webui-csrf-ycUYxkKO
+# advisoryId is the trailing path segment.
+_ADVISORY_ID_FROM_URL_RE = re.compile(r"/CiscoSecurityAdvisory/(cisco-sa-[^/?#]+)")
+
+
+def _extract_advisory_id(advisory_url: Optional[str]) -> Optional[str]:
+    """Extract Cisco advisoryId from an advisory_url string. Returns None if not found."""
+    if not advisory_url:
+        return None
+    m = _ADVISORY_ID_FROM_URL_RE.search(advisory_url)
+    return m.group(1) if m else None
+
+
+def _atomic_write_json(path: str, data: Dict[str, Any]) -> None:
+    """Write JSON via temp file + rename to avoid partial writes on crash."""
+    tmp_path = path + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+    os.replace(tmp_path, path)
+
+
+def enrich_legacy_psirt_records(
+    provider,
+    cve_data_dir: str = CVE_DATA_DIR,
+    rate_limit_sleep: float = 2.0,
+    max_records: Optional[int] = None,
+    dry_run: bool = False,
+) -> Dict[str, int]:
+    """One-time migration: enrich legacy cisco-psirt-import records via PSIRT detail.
+
+    CVE-006 Phase 4a. Walks `cve_data_dir`, finds records where:
+      - source == "cisco-psirt-import"
+      - first_fixed_version is None / missing
+      - has advisory_url pointing to a Cisco advisory
+
+    For each, calls provider._fetch_advisory_detail(advisoryId), extracts
+    first-fixed map and product families, and patches the JSON file in place
+    via atomic write.
+
+    Idempotent: records already carrying first_fixed_version are skipped.
+
+    Rate limit: sleeps `rate_limit_sleep` seconds between API calls. Cisco
+    PSIRT global limit is 30 calls/min — default 2.0s leaves margin and
+    keeps 129 records under ~5 min wall clock.
+
+    Args:
+        provider: CiscoAdvisoryProvider instance (already authenticated/credentialed)
+        cve_data_dir: directory to scan (default: cve_data/ios_xe/)
+        rate_limit_sleep: sleep between successful API fetches (skipped on cache hit)
+        max_records: cap on records processed this run (None = all)
+        dry_run: if True, do not write changes (only count what would change)
+
+    Returns:
+        Counts dict with keys:
+          scanned, skipped_curated, skipped_already_enriched, skipped_no_url,
+          fetched, enriched, failed
+    """
+    from services.platform_taxonomy import (
+        ProductFamily,
+        normalize_cisco_product_names,
+    )
+
+    counts = {
+        "scanned": 0,
+        "skipped_curated": 0,
+        "skipped_already_enriched": 0,
+        "skipped_no_url": 0,
+        "fetched": 0,
+        "enriched": 0,
+        "failed": 0,
+    }
+
+    if not os.path.isdir(cve_data_dir):
+        return counts
+
+    files = sorted(
+        f for f in os.listdir(cve_data_dir)
+        if f.endswith(".json") and not f.startswith("_")
+    )
+
+    for fname in files:
+        if max_records is not None and counts["enriched"] >= max_records:
+            break
+
+        path = os.path.join(cve_data_dir, fname)
+        counts["scanned"] += 1
+
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            counts["failed"] += 1
+            continue
+
+        # Skip curated records (preserve hand-entered fixed_in / first_fixed_version).
+        if data.get("source") != "cisco-psirt-import":
+            counts["skipped_curated"] += 1
+            continue
+
+        # Idempotent: skip records already carrying first_fixed_version.
+        if data.get("first_fixed_version"):
+            counts["skipped_already_enriched"] += 1
+            continue
+
+        advisory_id = _extract_advisory_id(data.get("advisory_url"))
+        if not advisory_id:
+            counts["skipped_no_url"] += 1
+            continue
+
+        # Fetch detail (cache-aware via provider). On miss this triggers an API call.
+        cache_was_warm = provider._read_detail_cache(advisory_id) is not None
+        detail = provider._fetch_advisory_detail(advisory_id)
+
+        if detail is None:
+            counts["failed"] += 1
+            # Rate-limit sleep on actual API miss, even if we got None back
+            if not cache_was_warm:
+                time.sleep(rate_limit_sleep)
+            continue
+
+        if not cache_was_warm:
+            counts["fetched"] += 1
+
+        # Extract enrichment from detail.
+        fix_map = provider._extract_fix_versions(detail)
+        product_names = detail.get("productNames", [])
+        if isinstance(product_names, list) and product_names:
+            families = normalize_cisco_product_names(product_names)
+            product_families_str = sorted(
+                f.value for f in families if f != ProductFamily.UNKNOWN
+            )
+            affected_versions_raw = [
+                n for n in product_names if isinstance(n, str) and n
+            ][:50]
+        else:
+            product_families_str = []
+            affected_versions_raw = []
+
+        # Patch in-place. Only touch the new fields - keep everything else identical.
+        if fix_map:
+            data["first_fixed_version"] = {"fixes": fix_map}
+        if product_families_str and not data.get("product_families"):
+            data["product_families"] = product_families_str
+        if affected_versions_raw and not data.get("affected_versions_raw"):
+            data["affected_versions_raw"] = affected_versions_raw
+
+        if not dry_run:
+            try:
+                _atomic_write_json(path, data)
+            except Exception:
+                counts["failed"] += 1
+                if not cache_was_warm:
+                    time.sleep(rate_limit_sleep)
+                continue
+
+        counts["enriched"] += 1
+
+        # Throttle only on actual API miss (cache hits are zero-cost).
+        if not cache_was_warm:
+            time.sleep(rate_limit_sleep)
+
+    print(
+        f"[MIGRATE] Phase 4a scanned={counts['scanned']} enriched={counts['enriched']} "
+        f"fetched={counts['fetched']} skipped_curated={counts['skipped_curated']} "
+        f"skipped_already_enriched={counts['skipped_already_enriched']} "
+        f"skipped_no_url={counts['skipped_no_url']} failed={counts['failed']}"
+    )
+
+    return counts
