@@ -4,6 +4,111 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.25] – 2026-04-30 (W18 Day 4 evening — CVE-006 Phase 4 + 4a wiring complete)
+
+### Added — Phase 4: PSIRT advisory-detail enrichment pipeline
+
+Wires CVE-003 (platform taxonomy) and CVE-006 (per-family fix versions)
+into the production PSIRT import path. Gated by env var
+`CVE_CISCO_DETAIL_FETCH=1` for safety; default behavior unchanged.
+
+**Added (services/cve_sources.py):**
+- `_fetch_advisory_detail(advisory_id)` — single-advisory PSIRT detail
+  fetch with per-id 30-day file cache. Defends against 30 calls/min rate
+  limit. Cache miss triggers OAuth2-authenticated API call.
+- `_extract_fix_versions(detail)` — parses firstFixed list (when present)
+  into per-ProductFamily fix-version map. ASA-style versions (don't fit
+  IOS XE / IOS classic regexes) recorded anyway for matcher fallback.
+- `_parse_advisory()` enrichment — env-gated population of
+  `product_families`, `affected_versions_raw`, and `first_fixed_version`
+  on new PSIRT imports. Legacy hardcoded `platforms = ["IOS XE"]` tag
+  replaced with detected families when env flag is set.
+
+**Added (services/cisco_sync.py):**
+- `enrich_legacy_psirt_records(provider, ...)` — one-time migration
+  helper. Walks `cve_data/<platform>/` directory, finds records with
+  `source = cisco-psirt-import` + `first_fixed_version is None`, fetches
+  detail per advisoryId, patches JSON in place via atomic write.
+  Idempotent. Curated records (source != cisco-psirt-import) NEVER
+  touched. Configurable rate-limit, max-records cap, dry-run mode.
+- `_extract_advisory_id(url)` — pulls cisco-sa-* token from
+  CiscoSecurityAdvisory URL.
+- `_atomic_write_json(path, data)` — write-via-temp-then-rename pattern
+  for crash safety.
+
+**Added (scripts/migrate_phase4a.py):**
+- Executable CLI runner for `enrich_legacy_psirt_records`. Argparse with
+  `--dry-run`, `--max N`, `--sleep`, `--platform`, `--data-dir`,
+  `--no-flag-check`. Pre-run config table + post-run results table.
+  Refuses to run without `CVE_CISCO_DETAIL_FETCH=1` (safety guard).
+
+**Migration applied (de0d036):**
+- 129 of 129 legacy cisco-psirt-import records enriched
+- 13 curated records preserved untouched (hand-entered fixed_in intact)
+- Zero failures
+- 224s wall clock (~3.7 min) on real PSIRT API
+- Idempotent on re-execution
+
+### Discovery — Cisco PSIRT API limitation
+
+Live verification revealed Cisco PSIRT v2 detail endpoint and CSAF
+documents do NOT contain a `firstFixed` per-product field. Design doc
+Section "Phase 1" assumed it does; field is absent in actual responses.
+As a result:
+- `product_families`: 100% populated post-migration (CVE-003 success)
+- `first_fixed_version`: 0% populated for legacy records (Cisco API
+  limitation, not implementation bug)
+
+**Saving grace:** Phase 5 coverage_uncertain bucket (b70b28e) and
+Phase 6 published-date heuristic (73ff72e) — both shipped earlier —
+catch the smoking-gun cases via published-date age signal regardless.
+
+### Acceptance criterion AR-2 (functionally met)
+
+Real query "IOS XE 17.9.4" against migrated database:
+- 104 total matches | 100 routed to coverage_uncertain (96%) | 4 trust-grade
+- All 6 design-doc smoking-gun CVEs (CVE-2017-6736..6744 + CVE-2018-0174 +
+  CVE-2017-12319 + CVE-2021-1435) flagged uncertain
+- UI renders coverage_uncertain in separate collapsed section per Phase 5
+
+AR-2 strict ("not in matched at all"): NOT met directly without per-CVE
+hand-curated `fixed_in`. AR-2 spirit ("hidden from primary user view"):
+MET via Phase 5 + Phase 6.
+
+### Tests
+
+- `tests/test_advisory_detail_fetch.py` (8 cases, 25cef32)
+- `tests/test_extract_fix_versions.py` (16 cases, a1e4414)
+- `tests/test_parse_advisory_phase4.py` (9 cases, 38c0f51)
+- `tests/test_phase4a_migration.py` (15 cases, 676a382)
+
+Total new tests: 48. Full repo regression: 297 passed, 1 skipped, 0 fail.
+
+### Audit-grade status
+
+Was: 6/7 closed (CVE-006 + XCUT-001 outstanding from defect report).
+Now: 6.5/7 effective — CVE-006 functionally addressed via secondary
+defensive layer (coverage_uncertain bucket). True 7/7 requires either:
+1. Hand-curated `first_fixed_version` for top-N high-priority CVEs, or
+2. Acceptance that coverage_uncertain bucket = customer-facing solution
+
+Decision pending W19 retro.
+
+### Operator runbook
+
+```bash
+# Dry run (no writes):
+CVE_CISCO_DETAIL_FETCH=1 python3 scripts/migrate_phase4a.py --dry-run
+
+# Real run on full corpus (~5 min):
+CVE_CISCO_DETAIL_FETCH=1 python3 scripts/migrate_phase4a.py
+
+# Incremental run (top-N records):
+CVE_CISCO_DETAIL_FETCH=1 python3 scripts/migrate_phase4a.py --max 10
+```
+
+---
+
 ## [v0.6.23] – 2026-04-21 (W17 Day 2 evening — CVE data-quality transparency badge)
 
 ### Added — Per-CVE data-quality badge (CVE-006 transparency, not yet closure)
