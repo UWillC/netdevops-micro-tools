@@ -25,6 +25,12 @@ CISCO_CACHE_DIR = os.path.join(os.path.dirname(__file__), "..", "cache", "cisco"
 CISCO_CACHE_TTL = 6 * 3600  # 6 hours
 CISCO_CREDENTIALS_PATH = os.path.expanduser("~/.config/cisco-psirt/credentials.json")
 
+# CVE-006 Phase 4: per-advisory detail cache.
+# Long TTL: advisory details rarely change post-publication. Use lastUpdated
+# field as cache-bust signal in callers (Phase 4a migration).
+CISCO_DETAIL_CACHE_DIR = os.path.join(os.path.dirname(__file__), "..", "cache", "cisco", "details")
+CISCO_DETAIL_CACHE_TTL = 30 * 24 * 3600  # 30 days
+
 
 class CVEProvider(ABC):
     name: str = "base"
@@ -333,6 +339,74 @@ class CiscoAdvisoryProvider(CVEProvider):
     def _parse_severity(self, sir: str) -> str:
         mapping = {"critical": "critical", "high": "high", "medium": "medium", "low": "low"}
         return mapping.get(sir.lower(), "medium")
+
+    # ---------------------------------------------------------------------
+    # CVE-006 Phase 4: per-advisory detail fetch (PSIRT detail endpoint)
+    # ---------------------------------------------------------------------
+    def _read_detail_cache(self, advisory_id: str) -> Optional[Dict[str, Any]]:
+        """Read cached PSIRT advisory detail. Returns None if stale or missing."""
+        os.makedirs(CISCO_DETAIL_CACHE_DIR, exist_ok=True)
+        cache_path = os.path.join(CISCO_DETAIL_CACHE_DIR, f"{advisory_id}.json")
+        if not os.path.exists(cache_path):
+            return None
+        try:
+            with open(cache_path, "r", encoding="utf-8") as f:
+                cached = json.load(f)
+            if time.time() - cached.get("cached_at", 0) > CISCO_DETAIL_CACHE_TTL:
+                return None
+            return cached.get("detail")
+        except Exception:
+            return None
+
+    def _write_detail_cache(self, advisory_id: str, detail: Dict[str, Any]) -> None:
+        """Persist advisory detail to per-id cache file with cached_at timestamp."""
+        os.makedirs(CISCO_DETAIL_CACHE_DIR, exist_ok=True)
+        cache_path = os.path.join(CISCO_DETAIL_CACHE_DIR, f"{advisory_id}.json")
+        try:
+            with open(cache_path, "w", encoding="utf-8") as f:
+                json.dump({"cached_at": time.time(), "detail": detail}, f)
+        except Exception as e:
+            print(f"[WARN] Failed to cache Cisco advisory detail {advisory_id}: {e}")
+
+    def _fetch_advisory_detail(self, advisory_id: str) -> Optional[Dict[str, Any]]:
+        """Fetch single advisory detail from PSIRT /advisory/{id} endpoint.
+
+        CVE-006 Phase 4 helper: returns the advisory dict with full firstFixed
+        per-product list. Cache-first to defend against rate limits (30
+        calls/min global PSIRT limit). Cache TTL = 30 days; advisory details
+        rarely change post-publication.
+
+        Returns None on:
+        - 404 / 403 / 429 / network failure (delegated to _api_get)
+        - empty advisories list in response
+        - missing/invalid credentials
+
+        NOT YET CALLED by _parse_advisory(). Phase 4 wiring happens in
+        a follow-up commit, gated by CVE_CISCO_DETAIL_FETCH env var.
+        """
+        # Cache hit: short-circuit, zero API cost
+        cached = self._read_detail_cache(advisory_id)
+        if cached is not None:
+            return cached
+
+        creds = self._load_credentials()
+        if not creds:
+            return None
+
+        api_base = creds.get("api_base", "https://apix.cisco.com/security/advisories/v2")
+        url = f"{api_base}/advisory/{advisory_id}"
+        data = self._api_get(url)
+        if not data:
+            return None
+
+        # PSIRT detail response shape: {"advisories": [<single advisory dict>]}
+        advisories = data.get("advisories", [])
+        if not advisories:
+            return None
+
+        detail = advisories[0]
+        self._write_detail_cache(advisory_id, detail)
+        return detail
 
     def _parse_advisory(self, adv: Dict[str, Any]) -> List[CVEEntry]:
         """Parse a single Cisco advisory into CVEEntry objects (one per CVE ID)."""
