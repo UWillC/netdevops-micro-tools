@@ -8,7 +8,7 @@ import urllib.error
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 
-from models.cve_model import CVEEntry, CVEAffectedRange
+from models.cve_model import CVEEntry, CVEAffectedRange, CVEFirstFixed
 from services.cve_importers import NvdImporter
 from services.http_client import (
     http_get_json,
@@ -18,6 +18,7 @@ from services.http_client import (
 )
 from services.platform_taxonomy import (
     ProductFamily,
+    normalize_cisco_product_names,
     normalize_user_platform,
 )
 from services.cisco_version import parse_cisco_version
@@ -489,7 +490,21 @@ class CiscoAdvisoryProvider(CVEProvider):
         return detail
 
     def _parse_advisory(self, adv: Dict[str, Any]) -> List[CVEEntry]:
-        """Parse a single Cisco advisory into CVEEntry objects (one per CVE ID)."""
+        """Parse a single Cisco advisory into CVEEntry objects (one per CVE ID).
+
+        CVE-003 + CVE-006 Phase 4 enrichment is env-gated for safety:
+        Set CVE_CISCO_DETAIL_FETCH=1 to enable.
+
+        With flag ON:
+        - product_families: detected from productNames via normalize_cisco_product_names
+        - affected_versions_raw: first 50 productNames preserved (display/debug)
+        - first_fixed_version: per-family fix versions from PSIRT detail endpoint
+        - platforms (legacy): enriched from product_families when available
+
+        With flag OFF (default): legacy behavior preserved unchanged. All
+        new fields default to empty/None on the CVEEntry. Existing matcher
+        fallback paths handle the legacy shape.
+        """
         entries = []
         cves = adv.get("cves", [])
         if not cves or cves == ["NA"]:
@@ -530,6 +545,42 @@ class CiscoAdvisoryProvider(CVEProvider):
             tags.append("ips-signature")
         tags.append("cisco-psirt")
 
+        # ----- CVE-003 + CVE-006 Phase 4 enrichment (env-gated) -----
+        detail_fetch_enabled = os.getenv("CVE_CISCO_DETAIL_FETCH", "0") == "1"
+        product_families_str: List[str] = []
+        affected_versions_raw: List[str] = []
+        first_fixed_version: Optional[CVEFirstFixed] = None
+
+        if detail_fetch_enabled:
+            # CVE-003 Phase 4: detect product families from list-endpoint productNames.
+            product_names = adv.get("productNames", [])
+            if isinstance(product_names, list) and product_names:
+                families = normalize_cisco_product_names(product_names)
+                product_families_str = sorted(
+                    f.value for f in families if f != ProductFamily.UNKNOWN
+                )
+                affected_versions_raw = [
+                    n for n in product_names if isinstance(n, str) and n
+                ][:50]
+
+            # CVE-006 Phase 4: fetch detail endpoint, extract per-family fix versions.
+            advisory_id = adv.get("advisoryId")
+            if advisory_id:
+                detail = self._fetch_advisory_detail(advisory_id)
+                if detail:
+                    fix_map = self._extract_fix_versions(detail)
+                    if fix_map:
+                        first_fixed_version = CVEFirstFixed(fixes=fix_map)
+
+        # Legacy `platforms` field: enriched from families when available;
+        # falls back to self.platform-derived label for backward-compat.
+        if product_families_str:
+            platforms_legacy = [f.upper() for f in product_families_str]
+        else:
+            platforms_legacy = (
+                ["IOS XE"] if self.platform == "iosxe" else [self.platform.upper()]
+            )
+
         for cve_id in cves:
             if not cve_id.startswith("CVE-"):
                 continue
@@ -537,7 +588,7 @@ class CiscoAdvisoryProvider(CVEProvider):
                 cve_id=cve_id,
                 title=title,
                 severity=severity,
-                platforms=["IOS XE"] if self.platform == "iosxe" else [self.platform.upper()],
+                platforms=platforms_legacy,
                 affected=CVEAffectedRange(min="0.0.0", max="999.999.999"),
                 fixed_in=None,
                 tags=tags,
@@ -552,6 +603,10 @@ class CiscoAdvisoryProvider(CVEProvider):
                 published=published,
                 last_modified=last_modified,
                 references=[advisory_url] if advisory_url else [],
+                # CVE-003 + CVE-006 Phase 4 (default empty when env-flag off):
+                product_families=product_families_str,
+                affected_versions_raw=affected_versions_raw,
+                first_fixed_version=first_fixed_version,
             ))
         return entries
 
