@@ -113,11 +113,21 @@ NetDevOps Micro-Tools aims to solve this by providing:
 - Generate shutdown config for inactive ports
 - Based on real Tcl script used in production networks
 
-#### Config Drift Detection
+#### Config Drift Detection (v1.1)
 - Compare two configs (baseline vs current)
-- Section-by-section diff with added/removed lines
-- Risk flags on security-sensitive changes
+- Section-by-section diff: added / removed / modified (old → new pairing)
+- Side-by-side visual diff with collapsed unchanged context
+- Risk flags on security-sensitive changes, context-aware (VTY/Console/AUX)
+- Direction tags per change: hardening / degradation / neutral (heuristic, NOT a risk rating)
 - Drift score 0-100%
+
+**Known characteristics (by design):**
+- Drift score is line-based, not area-based — use it for golden-config
+  monitoring (expect ~0%, any deviation is the signal); do not compare
+  scores between devices with different config sizes.
+- Disabling a command is reported as a *modification* when the `no` form
+  names the same command (e.g. `snmp-server community …` → `no snmp-server
+  community …`), not as a removal — one logical change, one report entry.
 
 #### Config Explainer
 - Explain Cisco config in plain English (rule-based, no LLM)
