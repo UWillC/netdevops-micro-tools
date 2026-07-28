@@ -1394,9 +1394,50 @@ function cdEscapeHtml(s) {
   return s == null ? "" : s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+// Expand 'interface range X - Y' blocks into per-port blocks when the other
+// config doesn't contain the identical range header (mirrors the engine's
+// expand_interface_range so the visual diff agrees with the report).
+function cdExpandRanges(lines, otherText) {
+  const rangeRe = /^interface range\s+(.+)$/i;
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].trim().match(rangeRe);
+    if (!m || otherText.includes(lines[i].trim())) { out.push(lines[i]); continue; }
+    const children = [];
+    let j = i + 1;
+    while (j < lines.length && /^\s/.test(lines[j])) { children.push(lines[j]); j++; }
+    const names = [];
+    m[1].split(",").map(s => s.trim()).filter(Boolean).forEach(part => {
+      const pm = part.match(/^(\S+?)(\d+)\s*-\s*(\d+)$/);
+      if (pm) {
+        const start = parseInt(pm[2], 10), end = parseInt(pm[3], 10);
+        if (start <= end && end - start <= 1024) {
+          for (let k = start; k <= end; k++) names.push(pm[1] + k);
+          return;
+        }
+      }
+      names.push(part);
+    });
+    names.forEach(n => {
+      out.push("interface " + n);
+      children.forEach(c => out.push(c));
+    });
+    i = j - 1;
+  }
+  return out;
+}
+
 function renderDriftSideBySide(configA, configB) {
-  const aLines = configA.split("\n").filter(l => l.trim() !== "");
-  const bLines = configB.split("\n").filter(l => l.trim() !== "");
+  // Bare "!" separators are cosmetic (the engine ignores them too) — keep
+  // "! comment" context lines, drop lone separators so expansion doesn't
+  // produce phantom added/removed rows.
+  let aLines = configA.split("\n").filter(l => l.trim() !== "" && l.trim() !== "!");
+  let bLines = configB.split("\n").filter(l => l.trim() !== "" && l.trim() !== "!");
+  const expandedA = cdExpandRanges(aLines, configB);
+  const expandedB = cdExpandRanges(bLines, configA);
+  const rangesExpanded = expandedA.length !== aLines.length || expandedB.length !== bLines.length;
+  aLines = expandedA;
+  bLines = expandedB;
   if (aLines.length * bLines.length > 4000000) {
     return `<div style="padding:0.5rem; color:var(--text-dim);">Configs too large for visual diff — see the text report below.</div>`;
   }
@@ -1416,7 +1457,11 @@ function renderDriftSideBySide(configA, configB) {
   const bar = { removed: "#ef4444", added: "#22c55e", modified: "#f97316" };
 
   const cellBase = "padding:0 0.5rem; white-space:pre; font-family:var(--font-mono, monospace); font-size:0.72rem; line-height:1.6; overflow:hidden; text-overflow:ellipsis;";
-  let html = `<div style="display:grid; grid-template-columns:1fr 1fr; min-width:600px;">`;
+  let html = "";
+  if (rangesExpanded) {
+    html += `<div style="padding:0.25rem 0.5rem; font-size:0.72rem; color:var(--text-dim);">Note: unmatched <code>interface range</code> blocks expanded per-port to match the drift engine.</div>`;
+  }
+  html += `<div style="display:grid; grid-template-columns:1fr 1fr; min-width:600px;">`;
   let inGap = false;
   rows.forEach((r, idx) => {
     if (!visible.has(idx)) {

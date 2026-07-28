@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.27.2] – 2026-07-28 (Config Drift — side-by-side diff learns interface-range expansion)
+
+User catch on production: the visual diff is client-side on raw lines and
+didn't know about range expansion — baseline's `interface range TenGig…`
+showed red with per-port blocks green, contradicting the engine (0.3%,
+1 section). The JS panel now applies the same rule (expand ranges without
+an identical header on the other side; note shown when applied) and drops
+bare `!` separators (cosmetic, engine ignores them too). Verified on
+fixtures: baseline vs variant4 = exactly 2 visual rows (modified vlan +
+removed port-security); baseline vs variant3 = 0 rows. Assets bumped to
+`?v=0.6.27.1`.
+
 ## [v0.6.27.1] – 2026-07-28 (Config Drift — needle-in-haystack fixture + VLAN assignment risk flag)
 
 Round-5 fixture: per-port running-config with exactly ONE deviated port
