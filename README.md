@@ -119,7 +119,10 @@ NetDevOps Micro-Tools aims to solve this by providing:
 - Side-by-side visual diff with collapsed unchanged context
 - Risk flags on security-sensitive changes, context-aware (VTY/Console/AUX)
 - Direction tags per change: hardening / degradation / neutral (heuristic, NOT a risk rating)
-- Drift score 0-100%
+- `interface range` auto-expansion: golden templates written with ranges
+  compare cleanly against per-port running-configs (IOS-XE always stores
+  per-port); identical ranges on both sides stay compact
+- Drift score 0-100% = changed / (changed + unchanged), counted per section
 
 **Known characteristics (by design):**
 - Drift score is line-based, not area-based — use it for golden-config

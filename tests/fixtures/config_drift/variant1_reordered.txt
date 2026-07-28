@@ -1,0 +1,169 @@
+hostname [SW-ACCESS-01]
+!
+aaa accounting commands 15 default start-stop group [ISE-TACACS]
+!
+aaa accounting exec default start-stop group [ISE-TACACS]
+!
+aaa authentication enable default group [ISE-TACACS] enable
+!
+aaa authentication login default group [ISE-TACACS] local
+!
+aaa authorization commands 15 default group [ISE-TACACS] local if-authenticated
+!
+aaa authorization exec default group [ISE-TACACS] local if-authenticated
+!
+aaa group server tacacs+ [ISE-TACACS]
+ server name [ISE-1]
+!
+aaa new-model
+!
+banner motd ^
+[AUTHORIZED ACCESS ONLY — organizacyjny banner prawny]
+^
+!
+clock timezone [UTC] 0
+!
+crypto key generate rsa modulus 4096
+!
+errdisable recovery cause bpduguard
+!
+errdisable recovery cause psecure-violation
+!
+errdisable recovery interval 300
+!
+interface Port-channel1
+ description PO1-UPLINK-[DISTRO-SW]
+ switchport mode trunk
+ switchport trunk allowed vlan [10,20,30,100]
+!
+interface Vlan[100]
+ description MGMT
+ vrf forwarding [MGMT]
+ ip address [10.100.0.10] [255.255.255.0]
+ no shutdown
+!
+interface range GigabitEthernet1/0/1 - 40
+ description [USER+PHONE]
+ switchport mode access
+ switchport access vlan [10]
+ switchport voice vlan [20]
+ switchport port-security maximum 3
+ switchport port-security violation restrict
+ switchport port-security aging time 5
+ switchport port-security aging type inactivity
+ switchport port-security
+ spanning-tree portfast
+ storm-control broadcast level 5.00
+ no cdp enable  ! opcjonalnie — telefony Cisco wymagają CDP/LLDP, dostosuj
+!
+interface range GigabitEthernet1/0/41 - 46
+ description [WIFI-AP]
+ switchport mode access
+ switchport access vlan [30]
+ spanning-tree portfast
+!
+interface range GigabitEthernet1/0/47 - 48
+ description UNUSED
+ switchport mode access
+ switchport access vlan [999]
+ shutdown
+!
+interface range TenGigabitEthernet1/1/1 - 2
+ description UPLINK-[DISTRO-SW]
+ switchport mode trunk
+ switchport trunk allowed vlan [10,20,30,100]
+ switchport nonegotiate
+ ip dhcp snooping trust
+ channel-group 1 mode active
+!
+ip dhcp snooping
+!
+ip dhcp snooping vlan [10,20,30]
+!
+ip domain name [example.local]
+!
+ip route vrf [MGMT] 0.0.0.0 0.0.0.0 [10.100.0.1]
+!
+ip ssh authentication-retries 3
+!
+ip ssh time-out 60
+!
+ip ssh version 2
+!
+line con 0
+ exec-timeout 10 0
+ logging synchronous
+!
+line vty 0 15
+ transport input ssh
+ exec-timeout 10 0
+!
+logging buffered 64000 informational
+!
+logging host [LOG_SYSTEM_IP] vrf [MGMT]
+!
+logging source-interface Vlan[100] vrf [MGMT]
+!
+logging trap informational
+!
+no ip dhcp snooping information option
+!
+no ip domain lookup
+!
+no ip http secure-server
+!
+no ip http server
+!
+no service pad
+!
+ntp server [CORE_SW_IP_1] prefer
+!
+ntp server [CORE_SW_IP_2]
+!
+service password-encryption
+!
+service timestamps debug datetime msec localtime show-timezone
+!
+service timestamps log datetime msec localtime show-timezone
+!
+snmp-server community [RO_COMMUNITY] RO [SNMP_ACL]
+!
+snmp-server contact [NETOPS_CONTACT]
+!
+snmp-server location [BUILDING/FLOOR/ROOM]
+!
+spanning-tree extend system-id
+!
+spanning-tree mode rapid-pvst
+!
+spanning-tree portfast bpduguard default
+!
+tacacs server [ISE-1]
+ address ipv4 [10.x.x.x]
+ key [TACACS_SHARED_SECRET]
+!
+username [breakglass-admin] privilege 15 secret [STRONG_SECRET]
+!
+vlan [100]
+ name [MGMT]
+!
+vlan [10]
+ name [DATA]
+!
+vlan [20]
+ name [VOICE]
+!
+vlan [30]
+ name [WIFI-AP]
+!
+vlan [999]
+ name [BLACKHOLE]
+!
+vrf definition [MGMT]
+ address-family ipv4
+ exit-address-family
+!
+vtp mode transparent
+!
+end
+!

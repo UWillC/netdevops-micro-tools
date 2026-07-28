@@ -4,6 +4,48 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.27] – 2026-07-28 (Config Drift v1.1.1 — unchanged-counter fix + interface-range expansion)
+
+Source: round-4 negative-control campaign (network assistant): variant 1
+(reordered blocks), variant 2 (whitespace mangling), variant 3 (interface
+range rewritten per-port, as IOS-XE running-config always stores it).
+
+### Fixed (api/routers/config_drift.py)
+
+- **Unchanged: 0 / score 100% impossible-math bug (round-4 hard defect):**
+  the old formula counted changes as instances but the denominator as a
+  config-wide set of unique normalized lines — identical child lines
+  repeated across many similar sections (40× ` switchport mode access`)
+  deduplicated the denominator and clamped unchanged to 0. Unchanged is
+  now counted per shared section (instances), and
+  `score = changed / (changed + unchanged)`. Also fixes the 86-vs-100
+  unchanged inconsistency between runs — identical/reordered/whitespace
+  variants now all report the same deterministic unchanged count.
+- **New-section triage:** child lines of a brand-new section are initial
+  config, not changes — WARNINGs ("Switchport mode changed" on a brand-new
+  interface) downgraded to info with "(initial config in new section)";
+  genuine CRITICAL patterns are NOT silenced.
+
+### Added
+
+- **`interface range` expansion (new request flag
+  `expand_interface_range`, default true):** golden templates use
+  `interface range Gi1/0/1 - 40`; real IOS-XE running-config is always
+  per-port. Ranges without an identical header in the other config are
+  deterministically expanded into per-port sections before the diff
+  (comma lists supported); identical ranges on both sides stay compact.
+  Result: golden-template-vs-running comparison of variant 3 = 0.0% drift
+  (was: 100% with 112 noise WARNINGs).
+
+### Tests
+
+- +13 round-4 tests: negative controls (variants 1-2 = 0 drift,
+  deterministic unchanged), unchanged-counter bug pin (expansion off →
+  score < 100, unchanged > 50), range-expansion unit + E2E (variant 3 =
+  0.0%), new-section triage (info children, CRITICALs preserved).
+  Fixtures: 3 variant files from the round-4 campaign.
+  **342 passed, 1 skipped.**
+
 ## [v0.6.26.1] – 2026-07-28 (Config Drift v1.1 round 2 — NTP≠AAA + frontend cache-busting)
 
 Source: production verification of v1.1 (second network-assistant review).

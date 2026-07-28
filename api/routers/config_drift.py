@@ -41,6 +41,12 @@ class DriftRequest(BaseModel):
     config_b: str = Field(..., min_length=3, description="Current config (e.g. running-config)")
     ignore_order: bool = Field(default=True, description="Ignore line ordering in comparison")
     ignore_cosmetic: bool = Field(default=True, description="Ignore timestamps, version, building config lines")
+    expand_interface_range: bool = Field(
+        default=True,
+        description="Expand 'interface range X - Y' into per-port sections when the other "
+                    "config doesn't have the identical range header (golden templates use "
+                    "ranges; IOS-XE running-config is always per-port)",
+    )
 
 
 class DriftLine(BaseModel):
@@ -222,6 +228,51 @@ def _reconcile_bare_headers(sections_a: OrderedDict, sections_b: OrderedDict) ->
 def _detect_hostname(config_text: str) -> Optional[str]:
     m = re.search(r"^hostname\s+(\S+)", config_text, re.MULTILINE)
     return m.group(1) if m else None
+
+
+# ----------------------------
+# Interface-range expansion (golden template vs per-port running-config)
+# ----------------------------
+
+RANGE_HEADER_RE = re.compile(r"^interface range\s+(.+)$", re.IGNORECASE)
+_RANGE_PART_RE = re.compile(r"^(\S+?)(\d+)\s*-\s*(\d+)$")
+_MAX_RANGE_SPAN = 1024
+
+
+def _expand_interface_range(header: str, children: List[str]) -> "OrderedDict":
+    """Expand 'interface range GigabitEthernet1/0/1 - 40' into per-port sections,
+    each with a copy of the range's child lines. Comma-separated parts supported.
+    Unparsable parts become single 'interface <part>' sections."""
+    spec = RANGE_HEADER_RE.match(header).group(1).strip()
+    expanded: "OrderedDict" = OrderedDict()
+    for part in [p.strip() for p in spec.split(",") if p.strip()]:
+        m = _RANGE_PART_RE.match(part)
+        if m:
+            prefix, start, end = m.group(1), int(m.group(2)), int(m.group(3))
+            if start <= end and (end - start) <= _MAX_RANGE_SPAN:
+                for port in range(start, end + 1):
+                    expanded[f"interface {prefix}{port}"] = list(children)
+                continue
+        expanded[f"interface {part}"] = list(children)
+    return expanded
+
+
+def _expand_unmatched_ranges(sections_x: OrderedDict, sections_y: OrderedDict) -> None:
+    """Expand range headers in X that have no identical header in Y.
+    Identical ranges on both sides stay compact (readable report)."""
+    for header in list(sections_x.keys()):
+        if header in sections_y:
+            continue
+        if not RANGE_HEADER_RE.match(header):
+            continue
+        expanded = _expand_interface_range(header, sections_x[header])
+        del sections_x[header]
+        for new_header, lines in expanded.items():
+            if new_header in sections_x:
+                existing = sections_x[new_header]
+                existing.extend(l for l in lines if l not in existing)
+            else:
+                sections_x[new_header] = lines
 
 
 # ----------------------------
@@ -526,12 +577,18 @@ def _compare_sections(sections_a: OrderedDict, sections_b: OrderedDict) -> List[
             continue
 
         if in_b and not in_a and header != GLOBAL_SECTION:
-            # Entire section is new
+            # Entire section is new. Child lines are initial config, not changes —
+            # WARNING would be noise ("Switchport mode changed" on a brand-new
+            # interface). Downgrade warnings to info; genuine CRITICALs stay.
             changes = [DriftLine(line=header, section=header, change_type="added",
                                  risk="info", note="New section",
                                  direction=_direction("added", _normalize(header)))]
             for line in sections_b[header]:
-                changes.append(_make_change(line, header, "added"))
+                change = _make_change(line, header, "added")
+                if change.risk == "warning":
+                    change.risk = "info"
+                    change.note = f"{change.note} (initial config in new section)" if change.note else "Initial config"
+                changes.append(change)
             result.append(DriftSection(
                 title=_pretty_section(header), changes=changes,
                 added_count=len(changes), removed_count=0, modified_count=0,
@@ -624,6 +681,9 @@ def compare_configs(req: DriftRequest):
     sections_a = _parse_into_sections(req.config_a, req.ignore_cosmetic)
     sections_b = _parse_into_sections(req.config_b, req.ignore_cosmetic)
     _reconcile_bare_headers(sections_a, sections_b)
+    if req.expand_interface_range:
+        _expand_unmatched_ranges(sections_a, sections_b)
+        _expand_unmatched_ranges(sections_b, sections_a)
 
     # Detect hostnames
     hostname_a = _detect_hostname(req.config_a)
@@ -637,29 +697,20 @@ def compare_configs(req: DriftRequest):
     total_removed = sum(s.removed_count for s in drift_sections)
     total_modified = sum(s.modified_count for s in drift_sections)
 
-    # Count total meaningful lines for drift score (normalized)
-    all_lines_a = set()
-    for header, lines in sections_a.items():
-        all_lines_a.update(_normalize(l) for l in lines)
+    # Unchanged: counted per section as instances (v1.1.1 fix — the old
+    # config-wide unique-line union deduplicated identical lines repeated
+    # across sections, which could clamp unchanged to 0 / score to 100%
+    # when many similar sections were added).
+    total_unchanged = 0
+    for header in set(sections_a.keys()) & set(sections_b.keys()):
+        norm_a = {_normalize(l) for l in sections_a[header]}
+        norm_b = {_normalize(l) for l in sections_b[header]}
+        total_unchanged += len(norm_a & norm_b)
         if header != GLOBAL_SECTION:
-            all_lines_a.add(_normalize(header))
+            total_unchanged += 1  # the shared section header itself
 
-    all_lines_b = set()
-    for header, lines in sections_b.items():
-        all_lines_b.update(_normalize(l) for l in lines)
-        if header != GLOBAL_SECTION:
-            all_lines_b.add(_normalize(header))
-
-    total_unique = len(all_lines_a | all_lines_b)
-    # A modified pair contributes its old and new variant to the union — collapse
-    # each pair to a single logical line so score reflects logical changes.
-    total_unique_logical = max(total_unique - total_modified, 1)
     total_changed = total_added + total_removed + total_modified
-    total_unchanged = total_unique_logical - total_changed
-    if total_unchanged < 0:
-        total_unchanged = 0
-
-    drift_score = (total_changed / total_unique_logical) * 100
+    drift_score = (total_changed / max(total_changed + total_unchanged, 1)) * 100
 
     summary = _generate_summary(drift_sections, total_added, total_removed, total_modified)
 
