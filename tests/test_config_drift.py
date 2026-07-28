@@ -218,6 +218,48 @@ class TestDirection:
 
 
 # ----------------------------
+# Risk classification (round 2 fix: NTP is not AAA)
+# ----------------------------
+
+class TestRiskClassification:
+    def test_ntp_lines_never_classified_as_aaa(self, report):
+        ntp = [c for s, c in _all_changes(report)
+               if c.line.strip().startswith("ntp ")]
+        assert ntp, "Expected NTP changes in report"
+        for change in ntp:
+            assert "AAA" not in (change.note or ""), (
+                f"NTP line misclassified as AAA: {change.line!r} -> {change.note!r}"
+            )
+
+    def test_ntp_keyed_server_is_warning_ntp(self, report):
+        hits = [c for s, c in _all_changes(report)
+                if "ntp server" in c.line and "key 1" in c.line]
+        assert hits
+        for change in hits:
+            assert change.risk == "warning"
+            assert "NTP" in (change.note or "")
+
+    def test_tacacs_key_child_still_critical(self):
+        a = "tacacs server ISE\n address ipv4 10.0.0.1\n"
+        b = "tacacs server ISE\n address ipv4 10.0.0.1\n key SECRET123\n"
+        rep = compare_configs(DriftRequest(config_a=a, config_b=b))
+        added = [c for s in rep.sections for c in s.changes
+                 if c.change_type == "added" and c.line.strip().startswith("key ")]
+        assert added
+        assert added[0].risk == "critical"
+        assert "AAA" in added[0].note
+
+    def test_fixture_critical_count_is_exactly_real(self, report):
+        # Reference review 28.07: real CRITICALs = username, enable secret,
+        # aaa authorization console, snmp community. NTP must not inflate this.
+        criticals = [c for s, c in _all_changes(report) if c.risk == "critical"]
+        assert len(criticals) == 4, (
+            f"Expected 4 real CRITICALs, got {len(criticals)}: "
+            f"{[c.line for c in criticals]}"
+        )
+
+
+# ----------------------------
 # P5: reference detections from the real E2E test (trap coverage)
 # ----------------------------
 

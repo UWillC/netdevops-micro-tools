@@ -60,8 +60,11 @@ WEB_DIR = os.path.join(BASE_DIR, "web")
 
 @app.get("/")
 def root():
-    """Serve the frontend index.html"""
-    return FileResponse(os.path.join(WEB_DIR, "index.html"))
+    """Serve the frontend index.html (no-cache so asset version bumps propagate)"""
+    return FileResponse(
+        os.path.join(WEB_DIR, "index.html"),
+        headers={"Cache-Control": "no-cache"},
+    )
 
 CSS_FILES = ["style", "style-base", "style-home", "style-tools"]
 

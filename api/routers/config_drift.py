@@ -229,11 +229,16 @@ def _detect_hostname(config_text: str) -> Optional[str]:
 # ----------------------------
 
 RISK_PATTERNS = [
+    # NTP first — must win over the generic AAA "key N" pattern below
+    # (v1.1 fix: 'ntp server X key 1' / 'ntp authentication-key' were
+    # misclassified as CRITICAL "AAA server/key changed")
+    (r"^\s*ntp (server|authenticate|authentication-key|trusted-key|access-group)", "warning", "NTP configuration changed"),
+
     # Critical changes
     (r"enable secret|enable password|enable algorithm-type", "critical", "Enable password changed"),
     (r"username\s+\S+\s+(secret|password|privilege)", "critical", "User credentials modified"),
     (r"snmp-server community", "critical", "SNMP community string changed"),
-    (r"tacacs.server|radius.server|key\s+\d+", "critical", "AAA server/key changed"),
+    (r"tacacs.server|radius.server|^\s*key\s+\S+", "critical", "AAA server/key changed"),
     (r"crypto\s+key|crypto\s+isakmp|crypto\s+ipsec", "critical", "VPN/crypto config changed"),
     (r"aaa\s+(new-model|authentication|authorization)", "critical", "AAA policy changed"),
     (r"access-list|ip access-list|ip access-group", "warning", "ACL modified"),
@@ -243,7 +248,6 @@ RISK_PATTERNS = [
     (r"transport (input|output)", "warning", "Transport method changed"),
     (r"ip ssh version", "warning", "SSH version changed"),
     (r"exec-timeout", "warning", "Session timeout changed"),
-    (r"ntp server|ntp authenticate", "warning", "NTP configuration changed"),
     (r"logging\s+(host|\d+\.\d+)", "warning", "Logging destination changed"),
     (r"switchport mode", "warning", "Switchport mode changed"),
     (r"switchport trunk", "warning", "Trunk config changed"),

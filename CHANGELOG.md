@@ -4,6 +4,40 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.26.1] – 2026-07-28 (Config Drift v1.1 round 2 — NTP≠AAA + frontend cache-busting)
+
+Source: production verification of v1.1 (second network-assistant review).
+Backend fixes confirmed live, but browser served STALE frontend (no
+side-by-side panel, no `~ old → new`) — root cause: no cache-busting on
+static assets. Reported "regression: modified doesn't show old value" was
+this staleness, not code.
+
+### Fixed (api/routers/config_drift.py)
+
+- **NTP misclassified as AAA (4 of 8 CRITICALs were false):** `ntp server
+  … key 1`, `ntp authentication-key`, `ntp trusted-key` matched the AAA
+  pattern's bare `key \d+`. NTP pattern now checked first (WARNING "NTP
+  configuration changed"); AAA key pattern anchored to child lines
+  (`^\s*key …` — tacacs/radius block children still CRITICAL). Fixture
+  pair now yields exactly 4 real CRITICALs (username, enable secret,
+  aaa authorization console, snmp community) — pinned by test.
+
+### Fixed (web delivery)
+
+- `index.html` served with `Cache-Control: no-cache`; all 12 local
+  JS/CSS assets referenced with `?v=0.6.26` version query so deploys
+  propagate without hard refresh.
+
+### Tests
+
+- +4 regression tests (NTP never AAA, keyed ntp = WARNING/NTP, tacacs key
+  child stays CRITICAL, fixture CRITICAL count == 4).
+  **329 passed, 1 skipped.**
+
+Known characteristic (review pt 3, accepted): drift score is line-based,
+not area-based — fine for golden-config monitoring (expect ~0%), do not
+compare scores across devices of different config size.
+
 ## [v0.6.26] – 2026-07-28 (Config Drift v1.1 — classification quality + side-by-side diff)
 
 Source: first real E2E test (access-switch baseline vs hardened) + network
