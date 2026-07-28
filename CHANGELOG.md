@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.27.3] – 2026-07-28 (Config Drift — section context in side-by-side)
+
+User catch: the ±2-line context window shows the changed lines but the
+owning section header (e.g. `interface GigabitEthernet1/0/23`) scrolls
+away into the `···` gap. Each change block that starts with indented child
+lines now gets a dim `§ <section header>` context row (nearest preceding
+non-indented config line; comments excluded). Verified on the variant-4
+fixture: exactly one `§ interface GigabitEthernet1/0/23` row above the
+block. Assets bumped to `?v=0.6.27.2`.
+
 ## [v0.6.27.2] – 2026-07-28 (Config Drift — side-by-side diff learns interface-range expansion)
 
 User catch on production: the visual diff is client-side on raw lines and

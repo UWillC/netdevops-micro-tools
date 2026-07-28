@@ -1453,6 +1453,17 @@ function renderDriftSideBySide(configA, configB) {
     }
   });
 
+  // Section context per row: nearest preceding non-indented config line
+  // (interface X, line vty …). Comments (!) are not section headers.
+  const isHeaderLine = (l) => l != null && !/^\s/.test(l) && !l.trim().startsWith("!");
+  const sectionAt = new Array(rows.length);
+  let curSection = null;
+  rows.forEach((r, idx) => {
+    if (isHeaderLine(r.a)) curSection = r.a.trim();
+    else if (isHeaderLine(r.b)) curSection = r.b.trim();
+    sectionAt[idx] = curSection;
+  });
+
   const bg = { removed: "rgba(239,68,68,0.14)", added: "rgba(34,197,94,0.14)", modified: "rgba(249,115,22,0.16)" };
   const bar = { removed: "#ef4444", added: "#22c55e", modified: "#f97316" };
 
@@ -1463,6 +1474,7 @@ function renderDriftSideBySide(configA, configB) {
   }
   html += `<div style="display:grid; grid-template-columns:1fr 1fr; min-width:600px;">`;
   let inGap = false;
+  let lastShownSection = null;
   rows.forEach((r, idx) => {
     if (!visible.has(idx)) {
       if (!inGap) {
@@ -1471,6 +1483,17 @@ function renderDriftSideBySide(configA, configB) {
       }
       return;
     }
+    if (inGap) {
+      // First visible row after a gap: if it's an indented child line, show
+      // which section it belongs to (the header itself is hidden in the gap).
+      const section = sectionAt[idx];
+      const indented = (r.a != null && /^\s/.test(r.a)) || (r.b != null && /^\s/.test(r.b));
+      if (section && indented && section !== lastShownSection) {
+        html += `<div style="${cellBase} color:var(--text-dim); font-style:italic; grid-column:1 / span 2;">§ ${cdEscapeHtml(section)}</div>`;
+        lastShownSection = section;
+      }
+    }
+    if (isHeaderLine(r.a) || isHeaderLine(r.b)) lastShownSection = sectionAt[idx];
     inGap = false;
     let aStyle = cellBase, bStyle = cellBase + "border-left:1px solid var(--border, #333);";
     if (r.type === "removed") aStyle += `background:${bg.removed}; border-left:3px solid ${bar.removed};`;
