@@ -1,0 +1,243 @@
+! =====================================================
+! BASIC / IDENTITY
+! =====================================================
+hostname [SW-ACCESS-01]
+!
+no ip domain lookup
+ip domain name [example.local]
+!
+no service pad
+no service config
+no ip source-route
+no ip gratuitous-arps
+ip dhcp bootp ignore
+no vstack
+service tcp-keepalives-in
+service tcp-keepalives-out
+!
+! =====================================================
+! AAA — Cisco ISE (TACACS+) z lokalnym fallbackiem (break-glass only)
+! =====================================================
+username [breakglass-admin] privilege 15 algorithm-type scrypt secret [STRONG_SECRET]
+enable algorithm-type scrypt secret [ENABLE_SECRET]
+!
+aaa new-model
+!
+tacacs server [ISE-1]
+ address ipv4 [10.x.x.x]
+ key [TACACS_SHARED_SECRET]
+ timeout 5
+!
+aaa group server tacacs+ [ISE-TACACS]
+ server name [ISE-1]
+!
+aaa authentication login default group [ISE-TACACS] local
+aaa authentication enable default group [ISE-TACACS] enable
+aaa authorization exec default group [ISE-TACACS] local if-authenticated
+aaa authorization commands 15 default group [ISE-TACACS] local if-authenticated
+aaa authorization console
+aaa accounting exec default start-stop group [ISE-TACACS]
+aaa accounting commands 15 default start-stop group [ISE-TACACS]
+aaa accounting connection default start-stop group [ISE-TACACS]
+aaa accounting system default start-stop group [ISE-TACACS]
+!
+login block-for 120 attempts 3 within 60
+login quiet-mode access-class [MGMT-ACL]
+login on-failure log
+login on-success log
+!
+! =====================================================
+! MANAGEMENT — SSH only, VRF MGMT, ograniczenie źródeł
+! =====================================================
+vrf definition [MGMT]
+ address-family ipv4
+ exit-address-family
+!
+interface Vlan[100]
+ description MGMT
+ vrf forwarding [MGMT]
+ ip address [10.100.0.10] [255.255.255.0]
+ no shutdown
+!
+ip route vrf [MGMT] 0.0.0.0 0.0.0.0 [10.100.0.1]
+!
+ip access-list standard [MGMT-ACL]
+ permit [10.100.0.0] [0.0.0.255]
+ deny   any log
+!
+crypto key generate rsa modulus 4096
+ip ssh version 2
+ip ssh time-out 60
+ip ssh authentication-retries 3
+ip ssh dh min size 4096
+ip ssh server algorithm encryption aes256-gcm@openssh.com aes256-ctr
+ip ssh server algorithm mac hmac-sha2-512 hmac-sha2-256
+ip ssh server algorithm kex ecdh-sha2-nistp384 ecdh-sha2-nistp256
+ip ssh source-interface Vlan[100]
+ip ssh logging events
+!
+line vty 0 15
+ transport input ssh
+ transport output ssh
+ access-class [MGMT-ACL] in vrf-also
+ exec-timeout 5 0
+ session-timeout 15
+ logging synchronous
+!
+line con 0
+ exec-timeout 5 0
+ logging synchronous
+!
+line aux 0
+ no exec
+ transport input none
+!
+no ip http server
+no ip http secure-server
+!
+! =====================================================
+! NTP — CORE SW jako źródło czasu, z uwierzytelnianiem
+! =====================================================
+ntp authentication-key 1 hmac-sha2-256 [NTP_KEY]
+ntp authenticate
+ntp trusted-key 1
+ntp server [CORE_SW_IP_1] key 1 prefer
+ntp server [CORE_SW_IP_2] key 1
+clock timezone [UTC] 0
+!
+! =====================================================
+! LOGGING — syslog + audyt zmian konfiguracji
+! =====================================================
+logging buffered 512000 informational
+logging host [LOG_SYSTEM_IP] vrf [MGMT]
+logging source-interface Vlan[100] vrf [MGMT]
+logging trap informational
+no logging console
+service timestamps log datetime msec localtime show-timezone
+service timestamps debug datetime msec localtime show-timezone
+service sequence-numbers
+!
+archive
+ log config
+  logging enable
+  logging size 500
+  notify syslog contenttype plaintext
+  hidekeys
+!
+! SNMPv3 zamiast community v2c
+no snmp-server community [RO_COMMUNITY]
+snmp-server group [SNMPV3-GROUP] v3 priv read [SNMPV3-VIEW] access [SNMP_ACL]
+snmp-server view [SNMPV3-VIEW] iso included
+snmp-server user [SNMPV3-USER] [SNMPV3-GROUP] v3 auth sha [AUTH_PASS] priv aes 256 [PRIV_PASS] access [SNMP_ACL]
+snmp-server location [BUILDING/FLOOR/ROOM]
+snmp-server contact [NETOPS_CONTACT]
+snmp-server enable traps snmp authentication linkdown linkup coldstart warmstart
+!
+! =====================================================
+! VLANS
+! =====================================================
+vlan [10]
+ name [DATA]
+vlan [20]
+ name [VOICE]
+vlan [30]
+ name [WIFI-AP]
+vlan [100]
+ name [MGMT]
+vlan [999]
+ name [BLACKHOLE]
+!
+! =====================================================
+! GLOBAL L2 SECURITY
+! =====================================================
+spanning-tree mode rapid-pvst
+spanning-tree portfast bpduguard default
+spanning-tree extend system-id
+!
+ip dhcp snooping
+ip dhcp snooping vlan [10,20,30]
+no ip dhcp snooping information option
+!
+ip arp inspection vlan [10,20,30]
+ip arp inspection validate src-mac dst-mac ip
+!
+udld enable
+!
+errdisable recovery cause bpduguard
+errdisable recovery cause psecure-violation
+errdisable recovery cause arp-inspection
+errdisable recovery interval 300
+!
+vtp mode transparent
+!
+! =====================================================
+! ACCESS PORTS — userzy + telefony (PoE)
+! =====================================================
+interface range GigabitEthernet1/0/1 - 40
+ description [USER+PHONE]
+ switchport mode access
+ switchport access vlan [10]
+ switchport voice vlan [20]
+ switchport port-security maximum 3
+ switchport port-security violation restrict
+ switchport port-security aging time 5
+ switchport port-security aging type inactivity
+ switchport port-security
+ ip verify source
+ spanning-tree portfast
+ spanning-tree guard root
+ storm-control broadcast level 5.00
+ storm-control multicast level 10.00
+ storm-control action trap
+!
+! ACCESS PORTS — Access Pointy
+interface range GigabitEthernet1/0/41 - 46
+ description [WIFI-AP]
+ switchport mode access
+ switchport access vlan [30]
+ spanning-tree portfast
+ spanning-tree guard root
+!
+! Nieużywane porty — shutdown + blackhole VLAN
+interface range GigabitEthernet1/0/47 - 48
+ description UNUSED
+ switchport mode access
+ switchport access vlan [999]
+ switchport port-security
+ no cdp enable
+ no lldp transmit
+ no lldp receive
+ shutdown
+!
+! =====================================================
+! UPLINK — trunk do dystrybucji (C9500)
+! =====================================================
+interface range TenGigabitEthernet1/1/1 - 2
+ description UPLINK-[DISTRO-SW]
+ switchport mode trunk
+ switchport trunk allowed vlan [10,20,30,100]
+ switchport trunk native vlan [999]
+ switchport nonegotiate
+ ip dhcp snooping trust
+ ip arp inspection trust
+ udld port aggressive
+ channel-group 1 mode active
+!
+interface Port-channel1
+ description PO1-UPLINK-[DISTRO-SW]
+ switchport mode trunk
+ switchport trunk allowed vlan [10,20,30,100]
+ switchport trunk native vlan [999]
+!
+! =====================================================
+! MISC HARDENING
+! =====================================================
+service password-encryption
+banner login ^
+[AUTHORIZED ACCESS ONLY — organizacyjny banner prawny]
+^
+banner motd ^
+[AUTHORIZED ACCESS ONLY — organizacyjny banner prawny]
+^
+!
+end

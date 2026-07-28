@@ -4,6 +4,58 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.26] – 2026-07-28 (Config Drift v1.1 — classification quality + side-by-side diff)
+
+Source: first real E2E test (access-switch baseline vs hardened) + network
+assistant review. v1.0 caught 100% of planted changes but had 5
+classification weaknesses inflating the report (67 sections / 19 warnings,
+~6 of them comment noise).
+
+### Changed (api/routers/config_drift.py — engine rewrite)
+
+- **Comments are not config state:** lines starting with `!` are dropped
+  entirely — no more "Section removed" warnings on comment headers.
+  Inline trailing comments (`cmd  ! note`) ignored for comparison.
+- **No granularity inflation:** a non-indented line is a section header
+  ONLY if it has indented children; standalone global commands live in one
+  "Global Configuration" bucket. Same fixture pair: 67 sections → 12
+  logical areas. Drift score counts logical changes (modified pair = 1).
+- **Modified-line pairing:** removed+added lines of the same command are
+  paired into one `modified` entry (`old_line` → `line`): `username …
+  secret → … algorithm-type scrypt secret`, `logging buffered 64000 →
+  512000`, `ntp server … prefer → … key 1 prefer`, `snmp-server community
+  … → no snmp-server community …`. Unambiguous 1:1 matches only.
+- **Context-aware notes:** transport/exec-timeout notes use the actual
+  line type — `line aux 0` is reported as AUX, not VTY.
+- **Direction heuristic (new field `direction`):** every change tagged
+  `hardening` / `degradation` / `neutral` from a protective/risky pattern
+  table (e.g. removing `snmp-server community` v2c = hardening; removing
+  `no cdp enable` = degradation). Summary carries an explicit disclaimer:
+  heuristic tags, NOT a risk rating.
+- **Multiline banners** collapsed into one logical line (no more `^`
+  pseudo-sections).
+- Bare-header reconciliation: a block header with children in one config
+  and standalone in the other compares as the same section.
+
+### Added (web — Config Drift tab, v1.0 → v1.1)
+
+- **Side-by-side diff panel** (client-side LCS + modified pairing):
+  removed red (left), added green (right), modified orange (both),
+  unchanged dimmed and collapsed to context (··· separators). Renders
+  next to the existing text report; Copy/Download unchanged.
+- Text report shows `~ old → new` for modified entries, `[↑ hardening]` /
+  `[↓ DEGRADATION]` tags, modified count in summary chips.
+
+### Added (tests)
+
+- `tests/test_config_drift.py` — 28 regression tests pinning all five
+  fixes + reference detections from the real E2E test (incl. the traps:
+  removed `no cdp enable` on user ports, `snmp-server community` change).
+- `tests/fixtures/config_drift/` — real test pair (baseline + hardened
+  access switch), sanitized placeholders.
+
+**Tests: 325 passed, 1 skipped** (297 baseline + 28 new, zero regressions).
+
 ## [v0.6.25] – 2026-04-30 (W18 Day 4 evening — CVE-006 Phase 4 + 4a wiring complete)
 
 ### Added — Phase 4: PSIRT advisory-detail enrichment pipeline

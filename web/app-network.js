@@ -1284,6 +1284,12 @@ const cdOutput = document.getElementById("cd-output");
 const cdSummary = document.getElementById("cd-summary");
 const cdResults = document.getElementById("cd-results");
 
+function driftDirectionTag(c) {
+  if (c.direction === "hardening") return " [↑ hardening]";
+  if (c.direction === "degradation") return " [↓ DEGRADATION]";
+  return "";
+}
+
 function formatDrift(data) {
   let out = [];
 
@@ -1293,7 +1299,7 @@ function formatDrift(data) {
     out.push(`Config A: ${data.hostname_a || "unknown"}  →  Config B: ${data.hostname_b || "unknown"}`);
   }
   out.push(`Drift Score: ${data.drift_score}%`);
-  out.push(`Added: ${data.total_added} | Removed: ${data.total_removed} | Unchanged: ${data.total_unchanged}`);
+  out.push(`Added: ${data.total_added} | Removed: ${data.total_removed} | Modified: ${data.total_modified ?? 0} | Unchanged: ${data.total_unchanged}`);
   out.push("");
 
   data.summary.forEach(s => out.push(s));
@@ -1301,19 +1307,138 @@ function formatDrift(data) {
 
   data.sections.forEach(sec => {
     out.push("-".repeat(60));
-    out.push(`[${sec.title}]  +${sec.added_count} -${sec.removed_count}`);
+    const mod = sec.modified_count ? ` ~${sec.modified_count}` : "";
+    out.push(`[${sec.title}]  +${sec.added_count} -${sec.removed_count}${mod}`);
     out.push("");
 
     sec.changes.forEach(c => {
-      const prefix = c.change_type === "added" ? "+" : c.change_type === "removed" ? "-" : " ";
       const risk = c.risk ? ` [${c.risk.toUpperCase()}]` : "";
       const note = c.note ? ` — ${c.note}` : "";
-      out.push(`  ${prefix} ${c.line}${risk}${note}`);
+      const dir = driftDirectionTag(c);
+      if (c.change_type === "modified") {
+        out.push(`  ~ ${c.old_line}`);
+        out.push(`    → ${c.line}${risk}${note}${dir}`);
+      } else {
+        const prefix = c.change_type === "added" ? "+" : c.change_type === "removed" ? "-" : " ";
+        out.push(`  ${prefix} ${c.line}${risk}${note}${dir}`);
+      }
     });
     out.push("");
   });
 
   return out.join("\n");
+}
+
+// ---- Side-by-side diff (client-side, raw lines) ----
+
+function cdLcsRows(aLines, bLines) {
+  const n = aLines.length, m = bLines.length;
+  const dp = [];
+  for (let i = 0; i <= n; i++) dp.push(new Uint16Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      dp[i][j] = aLines[i].trim() === bLines[j].trim()
+        ? dp[i + 1][j + 1] + 1
+        : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+  const rows = [];
+  let i = 0, j = 0;
+  while (i < n && j < m) {
+    if (aLines[i].trim() === bLines[j].trim()) {
+      rows.push({ a: aLines[i], b: bLines[j], type: "same" }); i++; j++;
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+      rows.push({ a: aLines[i], b: null, type: "removed" }); i++;
+    } else {
+      rows.push({ a: null, b: bLines[j], type: "added" }); j++;
+    }
+  }
+  while (i < n) rows.push({ a: aLines[i++], b: null, type: "removed" });
+  while (j < m) rows.push({ a: null, b: bLines[j++], type: "added" });
+  return rows;
+}
+
+function cdCommandKey(line) {
+  let s = line.trim().replace(/\s+!.*$/, "").replace(/\s+/g, " ");
+  if (s.toLowerCase().startsWith("no ")) s = s.slice(3);
+  return s.split(" ").slice(0, 2).join(" ").toLowerCase();
+}
+
+function cdPairModified(rows) {
+  const out = [];
+  let k = 0;
+  while (k < rows.length) {
+    if (rows[k].type === "same") { out.push(rows[k]); k++; continue; }
+    const removed = [], added = [];
+    while (k < rows.length && rows[k].type !== "same") {
+      (rows[k].type === "removed" ? removed : added).push(rows[k]);
+      k++;
+    }
+    const usedAdded = new Set();
+    removed.forEach(r => {
+      const key = cdCommandKey(r.a);
+      const cand = added.find(x => !usedAdded.has(x) && cdCommandKey(x.b) === key);
+      if (cand) {
+        out.push({ a: r.a, b: cand.b, type: "modified" });
+        usedAdded.add(cand);
+      } else {
+        out.push(r);
+      }
+    });
+    added.forEach(x => { if (!usedAdded.has(x)) out.push(x); });
+  }
+  return out;
+}
+
+function cdEscapeHtml(s) {
+  return s == null ? "" : s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function renderDriftSideBySide(configA, configB) {
+  const aLines = configA.split("\n").filter(l => l.trim() !== "");
+  const bLines = configB.split("\n").filter(l => l.trim() !== "");
+  if (aLines.length * bLines.length > 4000000) {
+    return `<div style="padding:0.5rem; color:var(--text-dim);">Configs too large for visual diff — see the text report below.</div>`;
+  }
+  const rows = cdPairModified(cdLcsRows(aLines, bLines));
+
+  const CONTEXT = 2;
+  const visible = new Set();
+  rows.forEach((r, idx) => {
+    if (r.type !== "same") {
+      for (let d = -CONTEXT; d <= CONTEXT; d++) {
+        if (idx + d >= 0 && idx + d < rows.length) visible.add(idx + d);
+      }
+    }
+  });
+
+  const bg = { removed: "rgba(239,68,68,0.14)", added: "rgba(34,197,94,0.14)", modified: "rgba(249,115,22,0.16)" };
+  const bar = { removed: "#ef4444", added: "#22c55e", modified: "#f97316" };
+
+  const cellBase = "padding:0 0.5rem; white-space:pre; font-family:var(--font-mono, monospace); font-size:0.72rem; line-height:1.6; overflow:hidden; text-overflow:ellipsis;";
+  let html = `<div style="display:grid; grid-template-columns:1fr 1fr; min-width:600px;">`;
+  let inGap = false;
+  rows.forEach((r, idx) => {
+    if (!visible.has(idx)) {
+      if (!inGap) {
+        html += `<div style="${cellBase} color:var(--text-dim); grid-column:1 / span 2; text-align:center; border-top:1px dashed var(--border, #333); border-bottom:1px dashed var(--border, #333);">···</div>`;
+        inGap = true;
+      }
+      return;
+    }
+    inGap = false;
+    let aStyle = cellBase, bStyle = cellBase + "border-left:1px solid var(--border, #333);";
+    if (r.type === "removed") aStyle += `background:${bg.removed}; border-left:3px solid ${bar.removed};`;
+    if (r.type === "added") bStyle += `background:${bg.added}; border-left:3px solid ${bar.added};`;
+    if (r.type === "modified") {
+      aStyle += `background:${bg.modified}; border-left:3px solid ${bar.modified};`;
+      bStyle += `background:${bg.modified}; border-left:3px solid ${bar.modified};`;
+    }
+    if (r.type === "same") { aStyle += "opacity:0.55;"; bStyle += "opacity:0.55;"; }
+    html += `<div style="${aStyle}">${cdEscapeHtml(r.a) || "&nbsp;"}</div><div style="${bStyle}">${cdEscapeHtml(r.b) || "&nbsp;"}</div>`;
+  });
+  html += `</div>`;
+  return html;
 }
 
 function formatDriftSummary(data) {
@@ -1328,13 +1453,15 @@ function formatDriftSummary(data) {
     <div style="font-size:0.8rem; color:var(--text-dim);">Drift Score</div>
   </div>`;
   html += `<div style="flex:1; min-width:200px;">`;
-  html += `<div style="display:flex; gap:1rem; margin-bottom:0.5rem;">
+  html += `<div style="display:flex; gap:1rem; margin-bottom:0.5rem; flex-wrap:wrap;">
     <span style="color:#22c55e; font-weight:600;">+${data.total_added} added</span>
     <span style="color:#ef4444; font-weight:600;">-${data.total_removed} removed</span>
+    <span style="color:#f97316; font-weight:600;">~${data.total_modified ?? 0} modified</span>
     <span style="color:var(--text-dim);">${data.total_unchanged} unchanged</span>
   </div>`;
   data.summary.forEach(s => {
-    const cls = s.includes("CRITICAL") ? "color:#ef4444" : s.includes("WARNING") ? "color:#eab308" : "";
+    const cls = s.includes("CRITICAL") ? "color:#ef4444" : s.includes("WARNING") ? "color:#eab308" :
+      s.startsWith("Direction:") ? "color:#f97316" : "";
     html += `<div style="${cls}; font-size:0.85rem;">${s}</div>`;
   });
   html += `</div></div>`;
@@ -1352,9 +1479,11 @@ if (cdForm) {
       return;
     }
 
+    const cdSxs = document.getElementById("cd-sxs");
     if (cdOutput) cdOutput.value = "Comparing configs...";
     if (cdSummary) cdSummary.style.display = "none";
     if (cdResults) cdResults.style.display = "none";
+    if (cdSxs) cdSxs.style.display = "none";
 
     try {
       const data = await postJSON("/tools/config-drift/compare", {
@@ -1366,6 +1495,13 @@ if (cdForm) {
       if (cdSummary) {
         document.getElementById("cd-summary-content").innerHTML = formatDriftSummary(data);
         cdSummary.style.display = "block";
+      }
+      if (cdSxs) {
+        const hasDrift = (data.total_added + data.total_removed + (data.total_modified ?? 0)) > 0;
+        if (hasDrift) {
+          document.getElementById("cd-sxs-content").innerHTML = renderDriftSideBySide(configA, configB);
+          cdSxs.style.display = "block";
+        }
       }
       if (cdResults) cdResults.style.display = "block";
       if (cdOutput) cdOutput.value = formatDrift(data);

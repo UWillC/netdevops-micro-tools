@@ -2901,8 +2901,8 @@ With this, only ports inactive for 6+ months are flagged."></textarea>
 
       <!-- CONFIG DRIFT TAB -->
       <section id="tab-config-drift" class="tab-content">
-        <h2>Config Drift Detection <span class="version-badge">v1.0 — Compare Two Configs</span></h2>
-        <p class="tool-description">Paste two configs (baseline vs current) to detect changes, additions, and removals. Risk-flags highlight security-sensitive drift.</p>
+        <h2>Config Drift Detection <span class="version-badge">v1.1 — Compare Two Configs</span></h2>
+        <p class="tool-description">Paste two configs (baseline vs current) to detect changes, additions, removals, and modified commands. Risk-flags highlight security-sensitive drift; direction tags (hardening/degradation) are heuristic, not a risk rating.</p>
 
         <form id="cd-form" class="card" style="margin-top:12px;">
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
@@ -2933,6 +2933,22 @@ from the device right now..." required></textarea>
 
         <div id="cd-summary" class="card" style="display:none; margin-top:1rem;">
           <div id="cd-summary-content"></div>
+        </div>
+
+        <div id="cd-sxs" class="card" style="display:none; margin-top:1rem;">
+          <div class="output-header">
+            <h3>Side-by-Side Diff</h3>
+            <div style="font-size:0.75rem; color:var(--text-dim);">
+              <span style="color:#ef4444;">&#9632; removed</span>
+              <span style="color:#22c55e; margin-left:0.5rem;">&#9632; added</span>
+              <span style="color:#f97316; margin-left:0.5rem;">&#9632; modified</span>
+            </div>
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:0; font-size:0.7rem; color:var(--text-dim); padding:0 0.25rem 0.25rem;">
+            <div>Config A (baseline)</div>
+            <div>Config B (current)</div>
+          </div>
+          <div id="cd-sxs-content" style="overflow-x:auto; max-height:500px; overflow-y:auto;"></div>
         </div>
 
         <div id="cd-results" style="display:none; margin-top:1rem;">

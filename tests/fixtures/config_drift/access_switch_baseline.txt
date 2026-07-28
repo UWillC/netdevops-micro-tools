@@ -1,0 +1,169 @@
+! =====================================================
+! BASIC / IDENTITY
+! =====================================================
+hostname [SW-ACCESS-01]
+!
+no ip domain lookup
+ip domain name [example.local]
+!
+! =====================================================
+! AAA — Cisco ISE (TACACS+) z lokalnym fallbackiem (break-glass only)
+! =====================================================
+username [breakglass-admin] privilege 15 secret [STRONG_SECRET]
+!
+aaa new-model
+!
+tacacs server [ISE-1]
+ address ipv4 [10.x.x.x]
+ key [TACACS_SHARED_SECRET]
+!
+aaa group server tacacs+ [ISE-TACACS]
+ server name [ISE-1]
+!
+aaa authentication login default group [ISE-TACACS] local
+aaa authentication enable default group [ISE-TACACS] enable
+aaa authorization exec default group [ISE-TACACS] local if-authenticated
+aaa authorization commands 15 default group [ISE-TACACS] local if-authenticated
+aaa accounting exec default start-stop group [ISE-TACACS]
+aaa accounting commands 15 default start-stop group [ISE-TACACS]
+!
+! =====================================================
+! MANAGEMENT — SSH only (zgodnie z constraints.md), VRF MGMT
+! =====================================================
+vrf definition [MGMT]
+ address-family ipv4
+ exit-address-family
+!
+interface Vlan[100]
+ description MGMT
+ vrf forwarding [MGMT]
+ ip address [10.100.0.10] [255.255.255.0]
+ no shutdown
+!
+ip route vrf [MGMT] 0.0.0.0 0.0.0.0 [10.100.0.1]
+!
+crypto key generate rsa modulus 4096
+ip ssh version 2
+ip ssh time-out 60
+ip ssh authentication-retries 3
+!
+line vty 0 15
+ transport input ssh
+ exec-timeout 10 0
+!
+line con 0
+ exec-timeout 10 0
+ logging synchronous
+!
+no ip http server
+no ip http secure-server
+!
+! =====================================================
+! NTP — CORE SW jako źródło czasu (zgodnie z network_env.md 3.3)
+! =====================================================
+ntp server [CORE_SW_IP_1] prefer
+ntp server [CORE_SW_IP_2]
+clock timezone [UTC] 0
+!
+! =====================================================
+! LOGGING — syslog do systemu monitoringu (WhatsUp Gold / Prime)
+! =====================================================
+logging buffered 64000 informational
+logging host [LOG_SYSTEM_IP] vrf [MGMT]
+logging source-interface Vlan[100] vrf [MGMT]
+logging trap informational
+service timestamps log datetime msec localtime show-timezone
+service timestamps debug datetime msec localtime show-timezone
+!
+snmp-server community [RO_COMMUNITY] RO [SNMP_ACL]
+snmp-server location [BUILDING/FLOOR/ROOM]
+snmp-server contact [NETOPS_CONTACT]
+!
+! =====================================================
+! VLANS (przykładowe — uzupełnij wg planu adresacji)
+! =====================================================
+vlan [10]
+ name [DATA]
+vlan [20]
+ name [VOICE]
+vlan [30]
+ name [WIFI-AP]
+vlan [100]
+ name [MGMT]
+vlan [999]
+ name [BLACKHOLE]
+!
+! =====================================================
+! GLOBAL L2 SECURITY
+! =====================================================
+spanning-tree mode rapid-pvst
+spanning-tree portfast bpduguard default
+spanning-tree extend system-id
+!
+ip dhcp snooping
+ip dhcp snooping vlan [10,20,30]
+no ip dhcp snooping information option
+!
+errdisable recovery cause bpduguard
+errdisable recovery cause psecure-violation
+errdisable recovery interval 300
+!
+vtp mode transparent
+!
+! =====================================================
+! ACCESS PORTS — userzy + telefony (PoE)
+! =====================================================
+interface range GigabitEthernet1/0/1 - 40
+ description [USER+PHONE]
+ switchport mode access
+ switchport access vlan [10]
+ switchport voice vlan [20]
+ switchport port-security maximum 3
+ switchport port-security violation restrict
+ switchport port-security aging time 5
+ switchport port-security aging type inactivity
+ switchport port-security
+ spanning-tree portfast
+ storm-control broadcast level 5.00
+ no cdp enable  ! opcjonalnie — telefony Cisco wymagają CDP/LLDP, dostosuj
+!
+! ACCESS PORTS — Access Pointy (trunk lub access, zależnie od trybu AP)
+interface range GigabitEthernet1/0/41 - 46
+ description [WIFI-AP]
+ switchport mode access
+ switchport access vlan [30]
+ spanning-tree portfast
+!
+! Nieużywane porty — shutdown + blackhole VLAN
+interface range GigabitEthernet1/0/47 - 48
+ description UNUSED
+ switchport mode access
+ switchport access vlan [999]
+ shutdown
+!
+! =====================================================
+! UPLINK — trunk do dystrybucji (C9500)
+! =====================================================
+interface range TenGigabitEthernet1/1/1 - 2
+ description UPLINK-[DISTRO-SW]
+ switchport mode trunk
+ switchport trunk allowed vlan [10,20,30,100]
+ switchport nonegotiate
+ ip dhcp snooping trust
+ channel-group 1 mode active
+!
+interface Port-channel1
+ description PO1-UPLINK-[DISTRO-SW]
+ switchport mode trunk
+ switchport trunk allowed vlan [10,20,30,100]
+!
+! =====================================================
+! MISC HARDENING
+! =====================================================
+service password-encryption
+no service pad
+banner motd ^
+[AUTHORIZED ACCESS ONLY — organizacyjny banner prawny]
+^
+!
+end
