@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.27.1] – 2026-07-28 (Config Drift — needle-in-haystack fixture + VLAN assignment risk flag)
+
+Round-5 fixture: per-port running-config with exactly ONE deviated port
+(Gi1/0/23) vs the range-based golden template — the primary production
+use case. Result: score 0.3%, exactly 1 section reported, vlan 10→30
+paired as modified ACROSS the range↔per-port boundary, removed
+port-security tagged degradation. Zero noise at 648 unchanged lines.
+
+### Added
+
+- Risk pattern: `switchport access|voice vlan` → WARNING "Access/voice
+  VLAN assignment changed" (port moved to another VLAN is classic drift;
+  auto-downgraded to info inside brand-new sections like all warnings).
+- `tests/fixtures/config_drift/variant4_one_port_deviated.txt` + 4 E2E
+  tests (only deviated port reported, score <1%, vlan pairing + flag,
+  degradation on removed port-security). **346 passed, 1 skipped.**
+
 ## [v0.6.27] – 2026-07-28 (Config Drift v1.1.1 — unchanged-counter fix + interface-range expansion)
 
 Source: round-4 negative-control campaign (network assistant): variant 1

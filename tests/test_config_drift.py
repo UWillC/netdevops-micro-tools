@@ -431,3 +431,36 @@ class TestNewSectionTriage:
                if "line aux" in c.section and "transport" in c.line]
         assert aux
         assert all(c.risk == "info" for c in aux)
+
+
+class TestNeedleInHaystack:
+    """Round 5 fixture: per-port running-config where exactly ONE port
+    (Gi1/0/23) deviated from the golden template written with ranges —
+    the primary production use case for golden-config monitoring."""
+
+    @pytest.fixture(scope="class")
+    def rep(self, baseline):
+        v4 = (FIXTURES / "variant4_one_port_deviated.txt").read_text()
+        return compare_configs(DriftRequest(config_a=baseline, config_b=v4))
+
+    def test_only_the_deviated_port_reported(self, rep):
+        assert len(rep.sections) == 1
+        assert rep.sections[0].title == "interface GigabitEthernet1/0/23"
+
+    def test_score_near_zero(self, rep):
+        assert 0 < rep.drift_score < 1.0
+        assert rep.total_unchanged > 600
+
+    def test_vlan_change_paired_and_flagged(self, rep):
+        mods = [c for c in rep.sections[0].changes if c.change_type == "modified"]
+        assert len(mods) == 1
+        assert "switchport access vlan [30]" in mods[0].line
+        assert "switchport access vlan [10]" in mods[0].old_line
+        assert mods[0].risk == "warning"
+        assert "VLAN" in mods[0].note
+
+    def test_removed_port_security_is_degradation(self, rep):
+        removed = [c for c in rep.sections[0].changes if c.change_type == "removed"]
+        assert len(removed) == 1
+        assert "switchport port-security" in removed[0].line
+        assert removed[0].direction == "degradation"

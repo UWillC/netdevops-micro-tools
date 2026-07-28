@@ -301,6 +301,7 @@ RISK_PATTERNS = [
     (r"exec-timeout", "warning", "Session timeout changed"),
     (r"logging\s+(host|\d+\.\d+)", "warning", "Logging destination changed"),
     (r"switchport mode", "warning", "Switchport mode changed"),
+    (r"switchport (access|voice) vlan", "warning", "Access/voice VLAN assignment changed"),
     (r"switchport trunk", "warning", "Trunk config changed"),
     (r"spanning-tree", "warning", "STP config changed"),
     (r"ip route", "warning", "Static route changed"),
