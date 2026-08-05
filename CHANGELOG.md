@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.28] – 2026-08-05 (Whoami — ifconfig.me-style client info)
+
+New `/tools/whoami` endpoint family (curl-first, ifconfig.me pattern):
+`GET /tools/whoami` returns bare client IP as text/plain for CLI agents
+(curl/wget/httpie/fetch) and full JSON for browsers or `Accept:
+application/json`; `/tools/whoami/ip` is always plain (script-safe);
+`/tools/whoami/json` is always JSON. Client IP resolved from the first
+`X-Forwarded-For` entry (Render proxy), falling back to the socket peer.
+Only a whitelisted subset of client headers is ever reflected (UA,
+accept*, referer, forwarded chain) — cookies/authorization are never
+echoed. 7 new tests (content negotiation, XFF parsing, sensitive-header
+guard); suite 353 passed. Meta version was stale at 0.6.25 → aligned to
+0.6.28, feature flag `whoami` added.
+
 ## [v0.6.27.3] – 2026-07-28 (Config Drift — section context in side-by-side)
 
 User catch: the ±2-line context window shows the changed lines but the
