@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.28.1] – 2026-08-05 (Whoami — web UI tab)
+
+GUI for the whoami endpoint: "What's My IP" tab in the Network Tools nav
+group (badge 9→10), home tool card, panel with one-click check (fetch
+`/tools/whoami/json` → formatted summary in readonly textarea + Copy),
+and a CLI hints panel with click-to-copy curl commands. Reused existing
+patterns only (tab-content, hints-panel, `.copy-btn[data-target]`) — no
+new JS/CSS files, whitelists untouched. Assets bumped to `?v=0.6.28`.
+JS syntax-checked; suite 353 passed.
+
 ## [v0.6.28] – 2026-08-05 (Whoami — ifconfig.me-style client info)
 
 New `/tools/whoami` endpoint family (curl-first, ifconfig.me pattern):

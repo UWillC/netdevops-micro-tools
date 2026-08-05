@@ -1693,3 +1693,34 @@ if (cisForm) {
     }
   });
 }
+
+// ------- What's My IP (whoami) -------
+const whoamiCheck = document.getElementById("whoami-check");
+const whoamiOutput = document.getElementById("whoami-output");
+const whoamiCopy = document.getElementById("whoami-copy");
+
+function formatWhoami(data) {
+  const lines = [`Public IP:        ${data.ip}`];
+  if (data.proto) lines.push(`Protocol:         ${data.proto}`);
+  if (data.user_agent) lines.push(`User-Agent:       ${data.user_agent}`);
+  if (data.accept_language) lines.push(`Accept-Language:  ${data.accept_language}`);
+  if (data.accept_encoding) lines.push(`Accept-Encoding:  ${data.accept_encoding}`);
+  if (data.x_forwarded_for) lines.push(`Forwarded chain:  ${data.x_forwarded_for}`);
+  return lines.join("\n");
+}
+
+if (whoamiCheck && whoamiOutput) {
+  whoamiCheck.addEventListener("click", async () => {
+    whoamiOutput.style.display = "block";
+    whoamiOutput.value = "Checking...";
+    try {
+      const response = await fetch(`${API_BASE_URL}/tools/whoami/json`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      whoamiOutput.value = formatWhoami(data);
+      if (whoamiCopy) whoamiCopy.style.display = "inline-block";
+    } catch (err) {
+      whoamiOutput.value = `Error: ${err.message}`;
+    }
+  });
+}

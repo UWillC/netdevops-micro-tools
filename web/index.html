@@ -5,9 +5,9 @@
   <title>NetDevOps Micro-Tools – Web UI</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
-  <link rel="stylesheet" href="style-base.css?v=0.6.27.2" />
-  <link rel="stylesheet" href="style-home.css?v=0.6.27.2" />
-  <link rel="stylesheet" href="style-tools.css?v=0.6.27.2" />
+  <link rel="stylesheet" href="style-base.css?v=0.6.28" />
+  <link rel="stylesheet" href="style-home.css?v=0.6.28" />
+  <link rel="stylesheet" href="style-tools.css?v=0.6.28" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-SP6VHRYCNC"></script>
@@ -98,7 +98,7 @@
           <button class="nav-group-header" data-group="network">
             <span class="nav-group-icon">🔧</span>
             <span class="nav-group-label">Network Tools</span>
-            <span class="nav-group-badge">9</span>
+            <span class="nav-group-badge">10</span>
             <span class="nav-group-arrow">▶</span>
           </button>
           <div class="nav-group-items collapsed" id="group-network">
@@ -111,6 +111,7 @@
             <button class="tab-button" data-tab="ip-path-tracer"><span class="tool-icon">🔀</span> IP Path Tracer</button>
             <button class="tab-button" data-tab="port-auditor"><span class="tool-icon">🔌</span> Port Auditor</button>
             <button class="tab-button" data-tab="config-drift"><span class="tool-icon">🔃</span> Config Drift</button>
+            <button class="tab-button" data-tab="whoami"><span class="tool-icon">📡</span> What's My IP</button>
           </div>
         </div>
 
@@ -275,6 +276,11 @@
                 <span class="tool-icon">📏</span>
                 <span class="tool-name">MTU Calculator</span>
                 <span class="tool-desc">Tunnel overhead</span>
+              </button>
+              <button class="home-tool-card" data-tab="whoami">
+                <span class="tool-icon">📡</span>
+                <span class="tool-name">What's My IP</span>
+                <span class="tool-desc">Public IP + client info</span>
               </button>
               <button class="home-tool-card" data-tab="timezone">
                 <span class="tool-icon">🌍</span>
@@ -2326,6 +2332,41 @@ Use with caution on production!">debug ip icmp</code>
       </section>
 
       <!-- TIMEZONE CONVERTER TAB -->
+      <section id="tab-whoami" class="tab-content">
+        <h2>What's My IP</h2>
+        <p class="tool-description">Your public IP and what your client sends with every request — as seen from the server side. Handy for NAT/proxy debugging and source-IP checks for ACLs.</p>
+
+        <div class="card">
+          <button id="whoami-check" class="btn-primary" type="button">Check my IP</button>
+          <textarea id="whoami-output" class="output-text" readonly style="display:none; margin-top: 1rem;" placeholder=""></textarea>
+          <button class="copy-btn" data-target="whoami-output" style="display:none;" id="whoami-copy">Copy</button>
+        </div>
+
+        <div class="hints-panel card" id="whoami-hints-panel">
+          <div class="hints-header" id="whoami-hints-toggle">
+            <div class="hints-title">
+              <span class="hints-icon">💡</span>
+              CLI usage — script-safe endpoints
+            </div>
+            <span class="hints-arrow">▼</span>
+          </div>
+          <div class="hints-content" id="whoami-hints-content">
+            <div class="hints-grid">
+              <div class="hints-section">
+                <div class="hints-section-title">From your terminal</div>
+                <code class="hints-code">curl netdevops-micro-tools.onrender.com/tools/whoami</code>
+                <code class="hints-code">curl netdevops-micro-tools.onrender.com/tools/whoami/json</code>
+              </div>
+              <div class="hints-section">
+                <div class="hints-section-title">Notes</div>
+                <code class="hints-code">/tools/whoami/ip — always plain text, safe for scripts</code>
+                <code class="hints-code">Cookies and auth headers are never echoed back</code>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section id="tab-timezone" class="tab-content">
         <h2>Timezone Converter <span class="version-badge">v1.1 + NATO DTG</span></h2>
 
@@ -3146,22 +3187,22 @@ line vty 0 15
   </footer>
 
   <!-- Gate: email gate for pro tools (must load BEFORE core) -->
-  <script src="app-gate.js?v=0.6.27.2"></script>
+  <script src="app-gate.js?v=0.6.28"></script>
   <!-- Core: theme, tabs, navigation, utilities -->
-  <script src="app-core.js?v=0.6.27.2"></script>
+  <script src="app-core.js?v=0.6.28"></script>
   <!-- Config Generators: SNMPv3, NTP, AAA, iPerf3 -->
-  <script src="app-config.js?v=0.6.27.2"></script>
+  <script src="app-config.js?v=0.6.28"></script>
   <!-- Golden Config form -->
-  <script src="app-golden.js?v=0.6.27.2"></script>
+  <script src="app-golden.js?v=0.6.28"></script>
   <!-- CVE Analyzer -->
-  <script src="app-security.js?v=0.6.27.2"></script>
+  <script src="app-security.js?v=0.6.28"></script>
   <!-- Profiles, Vuln Widget, Security Score, Export -->
-  <script src="app-profiles.js?v=0.6.27.2"></script>
+  <script src="app-profiles.js?v=0.6.28"></script>
   <!-- Hints, Tooltips, Golden Config UI, SNMP Multi-Host -->
-  <script src="app-ui.js?v=0.6.27.2"></script>
+  <script src="app-ui.js?v=0.6.28"></script>
   <!-- Subnet, MTU, Config Parser, CVE Mitigation, Timezone, NATO DTG, IP Path Tracer -->
-  <script src="app-network.js?v=0.6.27.2"></script>
+  <script src="app-network.js?v=0.6.28"></script>
   <!-- Threat Feed, Port Auditor -->
-  <script src="app-feeds.js?v=0.6.27.2"></script>
+  <script src="app-feeds.js?v=0.6.28"></script>
 </body>
 </html>

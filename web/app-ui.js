@@ -24,6 +24,7 @@ initHintsPanel("aaa-hints-panel", "aaa-hints-toggle");
 initHintsPanel("golden-hints-panel", "golden-hints-toggle");
 initHintsPanel("iperf-hints-panel", "iperf-hints-toggle");
 initHintsPanel("subnet-hints-panel", "subnet-hints-toggle");
+initHintsPanel("whoami-hints-panel", "whoami-hints-toggle");
 
 // Click-to-copy for hints code blocks
 document.querySelectorAll(".hints-code").forEach((codeEl) => {
