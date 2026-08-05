@@ -1701,10 +1701,14 @@ const whoamiCopy = document.getElementById("whoami-copy");
 
 function formatWhoami(data) {
   const lines = [`Public IP:        ${data.ip}`];
+  if (data.remote_host && data.remote_host !== "unavailable") lines.push(`Reverse DNS:      ${data.remote_host}`);
   if (data.proto) lines.push(`Protocol:         ${data.proto}`);
+  if (data.port && data.port !== "unknown") lines.push(`Port:             ${data.port}`);
   if (data.user_agent) lines.push(`User-Agent:       ${data.user_agent}`);
+  if (data.mime) lines.push(`Accept (MIME):    ${data.mime}`);
   if (data.accept_language) lines.push(`Accept-Language:  ${data.accept_language}`);
   if (data.accept_encoding) lines.push(`Accept-Encoding:  ${data.accept_encoding}`);
+  if (data.via) lines.push(`Via:              ${data.via}`);
   if (data.x_forwarded_for) lines.push(`Forwarded chain:  ${data.x_forwarded_for}`);
   return lines.join("\n");
 }

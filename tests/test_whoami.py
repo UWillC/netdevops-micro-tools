@@ -70,3 +70,40 @@ def test_whoami_never_reflects_sensitive_headers():
     assert "secret" not in body_str
     assert "authorization" not in body_str
     assert "cookie" not in body_str
+
+
+def test_whoami_all_plain_listing():
+    headers = dict(CURL_UA)
+    headers["X-Forwarded-For"] = "203.0.113.7"
+    resp = client.get("/tools/whoami/all", headers=headers)
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("text/plain")
+    assert "ip: 203.0.113.7" in resp.text
+    assert "user_agent: curl/8.6.0" in resp.text
+    assert "remote_host:" in resp.text
+
+
+def test_whoami_per_field_endpoints():
+    headers = dict(CURL_UA)
+    headers["X-Forwarded-For"] = "203.0.113.7"
+    headers["Accept-Language"] = "pl-PL,pl;q=0.9"
+    assert client.get("/tools/whoami/ua", headers=headers).text.strip() == "curl/8.6.0"
+    assert client.get("/tools/whoami/lang", headers=headers).text.strip() == "pl-PL,pl;q=0.9"
+    assert client.get("/tools/whoami/forwarded", headers=headers).text.strip() == "203.0.113.7"
+    assert client.get("/tools/whoami/method", headers=headers).text.strip() == "GET"
+
+
+def test_whoami_unknown_field_404():
+    resp = client.get("/tools/whoami/nope", headers=CURL_UA)
+    assert resp.status_code == 404
+    assert "valid:" in resp.text
+
+
+def test_whoami_json_has_port_mime_remote_host():
+    headers = dict(CURL_UA)
+    headers["X-Forwarded-For"] = "203.0.113.7"
+    headers["X-Forwarded-Port"] = "51234"
+    body = client.get("/tools/whoami/json", headers=headers).json()
+    assert body["port"] == "51234"
+    assert body["mime"] == "*/*"
+    assert "remote_host" in body

@@ -5,9 +5,9 @@
   <title>NetDevOps Micro-Tools – Web UI</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
-  <link rel="stylesheet" href="style-base.css?v=0.6.28" />
-  <link rel="stylesheet" href="style-home.css?v=0.6.28" />
-  <link rel="stylesheet" href="style-tools.css?v=0.6.28" />
+  <link rel="stylesheet" href="style-base.css?v=0.6.29" />
+  <link rel="stylesheet" href="style-home.css?v=0.6.29" />
+  <link rel="stylesheet" href="style-tools.css?v=0.6.29" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-SP6VHRYCNC"></script>
@@ -2354,12 +2354,14 @@ Use with caution on production!">debug ip icmp</code>
             <div class="hints-grid">
               <div class="hints-section">
                 <div class="hints-section-title">From your terminal</div>
-                <code class="hints-code">curl netdevops-micro-tools.onrender.com/tools/whoami</code>
-                <code class="hints-code">curl netdevops-micro-tools.onrender.com/tools/whoami/json</code>
+                <code class="hints-code">curl https://netdevops-tools.thebackroom.ai/tools/whoami</code>
+                <code class="hints-code">curl https://netdevops-tools.thebackroom.ai/tools/whoami/all</code>
+                <code class="hints-code">curl https://netdevops-tools.thebackroom.ai/tools/whoami/json</code>
               </div>
               <div class="hints-section">
                 <div class="hints-section-title">Notes</div>
-                <code class="hints-code">/tools/whoami/ip — always plain text, safe for scripts</code>
+                <code class="hints-code">Per-field: /whoami/ip /ua /lang /encoding /mime /port /forwarded</code>
+                <code class="hints-code">Use https:// — plain http gets a 301 from the edge</code>
                 <code class="hints-code">Cookies and auth headers are never echoed back</code>
               </div>
             </div>
@@ -3187,22 +3189,22 @@ line vty 0 15
   </footer>
 
   <!-- Gate: email gate for pro tools (must load BEFORE core) -->
-  <script src="app-gate.js?v=0.6.28"></script>
+  <script src="app-gate.js?v=0.6.29"></script>
   <!-- Core: theme, tabs, navigation, utilities -->
-  <script src="app-core.js?v=0.6.28"></script>
+  <script src="app-core.js?v=0.6.29"></script>
   <!-- Config Generators: SNMPv3, NTP, AAA, iPerf3 -->
-  <script src="app-config.js?v=0.6.28"></script>
+  <script src="app-config.js?v=0.6.29"></script>
   <!-- Golden Config form -->
-  <script src="app-golden.js?v=0.6.28"></script>
+  <script src="app-golden.js?v=0.6.29"></script>
   <!-- CVE Analyzer -->
-  <script src="app-security.js?v=0.6.28"></script>
+  <script src="app-security.js?v=0.6.29"></script>
   <!-- Profiles, Vuln Widget, Security Score, Export -->
-  <script src="app-profiles.js?v=0.6.28"></script>
+  <script src="app-profiles.js?v=0.6.29"></script>
   <!-- Hints, Tooltips, Golden Config UI, SNMP Multi-Host -->
-  <script src="app-ui.js?v=0.6.28"></script>
+  <script src="app-ui.js?v=0.6.29"></script>
   <!-- Subnet, MTU, Config Parser, CVE Mitigation, Timezone, NATO DTG, IP Path Tracer -->
-  <script src="app-network.js?v=0.6.28"></script>
+  <script src="app-network.js?v=0.6.29"></script>
   <!-- Threat Feed, Port Auditor -->
-  <script src="app-feeds.js?v=0.6.28"></script>
+  <script src="app-feeds.js?v=0.6.29"></script>
 </body>
 </html>

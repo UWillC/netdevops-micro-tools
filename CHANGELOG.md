@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.29] – 2026-08-05 (Whoami — full ifconfig.me parity + https docs fix)
+
+User walked the path as a client: bare `curl host/tools/whoami` hit
+Render's edge 301 (http→https) — hints now show explicit `https://` URLs
+and use the custom domain `netdevops-tools.thebackroom.ai` (verified
+working through Cloudflare, XFF intact). Extended field set: `port`
+(X-Forwarded-Port first), `mime` (Accept), `via`, `forwarded`,
+`remote_host` (reverse DNS with 0.8s hard timeout, "unavailable" on
+miss — ifconfig.me parity). New endpoints: `/tools/whoami/all` (plain
+key: value listing) and per-field `/tools/whoami/{ua,lang,encoding,
+mime,method,host,proto,port,forwarded,referer,via}` (404 with valid-list
+for unknown fields). GUI shows the new fields. 4 new tests (per-field,
+/all, 404, port/mime/remote_host); suite 357 passed. Assets `?v=0.6.29`,
+meta 0.6.29.
+
 ## [v0.6.28.1] – 2026-08-05 (Whoami — web UI tab)
 
 GUI for the whoami endpoint: "What's My IP" tab in the Network Tools nav
