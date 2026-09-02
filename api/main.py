@@ -59,9 +59,10 @@ app.include_router(subscribe.router, prefix="/api", tags=["Subscribe"])
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WEB_DIR = os.path.join(BASE_DIR, "web")
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 def root():
-    """Serve the frontend index.html (no-cache so asset version bumps propagate)"""
+    """Serve the frontend index.html (no-cache so asset version bumps propagate).
+    HEAD is allowed so link-preview crawlers (LinkedIn/X/Slack) get 200 instead of 405."""
     return FileResponse(
         os.path.join(WEB_DIR, "index.html"),
         headers={"Cache-Control": "no-cache"},
@@ -84,6 +85,12 @@ def serve_js(filename: str):
     if filename in JS_FILES:
         return FileResponse(os.path.join(WEB_DIR, f"{filename}.js"), media_type="application/javascript")
     return FileResponse(os.path.join(WEB_DIR, "app-core.js"), media_type="application/javascript")
+
+@app.get("/og-card.jpg")
+def og_card():
+    """Open Graph / Twitter card image (1200x630) for link previews"""
+    return FileResponse(os.path.join(WEB_DIR, "og-card.jpg"), media_type="image/jpeg",
+                        headers={"Cache-Control": "public, max-age=86400"})
 
 @app.get("/favicon.svg")
 def favicon_svg():

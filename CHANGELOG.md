@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.30] – 2026-09-02 (Link previews — OG/Twitter cards + HEAD /)
+
+### Added
+- `web/og-card.jpg` (1200×630) + Open Graph / Twitter meta in `web/index.html` — LinkedIn/X/Slack now render a proper preview card for links to the app (previously: no OG tags → "couldn't generate a preview").
+- `GET /og-card.jpg` route (cache 24h) in addition to `/static/og-card.jpg`.
+
+### Changed
+- `/` accepts `HEAD` (was 405) — link-preview crawlers probe with HEAD before GET.
+
 ## [v0.6.29] – 2026-08-05 (Whoami — full ifconfig.me parity + https docs fix)
 
 User walked the path as a client: bare `curl host/tools/whoami` hit
