@@ -30,7 +30,7 @@ async def main():
         await js("localStorage.setItem('netdevops_unlocked','true')"); await call("Page.navigate",url="http://127.0.0.1:8000/"); await asyncio.sleep(2.5)
         await js("document.querySelector('[data-tab=\"cve\"]').click()")
         results={}
-        for plat,ver in [("ISE","3.3 Patch 9")]:
+        for plat,ver in [("IOS XE","17.9.04")]:
             await js(f"(()=>{{const s=document.getElementById('cve-platform'); s.value={json.dumps(plat)}; s.dispatchEvent(new Event('change')); return s.value}})()")
             ex=await js("document.getElementById('cve-version').value")
             await js(f"document.getElementById('cve-version').value={json.dumps(ver)}")
@@ -42,8 +42,10 @@ async def main():
               "hardening_cards":await js("Array.from(document.querySelectorAll('#cve-cards .tag-bundle')).map(e=>e.textContent)"),
               "kev_chips":await js("Array.from(document.querySelectorAll('#cve-cards .tag-escalation')).map(e=>e.textContent)"),
               "posture":await js("Array.from(document.querySelectorAll('#cve-summary .summary-row')).map(e=>e.innerText.replace(/\\s+/g,' ')).slice(2,9)"),
-              "text_head":await js("document.getElementById('cve-output').value.split('\\n').filter(l=>/^Matched, confirmed|^Lower confidence|^HARDENING|^Severity breakdown|^  (CRITICAL|HIGH|MEDIUM|LOW):/.test(l))"),
+              "text_head":await js("document.getElementById('cve-output').value.split('\\n').filter(l=>/^Matched, confirmed|^Lower confidence|^HARDENING|^Not confirmed|^Severity breakdown|^  (CRITICAL|HIGH|MEDIUM|LOW):/.test(l))"),
             }
+        await js("document.getElementById('cve-summary').scrollIntoView()")
+        box=await js("(()=>{const r=document.getElementById('cve-summary').getBoundingClientRect(); return [r.x,r.y,r.width,r.height]})()")
         shot=await call("Page.captureScreenshot",format="png"); open(OUT,"wb").write(base64.b64decode(shot["data"]))
         print("OUTPUT:", await js("document.getElementById('cve-output').value.slice(0,300)"))
         print("gate:", await js("localStorage.getItem('netdevops_unlocked')"), "| form:", await js("!!document.getElementById('cve-form')"), "| activeTab:", await js("(document.querySelector('.tab-content.active')||{}).id"))

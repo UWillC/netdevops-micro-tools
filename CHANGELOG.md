@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.53] – 2026-09-18 (posture panel: the row added an hour earlier did not fit)
+
+### Fixed
+- v0.6.52 put the whole explanation into the "Not confirmed" row; in the real
+  panel the label broke into "Not / confirmed" and ran into the value. The row
+  is short again (`101 listed separately`) and the reason sits on its own muted
+  line below it. Found on the owner's screenshot, confirmed and fixed in a
+  headless browser, which is what `scripts/dev/ui_smoke.py` is for (it now also
+  saves a screenshot with the panel scrolled into view).
+
+---
+
 ## [v0.6.52] – 2026-09-18 (one line about unconfirmed matches instead of three)
 
 ### Changed

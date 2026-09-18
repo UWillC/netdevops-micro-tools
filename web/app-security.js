@@ -544,7 +544,8 @@ if (cveForm && cveOutput) {
           </div>
           <div class="summary-row"><span>Confirmed</span><span>${critical} / ${high} / ${medium} / ${low}</span></div>
           ${unconfirmedItems.length > 0
-            ? `<div class="summary-row summary-muted" title="Matches Cisco did not confirm for this exact release. Listed separately and not counted above."><span>Not confirmed</span><span>${unconfirmedItems.length} listed separately (${noListCount} without a Cisco release list, ${unconfirmedItems.length - noListCount > 0 ? unconfirmedItems.length - noListCount : 0} much older than your release)</span></div>`
+            ? `<div class="summary-row summary-muted" title="Matches Cisco did not confirm for this exact release. Listed separately and not counted above."><span>Not confirmed</span><span>${unconfirmedItems.length} listed separately</span></div>
+               <div class="summary-muted" style="font-size:0.8rem; margin:-0.15rem 0 0.35rem; text-align:right;">${noListCount} without a Cisco release list &middot; ${Math.max(0, unconfirmedItems.length - noListCount)} much older than your release</div>`
             : ""}
           ${hardeningGroups.length > 0
             ? `<div class="summary-row summary-muted" title="A hardening release is counted once: Cisco assigns one CVE per CWE category, and the release is the only remediation."><span>Hardening releases</span><span>${hardeningGroups.length} (${hardeningGroups.reduce((n, g) => n + g.cves.length, 0)} CVEs, counted once each)</span></div>`
