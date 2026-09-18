@@ -64,9 +64,12 @@ def _file_count(path: str) -> int:
         return 0
     if os.path.isfile(path):
         return 1
+    # Data files only. cve_data/ise carries a README next to its 8 records, and
+    # an audit trail that says "9 files" for 8 records is off by exactly the
+    # kind of detail an auditor checks. Dotfiles (.DS_Store, .gitkeep) likewise.
     n = 0
     for _root, _dirs, files in os.walk(path):
-        n += len(files)
+        n += sum(1 for f in files if f.endswith(".json") and not f.startswith("."))
     return n
 
 
@@ -98,6 +101,8 @@ def cve_provenance(
     tool_version: str,
     cve_engine_version: str,
     matched_cves: List,
+    data_dir: str = "cve_data/ios_xe",
+    kev_catalog_version: Optional[str] = None,
 ) -> Dict:
     """Return the provenance metadata block for a CVE Analyzer response.
 
@@ -105,6 +110,12 @@ def cve_provenance(
         tool_version: from /meta/version (api/main.py).
         cve_engine_version: CVEEngineConfig.engine_version.
         matched_cves: list of CVEEntry returned by engine.match().
+        data_dir: the curated dataset the engine actually read. Defaulted for
+            old callers, but the analyzer passes it: an ISE analysis reads
+            cve_data/ise, and an audit trail that names cve_data/ios_xe
+            (142 files) for it describes a dataset that was never consulted.
+        kev_catalog_version: CISA KEV catalog the matches were checked against,
+            or None when no catalog was obtainable.
 
     Returns:
         dict ready to attach to CVEAnalyzeResponse.provenance.
@@ -112,12 +123,13 @@ def cve_provenance(
     sources = []
 
     # Local JSON dataset — primary source of truth, curated entries.
-    local_path = _project_path("cve_data", "ios_xe")
+    rel = [part for part in data_dir.replace("\\", "/").split("/") if part]
+    local_path = _project_path(*rel)
     sources.append(
         _source_block(
             name="local-json",
             path=local_path,
-            description="Curated local CVE dataset (cve_data/ios_xe/*.json)",
+            description=f"Curated local CVE dataset ({'/'.join(rel)}/*.json)",
         )
     )
 
@@ -140,6 +152,18 @@ def cve_provenance(
             description="NVD CVSS / CWE enrichment cache (24h TTL per CVE)",
         )
     )
+
+    # CISA KEV catalog (KEV-X). It changes what the report says — which CVEs are
+    # flagged as exploited and how matches are ranked — so it belongs in the
+    # trail like any other input. The version is reported even if the cache dir
+    # is unreadable; None means no catalog was used and KEV flags are absent.
+    kev_block = _source_block(
+        name="cisa-kev",
+        path=_project_path("cache", "kev"),
+        description="CISA Known Exploited Vulnerabilities catalog (6h TTL)",
+    )
+    kev_block["catalog_version"] = kev_catalog_version
+    sources.append(kev_block)
 
     # Per-CVE source distribution (which provider supplied each match).
     source_counts: Dict[str, int] = {}

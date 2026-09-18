@@ -4,6 +4,44 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.38] – 2026-09-18 (analyzer report: three false statements about itself)
+
+Found by reading a production report for `ISE 3.4 Patch 3` as a reviewer would.
+The vulnerability matching was right. Three things the report said *about
+itself* were not, and all three came from work shipped earlier the same day.
+
+### Fixed
+- **"Cisco SIR ≠ CVSS: 8 CVE(s)" — it is one.** `severity_info()` has always
+  documented `cisco_sir` as "Cisco SIR if distinct from CVSS bucket", but an
+  explicit `cisco_sir` on a record was returned unconditionally. The ISE dataset
+  (v0.6.31) sets SIR on every record, so each row read
+  `[CRITICAL] [Cisco SIR: CRITICAL]` and the posture panel counted all eight as
+  diverging. Only CVE-2026-20287 does (CVSS 6.5, SIR Critical). The function now
+  does what its docstring says; with no CVSS score an explicit SIR is still
+  reported, being the only rating available. Same defect, other side of the
+  app, as SIR-01 an hour earlier.
+- **Provenance named the wrong dataset.** `cve_provenance()` hard-coded
+  `cve_data/ios_xe`. ISE-03 (v0.6.33) taught the engine to read `cve_data/ise`
+  for ISE queries and did not carry that into the audit trail, so an ISE report
+  said "local-json … 142 files" about a directory it never opened. The trail now
+  receives the directory the engine actually used.
+- **"In Cisco bundle: 8 CVE(s)" — none are.** `CVEEntry.bundle` means Cisco's
+  semi-annual IOS / IOS XE bundled publication. v0.6.31 set `bundle: "2026-09"`
+  on the ISE records to express "published together on 2026-09-16", which is a
+  scheduled twice-monthly disclosure and a different thing. Field cleared; the
+  shared date is kept as the tag `cisco-drop-2026-09-16`. The hardening-release
+  grouping (`bundled_cves`, 6 of 8) is unaffected — it was never stored there.
+- Provenance file counts include data files only. `cve_data/ise` holds a README
+  beside its 8 records and was reported as 9 files.
+
+### Added
+- **CISA KEV in the provenance trail.** Since v0.6.35 the catalog decides which
+  matches are flagged as exploited and how they rank, but it was not listed as
+  a source. It now is, with its catalog version. When no catalog could be
+  obtained the report says so — then a missing KEV flag proves nothing, and the
+  trail should not let a reader assume otherwise.
+- `tests/test_analyzer_report_accuracy.py` (13).
+
 ## [v0.6.37] – 2026-09-18 (SIR-01 — feed severity follows CVSS, Cisco SIR is a tag)
 
 ### Fixed

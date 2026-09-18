@@ -66,10 +66,16 @@ class TestRecord:
         assert load(path).advisory_url.startswith(
             "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/")
 
-    def test_bundle_tagged(self, path):
+    def test_scheduled_drop_is_a_tag_not_a_bundle(self, path):
+        """`bundle` is reserved for the semi-annual IOS / IOS XE publication.
+
+        v0.6.31 set bundle="2026-09" here; the analyzer then claimed
+        "In Cisco bundle: 8 CVE(s)" for ISE advisories that are not part of it.
+        """
         e = load(path)
-        assert e.bundle == "2026-09"
-        assert "bundle-2026-09" in e.tags
+        assert e.bundle is None
+        assert "cisco-drop-2026-09-16" in e.tags
+        assert not any(tag.startswith("bundle-") for tag in e.tags)
 
 
 class TestKevRecord:

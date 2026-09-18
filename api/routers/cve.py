@@ -275,6 +275,8 @@ def analyze_cve(req: CVEAnalyzeRequest):
         tool_version=_APP_VERSION,
         cve_engine_version="0.3.7",
         matched_cves=matched,
+        data_dir=data_dir_for_platform(req.platform),
+        kev_catalog_version=kev_catalog.catalog_version(),
     )
 
     return CVEAnalyzeResponse(

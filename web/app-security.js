@@ -227,7 +227,14 @@ if (cveForm && cveOutput) {
         }
         out += "Live provider cache freshness:\n";
         (p.sources || []).forEach((s) => {
-          if (s.available) {
+          // KEV-X: for the CISA catalog the version is the evidence, not the
+          // file count — and "no catalog" must be said out loud, because then
+          // the absence of a KEV flag in this report proves nothing.
+          if (s.name === "cisa-kev") {
+            out += s.catalog_version
+              ? `  cisa-kev: catalog ${s.catalog_version}\n`
+              : "  cisa-kev: no catalog available (KEV flags in this report come from curated records only)\n";
+          } else if (s.available) {
             out += `  ${s.name}: ${s.last_refreshed} (${s.age_hours}h ago, ${s.file_count} files)\n`;
           } else {
             out += `  ${s.name}: not present (cache empty; records may still appear in attribution above)\n`;
@@ -438,6 +445,12 @@ if (cveForm && cveOutput) {
         const p = data.provenance;
         const sourceRows = (p.sources || [])
           .map((s) => {
+            if (s.name === "cisa-kev") {
+              const kevStatus = s.catalog_version
+                ? `<span class="prov-fresh">catalog ${s.catalog_version}</span>`
+                : `<span class="prov-missing" title="No CISA KEV catalog could be obtained. KEV flags in this report come from curated records only, so a missing flag proves nothing.">no catalog available</span>`;
+              return `<div class="prov-row"><span class="prov-name">${s.name}</span> ${kevStatus}<div class="prov-desc">${s.description}</div></div>`;
+            }
             const status = s.available
               ? `<span class="prov-fresh">${s.last_refreshed} (${s.age_hours}h ago, ${s.file_count} file${s.file_count === 1 ? "" : "s"})</span>`
               : `<span class="prov-missing" title="On-disk cache is empty. Records from this provider may still appear in attribution above (imported into local-json earlier).">not present</span>`;

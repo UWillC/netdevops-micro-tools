@@ -232,8 +232,18 @@ def severity_info(cve: "CVEEntry") -> Dict[str, Optional[str]]:
     # - If cisco_sir is explicitly set on the entry, trust it.
     # - Else, if the curated `severity` label differs from the CVSS bucket,
     #   treat the curated label as the effective Cisco SIR source.
+    #
+    # The docstring above has always said "Cisco SIR if distinct from CVSS
+    # bucket", but an explicit `cisco_sir` was returned unconditionally. Records
+    # that carry SIR on every entry (cve_data/ise does) then showed
+    # "[CRITICAL] [Cisco SIR: CRITICAL]" on each row and the posture panel
+    # counted all of them under "Cisco SIR ≠ CVSS". With no score there is no
+    # bucket to agree with, so an explicit SIR is still reported.
     if explicit_sir:
-        sir_display: Optional[str] = explicit_sir.upper()
+        sir_upper = explicit_sir.upper()
+        sir_display: Optional[str] = (
+            None if (score is not None and sir_upper == cvss) else sir_upper
+        )
     elif score is not None and label and label != cvss:
         sir_display = label
     else:

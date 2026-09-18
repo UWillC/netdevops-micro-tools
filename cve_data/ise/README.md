@@ -50,6 +50,15 @@ v0.6.31 shipped two CWE values inferred from titles: CVE-2026-20130 as CWE-707
 in v0.6.34 and `tests/test_hardening_release.py::TestDatasetAgainstNvd` now pins
 every CWE, score and vector in this directory to the NVD values.
 
+**4. `bundle` is empty on purpose.**
+
+`CVEEntry.bundle` (CVE-010) marks Cisco's *semi-annual IOS / IOS XE bundled
+publication* (March and September). The ISE advisories of 2026-09-16 are a
+scheduled twice-monthly disclosure, which is a different thing. v0.6.31 set
+`bundle: "2026-09"` on these records and the analyzer then reported "In Cisco
+bundle: 8 CVE(s)" — corrected in v0.6.38. The shared publication date is kept
+as the tag `cisco-drop-2026-09-16`.
+
 ## Bundled CVEs are classes of bugs, not single bugs
 
 Six of these records come from *Cisco Identity Services Engine Hardening

@@ -61,6 +61,10 @@ V_91 = "CVSS:3.1/AV:N/AC:L/PR:H/UI:N/S:C/C:H/I:H/A:H"
 V_65 = "CVSS:3.1/AV:N/AC:L/PR:H/UI:N/S:U/C:H/I:H/A:N"
 V_86 = "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:N/I:N/A:H"
 
+# Cisco's scheduled disclosure of 2026-09-16 (advance notice
+# cisco-sa-notice-jfxK98ZP): 16 ISE advisories published together.
+SCHEDULED_DROP = "cisco-drop-2026-09-16"
+
 EOSM_NOTE = (
     "Cisco ISE Software Release 3.0 has reached End of Software Maintenance; "
     "there is no fixed release on that train, customers must migrate. "
@@ -100,7 +104,13 @@ def rec(cve_id, title, sev, sir, cvss, cwe, desc, fixes, amin, amax,
         "last_modified": "2026-09-18",
         "references": [ADV + adv_slug, "https://nvd.nist.gov/vuln/detail/" + cve_id],
         "cisco_sir": sir,
-        "bundle": "2026-09",
+        # `bundle` (CVE-010) means Cisco's SEMI-ANNUAL IOS / IOS XE bundled
+        # publication (March and September). The ISE advisories of 2026-09-16
+        # are a scheduled twice-monthly disclosure, not that bundle, so the
+        # field stays empty. v0.6.31 set it to "2026-09" and the analyzer then
+        # reported "In Cisco bundle: 8 CVE(s)" about something that is not one.
+        # The shared publication date lives in the SCHEDULED_DROP tag instead.
+        "bundle": None,
         "product_families": ["ise"],
         "affected_versions_raw": [
             "Cisco ISE 3.1", "Cisco ISE 3.2", "Cisco ISE 3.3",
@@ -131,7 +141,7 @@ RECORDS = [
         + EOSM_NOTE,
         FIXES_FULL, "3.0", "3.5", "cisco-sa-ISE-ABP-VNSW7Tn5",
         ["cisco-psirt", "ise", "identity", "auth-bypass", "kev", "actively-exploited",
-         "bundle-2026-09"],
+         SCHEDULED_DROP],
         "No workarounds address this vulnerability. Mitigation only: use infrastructure ACLs "
         "(iACLs) to permit only required management and control plane traffic destined to the "
         "affected device.",
@@ -145,7 +155,7 @@ RECORDS = [
         "critical", "Critical", 10.0, "CWE-284",
         HARDENING_DESC + " Category: Access Control. " + EOSM_NOTE,
         FIXES_FULL, "3.0", "3.5", "cisco-sa-hardening-ise-XU5EwX5T",
-        ["cisco-psirt", "ise", "identity", "hardening-release", "bundled-cve", "bundle-2026-09"],
+        ["cisco-psirt", "ise", "identity", "hardening-release", "bundled-cve", SCHEDULED_DROP],
         "No workarounds. Upgrade to the hardened release for your train.",
         vector=V_10, bundled=True),
     rec("CVE-2026-20130",
@@ -153,7 +163,7 @@ RECORDS = [
         "critical", "Critical", 10.0, "CWE-74",
         HARDENING_DESC + " Category: Improper Neutralization. " + EOSM_NOTE,
         FIXES_FULL, "3.0", "3.5", "cisco-sa-hardening-ise-XU5EwX5T",
-        ["cisco-psirt", "ise", "identity", "hardening-release", "bundled-cve", "bundle-2026-09"],
+        ["cisco-psirt", "ise", "identity", "hardening-release", "bundled-cve", SCHEDULED_DROP],
         "No workarounds. Upgrade to the hardened release for your train.",
         vector=V_10, bundled=True),
     rec("CVE-2026-20234",
@@ -161,7 +171,7 @@ RECORDS = [
         "critical", "Critical", 9.9, "CWE-522",
         HARDENING_DESC + " Category: Insufficiently Protected Credentials. " + EOSM_NOTE,
         FIXES_FULL, "3.0", "3.5", "cisco-sa-hardening-ise-XU5EwX5T",
-        ["cisco-psirt", "ise", "identity", "hardening-release", "bundled-cve", "bundle-2026-09"],
+        ["cisco-psirt", "ise", "identity", "hardening-release", "bundled-cve", SCHEDULED_DROP],
         "No workarounds. Upgrade to the hardened release for your train.",
         vector=V_99, bundled=True),
     rec("CVE-2026-20237",
@@ -169,7 +179,7 @@ RECORDS = [
         "critical", "Critical", 9.1, "CWE-20",
         HARDENING_DESC + " Category: Input Validation. " + EOSM_NOTE,
         FIXES_FULL, "3.0", "3.5", "cisco-sa-hardening-ise-XU5EwX5T",
-        ["cisco-psirt", "ise", "identity", "hardening-release", "bundled-cve", "bundle-2026-09"],
+        ["cisco-psirt", "ise", "identity", "hardening-release", "bundled-cve", SCHEDULED_DROP],
         "No workarounds. Upgrade to the hardened release for your train.",
         vector=V_91, bundled=True),
     rec("CVE-2026-20194",
@@ -177,7 +187,7 @@ RECORDS = [
         "critical", "Critical", 9.1, "CWE-669",
         HARDENING_DESC + " Category: Incorrect Resource Transfer. " + EOSM_NOTE,
         FIXES_FULL, "3.0", "3.5", "cisco-sa-hardening-ise-XU5EwX5T",
-        ["cisco-psirt", "ise", "identity", "hardening-release", "bundled-cve", "bundle-2026-09"],
+        ["cisco-psirt", "ise", "identity", "hardening-release", "bundled-cve", SCHEDULED_DROP],
         "No workarounds. Upgrade to the hardened release for your train.",
         vector=V_91, bundled=True),
     rec("CVE-2026-20287",
@@ -187,7 +197,7 @@ RECORDS = [
         "NOTE: CVSS base score (6.5) and the advisory-level Cisco SIR (Critical) disagree here "
         "because the SIR applies to the hardening release as a whole. " + EOSM_NOTE,
         FIXES_FULL, "3.0", "3.5", "cisco-sa-hardening-ise-XU5EwX5T",
-        ["cisco-psirt", "ise", "identity", "hardening-release", "bundled-cve", "bundle-2026-09",
+        ["cisco-psirt", "ise", "identity", "hardening-release", "bundled-cve", SCHEDULED_DROP,
          "sir-cvss-divergence"],
         "No workarounds. Upgrade to the hardened release for your train.",
         vector=V_65, bundled=True),
@@ -198,7 +208,7 @@ RECORDS = [
         "an unauthenticated, remote attacker to cause a denial of service condition. "
         "Releases 3.1 and earlier are NOT vulnerable, which is why the affected range starts at 3.2.",
         FIXES_RADIUS, "3.2", "3.5", "cisco-sa-ise-RADIUS-dos-wR3hYPMw",
-        ["cisco-psirt", "ise", "identity", "radius", "dos", "bundle-2026-09"],
+        ["cisco-psirt", "ise", "identity", "radius", "dos", SCHEDULED_DROP],
         "See Cisco advisory for details.",
         vector=V_86),
 ]
