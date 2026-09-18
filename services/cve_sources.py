@@ -30,6 +30,10 @@ NVD_CACHE_TTL = 24 * 3600  # 24 hours in seconds
 
 CISCO_CACHE_DIR = os.path.join(os.path.dirname(__file__), "..", "cache", "cisco")
 CISCO_CACHE_TTL = 6 * 3600  # 6 hours
+
+# Platforms whose PSIRT advisories may be auto-imported into cve_data/ios_xe.
+# Anything else has its own dataset (or none) and must not be filed there.
+AUTO_SYNC_PLATFORMS = ("iosxe", "ios")
 CISCO_CREDENTIALS_PATH = os.path.expanduser("~/.config/cisco-psirt/credentials.json")
 
 # CVE-006 Phase 4: per-advisory detail cache.
@@ -666,12 +670,20 @@ class CiscoAdvisoryProvider(CVEProvider):
             if all_advisories:
                 self._write_cache(all_advisories)
 
-        # Auto-sync: import NEW CVEs to local files + generate mitigations
-        try:
-            from services.cisco_sync import auto_sync_new_cves
-            auto_sync_new_cves(all_advisories)
-        except Exception as e:
-            print(f"[WARN] Auto-sync failed (non-fatal): {e}")
+        # Auto-sync: import NEW CVEs to local files + generate mitigations.
+        #
+        # CACHE-01 (2026-09-18): only for platforms whose advisories belong in
+        # the IOS XE dataset. auto_sync_new_cves() writes everything it is given
+        # into cve_data/ios_xe with platforms=["IOS XE"] — it predates every
+        # other platform. Called for "asa", "nxos" or "ise" it filed their
+        # advisories as IOS XE records; once the feed learned to ask for ISE
+        # that meant ~220 ISE CVEs landing in the IOS XE dataset on each refresh.
+        if self.platform in AUTO_SYNC_PLATFORMS:
+            try:
+                from services.cisco_sync import auto_sync_new_cves
+                auto_sync_new_cves(all_advisories)
+            except Exception as e:
+                print(f"[WARN] Auto-sync failed (non-fatal): {e}")
 
         entries = []
         for adv in all_advisories:

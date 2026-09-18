@@ -43,6 +43,24 @@ def _frozen_clock(monkeypatch):
     monkeypatch.setattr(cve_router, "_today", lambda: FROZEN_TODAY)
 
 
+@pytest.fixture(autouse=True)
+def _no_background_refresh(monkeypatch):
+    """CACHE-01: the feed refreshes stale platform caches on a background thread.
+
+    In a test that thread would call the real PSIRT API and, for IOS XE, run the
+    auto-import into cve_data/. Suppress it suite-wide; tests that care about
+    the refresh install their own `_spawn`. State is reset so one test's
+    backoff or in-flight marker cannot leak into the next.
+    """
+    from api.routers import cve as cve_router
+    monkeypatch.setattr(cve_router, "_spawn", lambda target, *args: None)
+    cve_router._platform_refresh_failed_at.clear()
+    cve_router._platform_refresh_running.clear()
+    yield
+    cve_router._platform_refresh_failed_at.clear()
+    cve_router._platform_refresh_running.clear()
+
+
 @pytest.fixture
 def kev_index(monkeypatch):
     """Install a fake KEV index: kev_index({"CVE-…": {"due_date": …}})."""

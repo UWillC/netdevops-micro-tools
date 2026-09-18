@@ -14,9 +14,10 @@ vulnerability = one fixed version". A hardening-release CVE breaks all three.
 It is a category, it has no per-defect exploit path to reason about, and its
 remediation is "be on the hardened release", not a point mitigation.
 
-The signature is machine-readable. It was verified on 2026-09-18 against the six
-hardening advisories then in the PSIRT cache:
+The signature is machine-readable. It was verified on 2026-09-18 against the
+seven hardening advisories then obtainable from PSIRT:
 
+    cisco-sa-hardening-iosxe-V8NMuMZJ       2026-08-05   7 CVE / 7 CWE
     cisco-sa-hardening-crosswork-UzDTU9Vh   2026-08-19   4 CVE / 4 CWE
     cisco-sa-hardening-iosxr-qg64NcM        2026-09-02   7 CVE / 7 CWE
     cisco-sa-hardening-esa-dfCrfXkm         2026-09-14   5 CVE / 5 CWE

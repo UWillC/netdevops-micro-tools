@@ -17,6 +17,7 @@ import time
 from typing import Any, Dict, List, Optional, Tuple
 
 from models.cve_model import CVEEntry
+from services.hardening_release import bundled_info_from_advisory
 
 PROJECT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 CVE_DATA_DIR = os.path.join(PROJECT_DIR, "cve_data", "ios_xe")
@@ -172,8 +173,19 @@ def _build_cve_json(cve_id: str, adv: Dict[str, Any], ver_min: str, ver_max: str
     cwe_list = adv.get("cwe", [])
     cwe = cwe_list[0] if cwe_list and cwe_list != ["NA"] else None
 
+    # CVE-007: same rule as the other two importers (see
+    # services/hardening_release.py). This is the importer that actually runs in
+    # production — auto_sync_new_cves() is called on every PSIRT refresh — and
+    # it was missed in v0.6.34, which patched _parse_advisory and
+    # scripts/import_cisco_to_local.py only.
+    bundled_info = bundled_info_from_advisory(adv)
+    if bundled_info is not None:
+        cwe = None
+
     vtype = _classify_vuln(title, summary)
     tags = ["cisco-psirt"]
+    if bundled_info is not None:
+        tags.extend(["hardening-release", "bundled-cve"])
     if severity == "critical":
         tags.append("critical")
     if vtype != "generic":
@@ -195,6 +207,7 @@ def _build_cve_json(cve_id: str, adv: Dict[str, Any], ver_min: str, ver_max: str
         "source": "cisco-psirt-import", "cvss_score": cvss, "cvss_vector": None,
         "cwe": cwe, "published": published, "last_modified": last_modified,
         "references": [advisory_url] if advisory_url else [],
+        "bundled": bundled_info.model_dump() if bundled_info is not None else None,
     }
 
 

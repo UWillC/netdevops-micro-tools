@@ -72,13 +72,25 @@ class TestLocalRecordsToFeed:
         bad.mkdir()
         (bad / "cve-bad.json").write_text("{not json", encoding="utf-8")
         (bad / "cve-ok.json").write_text(
-            '{"cve_id":"CVE-2026-1","title":"t","severity":"high",'
+            '{"cve_id":"CVE-2026-1","title":"t","severity":"high","platforms":["ISE"],'
             '"affected":{"min":"3.1","max":"3.5"},"description":"d"}', encoding="utf-8")
         monkeypatch.setattr(cve_router.os.path, "isdir", lambda p: True)
         monkeypatch.setattr(cve_router.os, "listdir", lambda p: ["cve-bad.json", "cve-ok.json"])
         monkeypatch.setattr(cve_router.os.path, "normpath", lambda p: str(bad))
         items = _local_records_to_feed("ise")
         assert [i.cve_id for i in items] == ["CVE-2026-1"]
+
+    def test_record_that_declares_no_platform_is_not_shown(self, tmp_path, monkeypatch):
+        """CACHE-01: a record must say what it belongs to; silence is not ISE."""
+        d = tmp_path / "ise"
+        d.mkdir()
+        (d / "cve-anon.json").write_text(
+            '{"cve_id":"CVE-2026-2","title":"t","severity":"high",'
+            '"affected":{"min":"3.1","max":"3.5"},"description":"d"}', encoding="utf-8")
+        monkeypatch.setattr(cve_router.os.path, "isdir", lambda p: True)
+        monkeypatch.setattr(cve_router.os, "listdir", lambda p: ["cve-anon.json"])
+        monkeypatch.setattr(cve_router.os.path, "normpath", lambda p: str(d))
+        assert _local_records_to_feed("ise") == []
 
 
 class TestMerge:

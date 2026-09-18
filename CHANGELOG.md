@@ -4,6 +4,59 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.36] – 2026-09-18 (CACHE-01 — stale platform cache, feed scope, auto-sync scope)
+
+One symptom — the "IOS XE" filter in Latest Threats showing half-year-old
+advisories and other products — turned out to have three separate causes.
+
+### Fixed
+- **Platform caches were used forever.** `_load_platform_cache()` accepted a file
+  of any age, and the feed only asked the provider for data when the file did
+  not exist. `cache/cisco/iosxe.json` had reached **189 days**. The "Cache: 0h
+  ago" label next to it described a different cache.
+- **Other products under the IOS XE filter — a regression from v0.6.32.** The
+  local-dataset fallback read `cve_data/ios_xe` raw. Seven of its 142 records
+  are other product families the PSIRT importer mislabelled (RV320 routers, ASA,
+  CUCM, SSM On-Prem, AP software, FMC), and two more are curated records for FMC
+  and the SD-WAN Controller. The engine filters all of these at match time; the
+  feed path did not. It now applies the same taxonomy scope rule plus a check of
+  the record's own `platforms` field, and a record that declares no platform is
+  not shown at all.
+- **Auto-sync filed every platform's advisories as IOS XE.**
+  `CiscoAdvisoryProvider.load()` called `auto_sync_new_cves()` unconditionally,
+  and that function writes into `cve_data/ios_xe` with `platforms=["IOS XE"]`.
+  This was latent for `asa` and `nxos`; v0.6.32 made it reachable for `ise`,
+  which put ~220 ISE CVEs into the IOS XE dataset on each refresh. Now limited to
+  `AUTO_SYNC_PLATFORMS = ("iosxe", "ios")`.
+- **The third importer.** v0.6.34 said "both PSIRT importers" stamp the
+  `bundled` block and stop fabricating per-CVE CWE. There are three.
+  `services.cisco_sync._build_cve_json` — the one `auto_sync_new_cves()` uses,
+  i.e. the one that actually runs in production — was missed. Patched, and a
+  test now asserts all three produce an identical block for one advisory.
+
+### Changed
+- **Stale-while-revalidate for platform caches.** A missing or expired cache
+  starts a refresh on a background thread and the request is answered from what
+  is on disk. A full platform pull is up to five PSIRT pages 2 s apart; the home
+  page previously blocked on it whenever the file was absent. One refresh per
+  platform in flight, 15 min backoff after a failed attempt. Measured: 56 ms to
+  answer with a 189-day cache, background refresh done in ~6 s (100 → 477
+  advisories), next call fresh.
+- `CriticalFeedResponse.platform_cache_age_hours` / `.platform_cache_refreshing`.
+  The UI appends "platform data Nd old, refreshing" when the platform cache is
+  over 24 h old, instead of presenting it as current.
+
+### Notes
+- **A claim in v0.6.33 was wrong and is corrected there.** The CVE-007 recon
+  said IOS XE had not yet had a hardening release. It had, on 2026-08-05. The
+  statement was derived from the very cache this release fixes. The detection
+  signature (`cisco-sa-hardening-` id, "Hardening Release" title,
+  `len(cves) == len(cwe)`) holds for this seventh advisory too: 7 CVEs, 7 CWEs.
+- `tests/conftest.py` suppresses the background refresh suite-wide. Unsuppressed,
+  any test touching a filtered feed view would call the live PSIRT API and, for
+  IOS XE, run the auto-import into `cve_data/`.
+- `tests/test_platform_cache.py` (28) + 3 in `test_hardening_release.py`.
+
 ## [v0.6.35] – 2026-09-18 (KEV-X — CISA KEV status for every row, not just curated ones)
 
 ### Fixed
@@ -154,6 +207,10 @@ and the feed read the ISE directory directly. ISE looked wired up while
   SD-WAN) ships on a quarterly hardening cadence; IOS XR (2026-09-02) and
   ASA/FTD/FMC (2026-09-16) have already had theirs. IOS XE has not, so the
   detection lands before the first record that needs it.
+  **Correction (v0.6.36, same day): the last sentence is wrong.** IOS XE had its
+  hardening release on 2026-08-05 (`cisco-sa-hardening-iosxe-V8NMuMZJ`, 7 CVEs).
+  The claim was read off a platform cache that turned out to be 189 days old.
+  "None of the 142 local records" remains true.
 
 ## [v0.6.32] – 2026-09-18 (ISE-02 — ISE in the threat feed, KEV badges, local fallback)
 

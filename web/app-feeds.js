@@ -35,6 +35,21 @@ async function loadThreatFeed() {
         ? ` · KEV ${data.kev_catalog_version}`
         : " · KEV catalog unavailable";
       threatFeedAge.textContent = `Cache: ${data.cache_age_hours}h ago · ${data.total_advisories} advisories${kevNote}`;
+
+      // CACHE-01: a filtered view also draws on a per-platform cache, which can
+      // be far older than the "latest" cache above. Say so instead of showing
+      // months-old advisories under a "0h ago" label.
+      const pAge = data.platform_cache_age_hours;
+      if (pAge != null && pAge > 24) {
+        const days = Math.round(pAge / 24);
+        threatFeedAge.textContent += ` · platform data ${days}d old`
+          + (data.platform_cache_refreshing ? ", refreshing" : "");
+        threatFeedAge.title = "The per-platform advisory cache is stale. A refresh "
+          + (data.platform_cache_refreshing ? "has started in the background; reload in a moment."
+                                             : "could not be started (no PSIRT credentials, or a recent attempt failed).");
+      } else {
+        threatFeedAge.title = "";
+      }
     }
 
     if (!data.items || data.items.length === 0) {

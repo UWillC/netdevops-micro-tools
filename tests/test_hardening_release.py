@@ -35,6 +35,8 @@ REAL_HARDENING = [
      ["CWE-20", "CWE-269", "CWE-284", "CWE-522", "CWE-669", "CWE-74"]),
     ("cisco-sa-hardening-ndw1-psFvnrg", 6,
      ["CWE-200", "CWE-22", "CWE-284", "CWE-306", "CWE-77", "CWE-89"]),
+    ("cisco-sa-hardening-iosxe-V8NMuMZJ", 7,
+     ["CWE-119", "CWE-20", "CWE-284", "CWE-664", "CWE-682", "CWE-691", "CWE-74"]),
     ("cisco-sa-hardening-asaftdfmc-uvpPROhN", 8,
      ["CWE-284", "CWE-664", "CWE-682", "CWE-693", "CWE-697", "CWE-703", "CWE-707", "CWE-710"]),
 ]
@@ -179,6 +181,44 @@ class TestScriptImport:
         d = mod.build_cve_data("CVE-2026-76460", ordinary_adv(), "0.0.0", "99.0.0")
         assert d["cwe"] == "CWE-648" and d["bundled"] is None
         CVEEntry(**d)
+
+
+class TestRuntimeAutoSyncImport:
+    """services.cisco_sync._build_cve_json — the importer that runs in production.
+
+    v0.6.34 claimed "both importers" were patched. There are three: this one is
+    called by auto_sync_new_cves() on every PSIRT refresh and was missed.
+    """
+
+    def test_hardening_record_shape(self):
+        from services.cisco_sync import _build_cve_json
+        d = _build_cve_json("CVE-2026-20000", hardening_adv(), "0.0.0", "99.0.0")
+        assert d["cwe"] is None
+        assert d["bundled"]["one_cve_per_cwe"] is True
+        assert "bundled-cve" in d["tags"] and "hardening-release" in d["tags"]
+        CVEEntry(**d)
+
+    def test_ordinary_record_shape(self):
+        from services.cisco_sync import _build_cve_json
+        d = _build_cve_json("CVE-2026-76460", ordinary_adv(), "0.0.0", "99.0.0")
+        assert d["cwe"] == "CWE-648" and d["bundled"] is None
+        CVEEntry(**d)
+
+    def test_all_three_importers_agree(self):
+        """One advisory, three code paths, one answer."""
+        import importlib.util
+        from services.cisco_sync import _build_cve_json
+        from services.cve_sources import CiscoAdvisoryProvider
+        spec = importlib.util.spec_from_file_location(
+            "import_cisco_to_local", os.path.join(ROOT, "scripts", "import_cisco_to_local.py"))
+        script = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(script)
+
+        adv = hardening_adv()
+        a = _build_cve_json(adv["cves"][0], adv, "0", "9")["bundled"]
+        b = script.build_cve_data(adv["cves"][0], adv, "0", "9")["bundled"]
+        c = CiscoAdvisoryProvider(platform="ise")._parse_advisory(adv)[0].bundled.model_dump()
+        assert a == b == c
 
 
 class TestFixPathContract:

@@ -2,6 +2,7 @@ import datetime
 import json
 import os
 import re
+import threading
 import time
 from typing import List, Optional
 
@@ -35,6 +36,7 @@ _APP_VERSION = _read_app_version()
 from services.cve_sources import NvdEnricherProvider, CiscoAdvisoryProvider, CISCO_CACHE_DIR
 from services.hardening_release import bundled_info_from_advisory
 from services import kev_catalog
+from services.platform_taxonomy import ProductFamily, detect_all_families, is_cve_in_scope_for_query
 from models.cve_model import CVEEntry
 
 
@@ -149,6 +151,11 @@ class CriticalFeedResponse(BaseModel):
     # KEV-X: which CISA KEV catalog the badges were checked against. None means
     # no catalog was obtainable, so a missing badge proves nothing.
     kev_catalog_version: Optional[str] = None
+    # CACHE-01: age of the platform-specific cache behind a filtered view, and
+    # whether a background refresh was started for it. None on the "all" view.
+    # The UI warns when this is old instead of presenting it as current.
+    platform_cache_age_hours: Optional[float] = None
+    platform_cache_refreshing: bool = False
 
 
 def _env_true(name: str) -> bool:
@@ -554,6 +561,38 @@ _LOCAL_DATA_DIRS = {
     "iosxe": "ios_xe",
 }
 
+# CACHE-01: product family each local directory is supposed to contain. The IOS
+# XE directory also holds records the PSIRT importer mislabelled (RV320 routers,
+# ASA, CUCM, FMC, SSM On-Prem, AP software). The engine drops those with the
+# taxonomy at match time; the feed read the directory raw and showed them under
+# the "IOS XE" filter.
+_LOCAL_DATA_FAMILIES = {
+    "ise": ProductFamily.ISE,
+    "iosxe": ProductFamily.IOS_XE,
+}
+
+# What a record's own `platforms` field must say for it to belong to a view.
+# Curated records for other products (FMC, SD-WAN Controller) sit in the IOS XE
+# directory with correct `platforms`; the taxonomy cannot always name them from
+# the title alone, but the record itself already does.
+_LOCAL_PLATFORM_TOKENS = {
+    "ise": ("ise", "ise-pic"),
+    "iosxe": ("ios xe", "ios-xe", "iosxe"),
+}
+
+
+def _record_belongs_to(platform: str, entry) -> bool:
+    """Record-level platform check for the local feed fallback."""
+    family = _LOCAL_DATA_FAMILIES.get(platform)
+    if family is not None and family.value in (entry.product_families or []):
+        return True
+    tokens = _LOCAL_PLATFORM_TOKENS.get(platform)
+    if not tokens:
+        return True
+    declared = [(p or "").strip().lower() for p in (entry.platforms or [])]
+    return any(d in tokens for d in declared)
+
+
 # Platform label shown on locally-sourced rows.
 _LOCAL_PLATFORM_LABELS = {
     "ise": ["ISE", "ISE-PIC"],
@@ -588,6 +627,16 @@ def _local_records_to_feed(platform: str) -> list:
             entry = CVEEntry(**raw)
         except Exception:
             continue
+
+        if not _record_belongs_to(platform, entry):
+            continue
+
+        # Same scope rule the engine applies in CVEEngine.match().
+        family = _LOCAL_DATA_FAMILIES.get(platform)
+        if family is not None:
+            detected = detect_all_families(entry.title or "", entry.description or "")
+            if not is_cve_in_scope_for_query(family, detected):
+                continue
 
         local_kev = None
         if entry.kev is not None:
@@ -664,18 +713,85 @@ def _merge_feed_items(psirt_items: list, local_items: list) -> list:
     return [by_id[i] for i in order]
 
 
+PLATFORM_CACHE_TTL = 6 * 3600           # matches the provider's own TTL
+PLATFORM_REFRESH_BACKOFF = 15 * 60      # after a failed refresh, wait 15 min
+
+# platform -> epoch of the last refresh attempt that did not produce data
+_platform_refresh_failed_at: dict = {}
+# platforms with a refresh currently running
+_platform_refresh_running: set = set()
+_platform_refresh_lock = threading.Lock()
+
+
 def _load_platform_cache(platform: str) -> list:
-    """Load platform-specific cache (e.g. iosxe.json) if available."""
+    """Load platform-specific cache (e.g. iosxe.json) if available.
+
+    Expired data is still returned — better stale than empty for a platform
+    filter — but see _platform_cache_age_hours(): the feed no longer keeps
+    serving it forever without saying so or trying to replace it.
+    """
     cache_path = os.path.join(CISCO_CACHE_DIR, f"{platform}.json")
     if not os.path.exists(cache_path):
         return []
     try:
         with open(cache_path, "r", encoding="utf-8") as f:
             cached = json.load(f)
-        # Accept even if expired — better stale data than none for platform filter
         return cached.get("advisories", [])
     except Exception:
         return []
+
+
+def _platform_cache_age_hours(platform: str) -> Optional[float]:
+    """Age of the platform cache in hours, or None when there is none."""
+    cache_path = os.path.join(CISCO_CACHE_DIR, f"{platform}.json")
+    try:
+        with open(cache_path, "r", encoding="utf-8") as f:
+            cached_at = json.load(f).get("cached_at", 0)
+        return round((time.time() - cached_at) / 3600, 1)
+    except Exception:
+        return None
+
+
+def _refresh_platform_cache(platform: str) -> None:
+    """Fetch a platform's advisories through the provider. Runs off-request."""
+    try:
+        provider = CiscoAdvisoryProvider(platform=platform)
+        if not provider._load_credentials():
+            _platform_refresh_failed_at[platform] = time.time()
+            return
+        provider.load()  # honours the provider TTL, writes <platform>.json
+        age = _platform_cache_age_hours(platform)
+        if age is None or age * 3600 > PLATFORM_CACHE_TTL:
+            _platform_refresh_failed_at[platform] = time.time()
+    except Exception as e:
+        _platform_refresh_failed_at[platform] = time.time()
+        print(f"[WARN] Platform cache refresh failed for {platform}: {e}")
+    finally:
+        with _platform_refresh_lock:
+            _platform_refresh_running.discard(platform)
+
+
+def _spawn(target, *args) -> None:
+    """Indirection so tests can run or suppress background work."""
+    threading.Thread(target=target, args=args, daemon=True).start()
+
+
+def _refresh_platform_cache_in_background(platform: str) -> bool:
+    """Start a refresh unless one is running or one just failed. True if started.
+
+    CACHE-01: stale-while-revalidate. A full platform pull is up to five PSIRT
+    pages with a 2 s pause between them; the home page must never wait on that.
+    The request is answered from whatever is on disk and the next one benefits.
+    """
+    now = time.time()
+    with _platform_refresh_lock:
+        if platform in _platform_refresh_running:
+            return False
+        if now - _platform_refresh_failed_at.get(platform, 0) < PLATFORM_REFRESH_BACKOFF:
+            return False
+        _platform_refresh_running.add(platform)
+    _spawn(_refresh_platform_cache, platform)
+    return True
 
 
 def _merge_advisories(*sources: list) -> list:
@@ -706,18 +822,17 @@ def _get_advisories_feed(platform: str = "all"):
 
     # When filtering by platform, also include platform-specific cache
     # (latest/50 may not contain that platform's advisories)
+    platform_age_hours = None
+    platform_refreshing = False
     if platform != "all":
         platform_advisories = _load_platform_cache(platform)
-        if not platform_advisories:
-            # No platform cache — try fetching it
-            try:
-                provider = CiscoAdvisoryProvider(platform=platform)
-                creds = provider._load_credentials()
-                if creds:
-                    provider.load()  # fetches + writes platform cache
-                    platform_advisories = _load_platform_cache(platform)
-            except Exception:
-                pass
+        platform_age_hours = _platform_cache_age_hours(platform)
+        # CACHE-01: missing or expired -> refresh off-request, answer from what
+        # is on disk. Previously an existing file was used forever (the IOS XE
+        # cache reached 189 days) and a missing one blocked the page on a
+        # multi-page PSIRT pull.
+        if platform_age_hours is None or platform_age_hours * 3600 > PLATFORM_CACHE_TTL:
+            platform_refreshing = _refresh_platform_cache_in_background(platform)
         if platform_advisories:
             advisories = _merge_advisories(advisories, platform_advisories)
 
@@ -740,6 +855,8 @@ def _get_advisories_feed(platform: str = "all"):
         cache_age_hours=cache_age_hours,
         timestamp=datetime.datetime.utcnow().isoformat() + "Z",
         kev_catalog_version=kev_catalog.catalog_version(),
+        platform_cache_age_hours=platform_age_hours,
+        platform_cache_refreshing=platform_refreshing,
     )
 
 
