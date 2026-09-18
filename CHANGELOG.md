@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.56] – 2026-09-18 (boilerplate of 2011-2016 advisories)
+
+### Fixed
+- Descriptions of old advisories still carried Cisco's closing formulas in their
+  earlier wording: "This advisory is posted at https://...", "Note: The March 28,
+  2012, Cisco IOS Software Security Advisory bundled publication includes nine
+  Cisco Security Advisories...", "This advisory will be updated as additional
+  information becomes available." Removed by the summarizer; a sentence that
+  names a workaround ("The HTTP server may be disabled as a workaround...") stays.
+
+---
+
 ## [v0.6.55] – 2026-09-18 (tags that mean something; no description ends mid-word)
 
 ### Fixed

@@ -32,6 +32,10 @@ _BOILERPLATE_RES = [
     re.compile(r"\s*This advisory is available at the following link:\s*\S*?(?=This advisory|\s|$)", re.I),
     re.compile(r"\s*This advisory is part of the .*?Bundled Publication\.?(\s*For a complete list of the advisories.*)?$", re.I | re.S),
     re.compile(r"\s*For more information about these vulnerabilities, see the Details section of this advisory\.", re.I),
+    # 2011-2016 advisories word the same boilerplate differently
+    re.compile(r"\s*This advisory is posted at\s*\S+?\.?(?=\s|$)", re.I),
+    re.compile(r"\s*Note: The [A-Z][a-z]+ \d{1,2}, \d{4}, Cisco IOS Software Security Advisory bundled publication includes.*$", re.I | re.S),
+    re.compile(r"\s*This advisory will be updated as additional information becomes available\.", re.I),
 ]
 
 

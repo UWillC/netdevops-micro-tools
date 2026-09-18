@@ -98,3 +98,15 @@ def test_summarizer_repairs_text_cut_by_the_old_importer():
     from services.advisory_text import summarize_advisory_text
     out = summarize_advisory_text("An attacker could run code. This vulnerability is due to improper valida...")
     assert out == "An attacker could run code."
+
+
+def test_boilerplate_of_2011_2016_advisories_is_removed_but_the_workaround_hint_stays():
+    from services.advisory_text import summarize_advisory_text
+    text = ("Cisco IOS Software may allow a device to exceed its authorization level. "
+            "The HTTP server may be disabled as a workaround for the vulnerability described in this advisory. "
+            "This advisory is posted at https://sec.cloudapps.cisco.com/x/cisco-sa-20120328-pai. "
+            "Note: The March 28, 2012, Cisco IOS Software Security Advisory bundled publication includes nine "
+            "Cisco Security Advisories. Each advisory lists the releases that correct it.")
+    out = summarize_advisory_text(text)
+    assert "bundled publication" not in out and "posted at" not in out
+    assert out.endswith("described in this advisory.")

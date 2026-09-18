@@ -45,7 +45,7 @@ def main(dry_run: bool) -> int:
             tags.append(vtype)
         # Descriptions the old importer cut mid-word: back to whole sentences.
         desc = rec.get("description", "")
-        new_desc = summarize_advisory_text(desc) if desc.rstrip().endswith("...") else desc
+        new_desc = summarize_advisory_text(desc)  # idempotent: boilerplate out, whole sentences
         if tags != rec.get("tags", []) or new_desc != desc:
             retagged += 1
             if not dry_run:
