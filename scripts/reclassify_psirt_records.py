@@ -7,7 +7,8 @@ unrelated CVEs under web UI. 87 auto-generated mitigation files told the reader
 to run "no ip http server" for bugs in Ethernet frame handling, IKEv1 or ARP.
 
 Touches ONLY machine-made content:
-  * cve_data/ios_xe/*.json with source == "cisco-psirt-import": the feature tag
+  * cve_data/ios_xe/*.json with source == "cisco-psirt-import": the feature tag,
+    and descriptions an older importer cut mid-word
   * cve_mitigations/*.json that still carry the importer's boilerplate upgrade_path:
     workaround_steps, acl_mitigation, detection.commands, tags
 Hand-written records and mitigations are left alone.
@@ -22,9 +23,10 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
+from services.advisory_text import summarize_advisory_text  # noqa: E402
 from services.cisco_sync import _MIT_TEMPLATES, _VULN_KEYWORDS, _classify_vuln  # noqa: E402
 
-FEATURE_TAGS = {vtype for _, vtype in _VULN_KEYWORDS}
+FEATURE_TAGS = {vtype for _, vtype in _VULN_KEYWORDS} | {"auth"}  # "auth": pre-0.6.55 label
 AUTO_MARKER = "Check Cisco advisory for platform-specific fixed versions."
 
 
@@ -41,10 +43,14 @@ def main(dry_run: bool) -> int:
         tags = [t for t in rec.get("tags", []) if t not in FEATURE_TAGS]
         if vtype != "generic":
             tags.append(vtype)
-        if tags != rec.get("tags", []):
+        # Descriptions the old importer cut mid-word: back to whole sentences.
+        desc = rec.get("description", "")
+        new_desc = summarize_advisory_text(desc) if desc.rstrip().endswith("...") else desc
+        if tags != rec.get("tags", []) or new_desc != desc:
             retagged += 1
             if not dry_run:
                 rec["tags"] = tags
+                rec["description"] = new_desc
                 with open(path, "w", encoding="utf-8") as f:
                     json.dump(rec, f, indent=2, ensure_ascii=False)
 

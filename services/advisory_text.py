@@ -44,6 +44,10 @@ def summarize_advisory_text(text: str, limit: int = 700) -> str:
     nothing and, at a hard 1500-character cut, left reports ending mid-word.
     """
     out = clean_advisory_text(text or "")
+    # Text already cut mid-word by an older importer ("...improper valida..."):
+    # drop the dangling fragment back to the last whole sentence.
+    if out.rstrip().endswith("...") and ". " in out:
+        out = out[:out.rfind(". ") + 1]
     for rx in _BOILERPLATE_RES:
         out = rx.sub("", out)
     out = re.sub(r"[ \t]*\n\s*\n\s*", "\n", out).strip()

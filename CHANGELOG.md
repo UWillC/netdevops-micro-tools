@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.55] – 2026-09-18 (tags that mean something; no description ends mid-word)
+
+### Fixed
+- Classifier, second pass after reading the v0.6.54 report. A FEATURE (where the
+  bug lives) now beats an EFFECT (what it does), in the title or in the first
+  sentence: "SD-Access Fabric Edge Node Denial of Service" is a DHCP snooping
+  bug and was tagged `dos`. Spelled-out protocol names are recognised ("Simple
+  Network Management Protocol" was `dos`, not `snmp`). "VPN routing and
+  forwarding" is not a VPN bug.
+- The `auth` tag covered Secure Boot bypass, CLI privilege escalation and
+  authorization bypass alike. Now `secure-boot`, `privesc`, `auth-bypass`; all
+  three keep the generic mitigation template.
+- Imported descriptions were cut at 497 characters, mid-word ("due to improper
+  valida..."). The importer now uses the sentence-aware summarizer; the
+  summarizer repairs text already cut; 129 records rewritten to whole sentences.
+
+### Tests
+- `tests/test_report_review_2026_09_18d.py` +6 (feature beats effect, VRF is not
+  VPN, no imported description ends in "...", summarizer repair).
+
+---
+
 ## [v0.6.54] – 2026-09-18 (mitigations: 90 CVEs were told to disable the HTTP server for no reason)
 
 ### Fixed

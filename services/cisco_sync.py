@@ -59,19 +59,28 @@ def _strip_html(text: str) -> str:
     return re.sub(r"\s+", " ", clean)
 
 
-# Feature keywords, matched on word boundaries. Order matters: the first hit wins,
-# so the specific feature comes before the generic effect (dos / rce).
-_VULN_KEYWORDS = [
-    (r"snmp(v[123]c?)?", "snmp"),
+# Matched on word boundaries. FEATURES name where the bug lives; EFFECTS name what
+# it does. A feature always beats an effect, in the title or in the first sentence:
+# "SD-Access Fabric Edge Node Denial of Service" is a DHCP snooping bug, and the
+# title alone would file it under "dos".
+_VULN_FEATURES = [
+    (r"snmp(v[123]c?)?|simple network management protocol", "snmp"),
     (r"web ui|webui|web-based|web services|https? server|http api|lobby ambassador", "webui"),
-    (r"ssh|scp|secure copy", "ssh"), (r"bgp", "bgp"), (r"ospf(v3)?", "ospf"),
-    (r"dhcp(v6)?|bootp", "dhcp"), (r"m?dns", "dns"),
-    (r"ipsec|ikev?[12]?|internet key exchange|vpn", "vpn"),
+    (r"ssh|secure shell|scp|secure copy", "ssh"),
+    (r"bgp|border gateway protocol", "bgp"), (r"ospf(v3)?|open shortest path first", "ospf"),
+    (r"dhcp(v6)?|dynamic host configuration protocol|bootp", "dhcp"),
+    (r"m?dns|domain name system", "dns"),
+    (r"ipsec|ikev?[12]?|internet key exchange|vpn(?! routing)", "vpn"),
     (r"aaa|tacacs\+?|radius", "aaa"),
-    (r"privilege escalation|authentication bypass|authorization bypass|secure boot bypass", "auth"),
+]
+_VULN_EFFECTS = [
+    (r"secure boot bypass", "secure-boot"),
+    (r"privilege escalation", "privesc"),
+    (r"authentication bypass|authorization bypass", "auth-bypass"),
     (r"denial of service|dos", "dos"),
     (r"remote code execution|code execution|buffer overflow|command injection", "rce"),
 ]
+_VULN_KEYWORDS = _VULN_FEATURES + _VULN_EFFECTS
 _URL_RE = re.compile(r"https?://\S+")
 
 
@@ -84,18 +93,17 @@ def _classify_vuln(title: str, summary: str) -> str:
     "http" over that text filed 87 unrelated CVEs (Ethernet frames, IKEv1, ARP)
     under web UI, each with "no ip http server" as its workaround.
     """
-    def first_hit(text: str) -> str:
+    def first_hit(text: str, table) -> str:
         text = _URL_RE.sub(" ", text.lower())
-        for pattern, vtype in _VULN_KEYWORDS:
+        for pattern, vtype in table:
             if re.search(r"(?<![a-z0-9])(?:" + pattern + r")(?![a-z0-9])", text):
                 return vtype
         return ""
 
-    hit = first_hit(title or "")
-    if hit:
-        return hit
     first_sentence = re.split(r"(?<=[.!?])\s", _URL_RE.sub(" ", summary or ""), maxsplit=1)[0]
-    return first_hit(first_sentence) or "generic"
+    return (first_hit(title or "", _VULN_FEATURES) or first_hit(first_sentence, _VULN_FEATURES)
+            or first_hit(title or "", _VULN_EFFECTS) or first_hit(first_sentence, _VULN_EFFECTS)
+            or "generic")
 
 
 # Mitigation templates keyed by vuln type
@@ -168,7 +176,8 @@ _MIT_TEMPLATES = {
 }
 
 # Aliases
-for _alias, _target in [("rce", "generic"), ("auth", "generic"), ("ssh", "generic"),
+for _alias, _target in [("rce", "generic"), ("auth", "generic"), ("privesc", "generic"),
+                         ("auth-bypass", "generic"), ("secure-boot", "generic"), ("ssh", "generic"),
                          ("bgp", "dos"), ("ospf", "dos"), ("dhcp", "dos"),
                          ("dns", "dos"), ("vpn", "generic"), ("aaa", "generic")]:
     if _alias not in _MIT_TEMPLATES:
@@ -188,9 +197,9 @@ def _build_cve_json(cve_id: str, adv: Dict[str, Any], ver_min: str, ver_max: str
         pass
 
     title = adv.get("advisoryTitle", "")
-    summary = _strip_html(adv.get("summary", ""))
-    if len(summary) > 500:
-        summary = summary[:497] + "..."
+    # Whole sentences, Cisco boilerplate removed. The old cut at 497 characters
+    # ended records mid-word ("due to improper valida...").
+    summary = summarize_advisory_text(_strip_html(adv.get("summary", "")))
 
     advisory_url = adv.get("publicationUrl", "")
     published = adv.get("firstPublished", "").split("T")[0] if adv.get("firstPublished") else ""

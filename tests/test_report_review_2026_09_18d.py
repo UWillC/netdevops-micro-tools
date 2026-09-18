@@ -21,7 +21,9 @@ LINK = " This advisory is available at the following link:https://sec.cloudapps.
 @pytest.mark.parametrize("title,expected", [
     ("Cisco IOS XE Software for Catalyst 9000 Series Switches Denial of Service Vulnerability", "dos"),
     ("Cisco IOS, IOS XE, and IOS XR Software TWAMP Denial of Service Vulnerability", "dos"),
-    ("Cisco IOS XE Software Secure Boot Bypass Vulnerabilities", "auth"),
+    ("Cisco IOS XE Software Secure Boot Bypass Vulnerabilities", "secure-boot"),
+    ("Cisco IOS XE Software Privilege Escalation Vulnerabilities", "privesc"),
+    ("Cisco IOS XE Software Simple Network Management Protocol Denial of Service Vulnerability", "snmp"),
     ("Cisco IOS XE Software Web UI Cross-Site Request Forgery Vulnerability", "webui"),
     ("Cisco IOS XE Software SNMP Denial of Service Vulnerability", "snmp"),
     ("Cisco IOS XE Software DHCP Snooping Denial of Service Vulnerability", "dhcp"),
@@ -40,7 +42,7 @@ def test_substrings_inside_words_do_not_count():
 
 
 def test_privilege_and_aaa_bugs_do_not_get_the_web_ui_workaround():
-    for vtype in ("auth", "aaa"):
+    for vtype in ("auth", "aaa", "privesc", "auth-bypass", "secure-boot"):
         assert "no ip http server" not in json.dumps(_MIT_TEMPLATES[vtype])
 
 
@@ -67,3 +69,32 @@ def test_sir_counter_in_the_panel_counts_confirmed_matches_only():
         js = f.read()
     block = js[js.index("const sirDistinct"):js.index("const bundleCount")]
     assert "uncertainIds.has" in block
+
+
+def test_feature_in_the_first_sentence_beats_effect_in_the_title():
+    title = "Cisco IOS XE Software SD-Access Fabric Edge Node Denial of Service Vulnerability"
+    summary = ("A vulnerability in the DHCP Snooping feature of Cisco IOS XE Software could allow "
+               "an unauthenticated, remote attacker to cause high CPU utilization. More text." + LINK)
+    assert _classify_vuln(title, summary) == "dhcp"
+
+
+def test_vpn_routing_and_forwarding_is_not_a_vpn_bug():
+    assert _classify_vuln("Cisco IOS Software RSVP Denial of Service Vulnerability",
+                          "A vulnerability in RSVP on a device configured with VPN routing and forwarding (VRF) instances.") == "dos"
+
+
+def test_no_imported_description_ends_mid_word():
+    cut = []
+    for path in glob.glob(os.path.join(ROOT, "cve_data", "ios_xe", "*.json")):
+        with open(path, encoding="utf-8") as f:
+            rec = json.load(f)
+        if isinstance(rec, dict) and rec.get("source") == "cisco-psirt-import" \
+                and rec.get("description", "").rstrip().endswith("..."):
+            cut.append(rec["cve_id"])
+    assert cut == []
+
+
+def test_summarizer_repairs_text_cut_by_the_old_importer():
+    from services.advisory_text import summarize_advisory_text
+    out = summarize_advisory_text("An attacker could run code. This vulnerability is due to improper valida...")
+    assert out == "An attacker could run code."
