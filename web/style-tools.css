@@ -1567,7 +1567,7 @@
   border-radius: 6px;
 }
 
-/* NATO DTG Format */
+/* Military DTG Format */
 .dtg-result-card {
   border-left: 3px solid var(--accent);
 }

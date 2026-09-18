@@ -296,7 +296,7 @@
 /* Light mode - DTG Preview */
 [data-theme="light"] .dtg-preview,
 [data-theme="light"] .dtg-result,
-[data-theme="light"] .nato-dtg-output {
+[data-theme="light"] .military-dtg-output {
   background: #dbeafe !important;
   border-color: #93c5fd !important;
 }

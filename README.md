@@ -92,7 +92,7 @@ NetDevOps Micro-Tools aims to solve this by providing:
 
 #### Timezone Converter
 - Convert timestamps across 12 common timezones
-- **NATO DTG format** (military date-time groups)
+- **Military DTG format** (date-time groups, e.g. 181430ZSEP26)
 - Date picker UI for easy selection
 - Batch conversion support
 
@@ -383,7 +383,7 @@ are persisted across container restarts.
 
 **v0.6.0 (current):** ✅ LIVE — 20 production modules
 - **Config Generators** (5): SNMPv3, NTP, AAA, Golden Config, SNMP Multi-Host
-- **Network Tools** (8): iPerf3, Subnet, MTU, Timezone/NATO DTG, Config Parser, IP Path Tracer, Port Auditor, Config Drift
+- **Network Tools** (8): iPerf3, Subnet, MTU, Timezone/Military DTG, Config Parser, IP Path Tracer, Port Auditor, Config Drift
 - **Security Tools** (5): CVE Analyzer, CVE Mitigation Advisor, Cisco Threat Feed, Config Explainer, CIS Compliance Audit
 - **Management** (2): Profiles v2, Security Score Engine
 - Modular frontend architecture (8 JS + 3 CSS files)

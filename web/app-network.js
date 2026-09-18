@@ -714,7 +714,7 @@ if (tzBatchForm) {
 }
 
 // =====================
-// NATO DTG FORMAT
+// Military DTG FORMAT
 // =====================
 
 // Elements - Picker form

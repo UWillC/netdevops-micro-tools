@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.44] – 2026-09-18 (Timezone Converter: feature renamed to "Military DTG")
+
+### Changed
+- The date-time-group feature of the Timezone Converter is now called
+  **Military DTG** everywhere it is named: tool cards and headings in the UI,
+  OpenAPI summaries and field descriptions, README, and one unused CSS class.
+  27 lines across 7 files. No route, request or response field changes — the
+  API contract is identical.
+
 ## [v0.6.43] – 2026-09-18 (ISE-04 — full ISE coverage, and a report that says what it leaves out)
 
 ### Fixed
@@ -1968,7 +1977,7 @@ matches.
 ### Frontend
 
 - **Quickstart banner** added to homepage: guided entry for first-time users
-  (Subnet Calculator, Timezone + NATO DTG, MTU Calculator — all free, no email).
+  (Subnet Calculator, Timezone + Military DTG, MTU Calculator — all free, no email).
 - **Favicon** — network topology SVG (5-node diagram, gradient hub).
 - Quickstart buttons bound to tab navigation (`app-core.js`).
 
