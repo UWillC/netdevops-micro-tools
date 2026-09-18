@@ -86,7 +86,7 @@ const toolNames = {
   "ip-path-tracer": "Path Tracer",
   "port-auditor": "Port Auditor",
   "config-drift": "Config Drift",
-  "cis-audit": "CIS Audit",
+  "cis-audit": "Hardening Audit",
   "profiles": "Profiles"
 };
 
@@ -299,7 +299,7 @@ tabButtons.forEach((btn) => {
 // -----------------------------
 // Supports two attribute patterns (UI-001 fix 2026-04-20):
 //   1. Standard: .btn-secondary[data-copy-target="output-id"]  (most tools)
-//   2. Alt:      .copy-btn[data-target="output-id"]            (CIS Audit, Config Drift)
+//   2. Alt:      .copy-btn[data-target="output-id"]            (Hardening Audit, Config Drift)
 // Both funnel into the same copy logic.
 function _bindCopyButton(btn, targetAttr) {
   btn.addEventListener("click", () => {
@@ -332,7 +332,7 @@ document
 // -----------------------------
 // Supports two attribute patterns (UI-001 fix 2026-04-20):
 //   1. Standard: .btn-secondary[data-download-target="output-id"]  (most tools)
-//   2. Alt:      .download-btn[data-target="output-id"]            (CIS Audit, Config Drift)
+//   2. Alt:      .download-btn[data-target="output-id"]            (Hardening Audit, Config Drift)
 function _bindDownloadButton(btn, targetAttr) {
   btn.addEventListener("click", () => {
     const targetId = btn.dataset[targetAttr];

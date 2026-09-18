@@ -50,7 +50,7 @@ app.include_router(ip_path_tracer.router, prefix="/tools", tags=["IP Path Tracer
 app.include_router(port_auditor.router, prefix="/tools", tags=["Port Auditor"])
 app.include_router(config_explainer.router, prefix="/tools", tags=["Config Explainer"])
 app.include_router(config_drift.router, prefix="/tools", tags=["Config Drift"])
-app.include_router(cis_audit.router, prefix="/tools", tags=["CIS Audit"])
+app.include_router(cis_audit.router, prefix="/tools", tags=["Hardening Audit"])
 app.include_router(whoami.router, prefix="/tools", tags=["Whoami"])
 app.include_router(subscribe.router, prefix="/api", tags=["Subscribe"])
 
@@ -117,7 +117,7 @@ def health():
 @app.get("/meta/version", response_model=MetaInfo)
 def meta_version():
     return MetaInfo(
-        version="0.6.44",
+        version="0.6.45",
         build_time=datetime.datetime.utcnow().isoformat() + "Z",
         feature_flags=["cve_engine_v3", "nvd_enrichment", "nvd_cache", "web_ui_v2", "profiles_v2", "profiles_cve", "security_score", "subnet_calc", "mtu_calc", "config_parser", "cloud_deploy", "export_pdf", "cve_mitigation_advisor", "timezone_converter", "ip_path_tracer", "port_auditor", "config_explainer", "config_drift", "cis_audit", "whoami", "ise_coverage", "threat_feed_local", "kev_badges", "ise_analyzer", "bundled_cve", "kev_catalog", "known_affected_match", "ise_full_coverage"]
     )

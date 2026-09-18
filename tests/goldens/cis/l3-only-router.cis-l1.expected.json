@@ -7,9 +7,13 @@
       "rules": [
         {
           "category": "Management Plane",
-          "cis_ref": "CIS Cisco IOS Benchmark 1.1.1",
-          "description": "CIS Benchmark 1.1.1",
+          "cis_ref": "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a75.4 Store passwords with secure algorithms",
+          "description": "Hardening rule 1.1.1",
           "evidence": "enable secret Type 9 (scrypt)",
+          "references": [
+            "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a75.4 Store passwords with secure algorithms",
+            "Cisco: Harden IOS Devices (Document ID 13608)"
+          ],
           "remediation": "",
           "result": "PASS",
           "rule_id": "1.1.1",
@@ -18,9 +22,13 @@
         },
         {
           "category": "Management Plane",
-          "cis_ref": "CIS Cisco IOS Benchmark 1.1.2",
-          "description": "CIS Benchmark 1.1.2",
+          "cis_ref": "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a75.4 Store passwords with secure algorithms",
+          "description": "Hardening rule 1.1.2",
           "evidence": "No enable password configured",
+          "references": [
+            "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a75.4 Store passwords with secure algorithms",
+            "Cisco: Harden IOS Devices (Document ID 13608)"
+          ],
           "remediation": "",
           "result": "PASS",
           "rule_id": "1.1.2",
@@ -29,9 +37,13 @@
         },
         {
           "category": "Management Plane",
-          "cis_ref": "CIS Cisco IOS Benchmark 1.1.3",
-          "description": "CIS Benchmark 1.1.3",
+          "cis_ref": "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a75.4 Store passwords with secure algorithms",
+          "description": "Hardening rule 1.1.3",
           "evidence": "service password-encryption found",
+          "references": [
+            "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a75.4 Store passwords with secure algorithms",
+            "Cisco: Harden IOS Devices (Document ID 13608)"
+          ],
           "remediation": "",
           "result": "PASS",
           "rule_id": "1.1.3",
@@ -40,9 +52,13 @@
         },
         {
           "category": "Management Plane",
-          "cis_ref": "CIS Cisco IOS Benchmark 1.1.4",
-          "description": "CIS Benchmark 1.1.4",
+          "cis_ref": "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a74.1 Implement centralized servers",
+          "description": "Hardening rule 1.1.4",
           "evidence": "aaa new-model enabled",
+          "references": [
+            "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a74.1 Implement centralized servers",
+            "Cisco: Harden IOS Devices (Document ID 13608)"
+          ],
           "remediation": "",
           "result": "PASS",
           "rule_id": "1.1.4",
@@ -51,9 +67,13 @@
         },
         {
           "category": "Management Plane",
-          "cis_ref": "CIS Cisco IOS Benchmark 1.1.5",
-          "description": "CIS Benchmark 1.1.5",
-          "evidence": "AAA authentication via TACACS+/RADIUS with fallback",
+          "cis_ref": "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a74.2 Configure authentication",
+          "description": "Hardening rule 1.1.5",
+          "evidence": "AAA authentication via central server group with local fallback",
+          "references": [
+            "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a74.2 Configure authentication",
+            "Cisco: Harden IOS Devices (Document ID 13608)"
+          ],
           "remediation": "",
           "result": "PASS",
           "rule_id": "1.1.5",
@@ -70,9 +90,13 @@
       "rules": [
         {
           "category": "Access",
-          "cis_ref": "CIS Cisco IOS Benchmark 1.2.1",
-          "description": "CIS Benchmark 1.2.1",
+          "cis_ref": "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a77.11 Configure remote network administration services",
+          "description": "Hardening rule 1.2.1",
           "evidence": "SSH version 2 enforced",
+          "references": [
+            "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a77.11 Configure remote network administration services",
+            "Cisco: Harden IOS Devices (Document ID 13608)"
+          ],
           "remediation": "",
           "result": "PASS",
           "rule_id": "1.2.1",
@@ -81,9 +105,13 @@
         },
         {
           "category": "Access",
-          "cis_ref": "CIS Cisco IOS Benchmark 1.2.2",
-          "description": "CIS Benchmark 1.2.2",
+          "cis_ref": "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a77.5 Set an acceptable timeout period",
+          "description": "Hardening rule 1.2.2",
           "evidence": "SSH timeout not set (default 120s)",
+          "references": [
+            "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a77.5 Set an acceptable timeout period",
+            "Cisco: Harden IOS Devices (Document ID 13608)"
+          ],
           "remediation": "Add: ip ssh time-out 60",
           "result": "WARNING",
           "rule_id": "1.2.2",
@@ -92,9 +120,13 @@
         },
         {
           "category": "Access",
-          "cis_ref": "CIS Cisco IOS Benchmark 1.2.4",
-          "description": "CIS Benchmark 1.2.4",
+          "cis_ref": "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a77.1 Disable clear text administration services",
+          "description": "Hardening rule 1.2.4",
           "evidence": "VTY lines restricted to SSH only",
+          "references": [
+            "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a77.1 Disable clear text administration services",
+            "Cisco: Harden IOS Devices (Document ID 13608)"
+          ],
           "remediation": "",
           "result": "PASS",
           "rule_id": "1.2.4",
@@ -103,9 +135,13 @@
         },
         {
           "category": "Access",
-          "cis_ref": "CIS Cisco IOS Benchmark 1.2.5",
-          "description": "CIS Benchmark 1.2.5",
-          "evidence": "exec-timeout configured on all management lines",
+          "cis_ref": "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a77.5 Set an acceptable timeout period",
+          "description": "Hardening rule 1.2.5",
+          "evidence": "exec-timeout configured on all management lines (longest 10 min; NSA recommends 5 min or less)",
+          "references": [
+            "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a77.5 Set an acceptable timeout period",
+            "Cisco: Harden IOS Devices (Document ID 13608)"
+          ],
           "remediation": "",
           "result": "PASS",
           "rule_id": "1.2.5",
@@ -114,9 +150,13 @@
         },
         {
           "category": "Access",
-          "cis_ref": "CIS Cisco IOS Benchmark 1.2.6",
-          "description": "CIS Benchmark 1.2.6",
+          "cis_ref": "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a77.4 Limit access to services",
+          "description": "Hardening rule 1.2.6",
           "evidence": "All VTY blocks restricted by access-class ACL",
+          "references": [
+            "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a77.4 Limit access to services",
+            "Cisco: Harden IOS Devices (Document ID 13608)"
+          ],
           "remediation": "",
           "result": "PASS",
           "rule_id": "1.2.6",
@@ -125,9 +165,13 @@
         },
         {
           "category": "Access",
-          "cis_ref": "CIS Cisco IOS Benchmark 1.2.7",
-          "description": "CIS Benchmark 1.2.7",
+          "cis_ref": "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a74.2 Configure authentication",
+          "description": "Hardening rule 1.2.7",
           "evidence": "VTY lines require authentication",
+          "references": [
+            "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a74.2 Configure authentication",
+            "Cisco: Harden IOS Devices (Document ID 13608)"
+          ],
           "remediation": "",
           "result": "PASS",
           "rule_id": "1.2.7",
@@ -136,9 +180,12 @@
         },
         {
           "category": "Access",
-          "cis_ref": "CIS Cisco IOS Benchmark 1.2.9",
-          "description": "CIS Benchmark 1.2.9",
+          "cis_ref": "Cisco: Harden IOS Devices (Document ID 13608)",
+          "description": "Hardening rule 1.2.9",
           "evidence": "No domain name set (needed for SSH key generation)",
+          "references": [
+            "Cisco: Harden IOS Devices (Document ID 13608)"
+          ],
           "remediation": "Add: ip domain-name <domain>",
           "result": "WARNING",
           "rule_id": "1.2.9",
@@ -155,9 +202,13 @@
       "rules": [
         {
           "category": "Services",
-          "cis_ref": "CIS Cisco IOS Benchmark 2.1.1",
-          "description": "CIS Benchmark 2.1.1",
+          "cis_ref": "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a77.1 Disable clear text administration services",
+          "description": "Hardening rule 2.1.1",
           "evidence": "HTTP server disabled",
+          "references": [
+            "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a77.1 Disable clear text administration services",
+            "Cisco: Harden IOS Devices (Document ID 13608)"
+          ],
           "remediation": "",
           "result": "PASS",
           "rule_id": "2.1.1",
@@ -166,9 +217,13 @@
         },
         {
           "category": "Services",
-          "cis_ref": "CIS Cisco IOS Benchmark 2.1.3",
-          "description": "CIS Benchmark 2.1.3",
+          "cis_ref": "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a78.1 Disable IP source routing",
+          "description": "Hardening rule 2.1.3",
           "evidence": "IP source routing not disabled",
+          "references": [
+            "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a78.1 Disable IP source routing",
+            "Cisco: Harden IOS Devices (Document ID 13608)"
+          ],
           "remediation": "Add: no ip source-route",
           "result": "FAIL",
           "rule_id": "2.1.3",
@@ -177,9 +232,12 @@
         },
         {
           "category": "Services",
-          "cis_ref": "CIS Cisco IOS Benchmark 2.1.4",
-          "description": "CIS Benchmark 2.1.4",
+          "cis_ref": "Cisco: Harden IOS Devices (Document ID 13608)",
+          "description": "Hardening rule 2.1.4",
           "evidence": "PAD service not disabled",
+          "references": [
+            "Cisco: Harden IOS Devices (Document ID 13608)"
+          ],
           "remediation": "Add: no service pad",
           "result": "FAIL",
           "rule_id": "2.1.4",
@@ -188,9 +246,13 @@
         },
         {
           "category": "Services",
-          "cis_ref": "CIS Cisco IOS Benchmark 2.1.5",
-          "description": "CIS Benchmark 2.1.5",
+          "cis_ref": "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a77.6 Enable Transmission Control Protocol (TCP) keep-alive",
+          "description": "Hardening rule 2.1.5",
           "evidence": "TCP keepalives not enabled",
+          "references": [
+            "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a77.6 Enable Transmission Control Protocol (TCP) keep-alive",
+            "Cisco: Harden IOS Devices (Document ID 13608)"
+          ],
           "remediation": "Add: service tcp-keepalives-in / service tcp-keepalives-out",
           "result": "FAIL",
           "rule_id": "2.1.5",
@@ -207,9 +269,13 @@
       "rules": [
         {
           "category": "Logging & NTP",
-          "cis_ref": "CIS Cisco IOS Benchmark 3.1.1",
-          "description": "CIS Benchmark 3.1.1",
+          "cis_ref": "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a76.1 Enable logging",
+          "description": "Hardening rule 3.1.1",
           "evidence": "No buffered logging",
+          "references": [
+            "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a76.1 Enable logging",
+            "Cisco: Harden IOS Devices (Document ID 13608)"
+          ],
           "remediation": "Add: logging buffered 64000 informational",
           "result": "FAIL",
           "rule_id": "3.1.1",
@@ -218,9 +284,13 @@
         },
         {
           "category": "Logging & NTP",
-          "cis_ref": "CIS Cisco IOS Benchmark 3.1.2",
-          "description": "CIS Benchmark 3.1.2",
+          "cis_ref": "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a76.2 Establish centralized remote log servers",
+          "description": "Hardening rule 3.1.2",
           "evidence": "No remote syslog server",
+          "references": [
+            "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a76.2 Establish centralized remote log servers",
+            "Cisco: Harden IOS Devices (Document ID 13608)"
+          ],
           "remediation": "Add: logging host <syslog-server-IP-or-FQDN>",
           "result": "FAIL",
           "rule_id": "3.1.2",
@@ -229,9 +299,13 @@
         },
         {
           "category": "Logging & NTP",
-          "cis_ref": "CIS Cisco IOS Benchmark 3.1.3",
-          "description": "CIS Benchmark 3.1.3",
+          "cis_ref": "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a76.3 Capture necessary log information",
+          "description": "Hardening rule 3.1.3",
           "evidence": "No service timestamps configured",
+          "references": [
+            "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a76.3 Capture necessary log information",
+            "Cisco: Harden IOS Devices (Document ID 13608)"
+          ],
           "remediation": "Add: service timestamps log datetime msec localtime show-timezone",
           "result": "FAIL",
           "rule_id": "3.1.3",
@@ -240,9 +314,13 @@
         },
         {
           "category": "Logging & NTP",
-          "cis_ref": "CIS Cisco IOS Benchmark 3.1.4",
-          "description": "CIS Benchmark 3.1.4",
+          "cis_ref": "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a76.4 Synchronize clocks",
+          "description": "Hardening rule 3.1.4",
           "evidence": "No NTP server configured",
+          "references": [
+            "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a76.4 Synchronize clocks",
+            "Cisco: Harden IOS Devices (Document ID 13608)"
+          ],
           "remediation": "Add: ntp server <NTP-server-IP-or-FQDN>",
           "result": "FAIL",
           "rule_id": "3.1.4",
@@ -259,9 +337,13 @@
       "rules": [
         {
           "category": "Banner & Info",
-          "cis_ref": "CIS Cisco IOS Benchmark 4.1.1",
-          "description": "CIS Benchmark 4.1.1",
+          "cis_ref": "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a710.1 Present a notification banner",
+          "description": "Hardening rule 4.1.1",
           "evidence": "No login/motd banner configured (legal/compliance requirement)",
+          "references": [
+            "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a710.1 Present a notification banner",
+            "Cisco: Harden IOS Devices (Document ID 13608)"
+          ],
           "remediation": "Add:\nbanner motd ^\nUnauthorized access to this system is prohibited.\nAll activity is monitored and recorded.\nViolators may be subject to civil and criminal prosecution.\n^",
           "result": "FAIL",
           "rule_id": "4.1.1",
@@ -278,9 +360,14 @@
       "rules": [
         {
           "category": "SNMP",
-          "cis_ref": "CIS Cisco IOS Benchmark 5.1.1",
-          "description": "CIS Benchmark 5.1.1",
+          "cis_ref": "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a77.8 Remove SNMP read-write community strings",
+          "description": "Hardening rule 5.1.1",
           "evidence": "No SNMPv2c community strings",
+          "references": [
+            "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a77.8 Remove SNMP read-write community strings",
+            "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a77.1 Disable clear text administration services",
+            "Cisco: Harden IOS Devices (Document ID 13608)"
+          ],
           "remediation": "",
           "result": "PASS",
           "rule_id": "5.1.1",
@@ -289,9 +376,13 @@
         },
         {
           "category": "SNMP",
-          "cis_ref": "CIS Cisco IOS Benchmark 5.1.2",
-          "description": "CIS Benchmark 5.1.2",
+          "cis_ref": "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a77.11 Configure remote network administration services",
+          "description": "Hardening rule 5.1.2",
           "evidence": "SNMP not configured",
+          "references": [
+            "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a77.11 Configure remote network administration services",
+            "Cisco: Harden IOS Devices (Document ID 13608)"
+          ],
           "remediation": "",
           "result": "N/A",
           "rule_id": "5.1.2",
@@ -313,7 +404,7 @@
   "score": 70.3,
   "score_capped": false,
   "summary": [
-    "CIS Compliance Score: 70.3% (Grade C)",
+    "Hardening Score: 70.3% (Grade C)",
     "12 passed, 8 failed, 2 warnings, 1 N/A",
     "Parser coverage 91.3% \u2014 2 rule(s) returned WARN (ambiguous); score may understate or overstate true posture.",
     "Moderate compliance. Several important gaps to fix."

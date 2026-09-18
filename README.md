@@ -170,11 +170,12 @@ A lightweight CVE awareness engine focused on Cisco platforms with NVD enrichmen
 - **Multi-format Export** — PDF, JSON, and Markdown reports
 - **File-based cache** — NVD responses cached for 24h (eliminates rate limiting)
 
-### 📋 CIS Compliance Audit ⭐ NEW
+### 📋 Hardening Audit
 
-Audit your Cisco config against CIS Benchmark hardening rules.
+Audit your Cisco config against public hardening guidance.
 
-- **37 rules** based on CIS Cisco IOS Benchmark (Level 1 + Level 2)
+- **39 rules** (23 at Level 1, all 39 at Level 2) aligned with the NSA *Network Infrastructure Security Guide* (v1.2) and Cisco's *Harden IOS Devices* guide; cross-checked against the CERT Polska knowledge base (CC BY-SA 4.0)
+- Every rule carries its source reference (`references` in the API, `REF:` in the report)
 - Categories: Management Plane, Access, Services, Logging & NTP, Banner, SNMP, Layer 2 Security
 - Compliance score 0-100% with letter grade (A-F)
 - Remediation commands per failed rule
@@ -316,7 +317,7 @@ netdevops-micro-tools/
 │   ├── app-security.js      # CVE Analyzer
 │   ├── app-profiles.js      # Profiles, Vuln Widget, Export
 │   ├── app-ui.js            # Hints, tooltips, SNMP Multi-Host
-│   ├── app-network.js       # Network tools, Config Explainer, Drift, CIS
+│   ├── app-network.js       # Network tools, Config Explainer, Drift, Hardening Audit
 │   ├── app-feeds.js         # Threat Feed, Port Auditor
 │   ├── style-base.css       # Base styles, layout, theme
 │   ├── style-home.css       # Home page, navigation
@@ -384,7 +385,7 @@ are persisted across container restarts.
 **v0.6.0 (current):** ✅ LIVE — 20 production modules
 - **Config Generators** (5): SNMPv3, NTP, AAA, Golden Config, SNMP Multi-Host
 - **Network Tools** (8): iPerf3, Subnet, MTU, Timezone/Military DTG, Config Parser, IP Path Tracer, Port Auditor, Config Drift
-- **Security Tools** (5): CVE Analyzer, CVE Mitigation Advisor, Cisco Threat Feed, Config Explainer, CIS Compliance Audit
+- **Security Tools** (5): CVE Analyzer, CVE Mitigation Advisor, Cisco Threat Feed, Config Explainer, Hardening Audit
 - **Management** (2): Profiles v2, Security Score Engine
 - Modular frontend architecture (8 JS + 3 CSS files)
 - Cloud deployment on custom domain

@@ -1,11 +1,20 @@
 """
-CIS Compliance Checker — Audit Cisco IOS/IOS-XE config against CIS Benchmark rules.
+Hardening Audit — audit a Cisco IOS/IOS-XE config against public hardening guidance.
 
 Rule-based: no LLM required, zero cost, works offline.
-Based on CIS Cisco IOS Benchmark v4.x key recommendations.
+
+Rule set aligned with (primary sources, see REFERENCES per rule):
+  - NSA "Network Infrastructure Security Guide" (U/OO/118623-22, v1.2, Oct 2023)
+  - Cisco "Harden IOS Devices" (Document ID 13608)
+  - cross-checked against CERT Polska knowledge base (wiedza.cert.pl, CC BY-SA 4.0)
+
+The module/route name `cis_audit` / `/cis-audit/*` is a legacy technical
+identifier kept for API compatibility; this tool is not affiliated with,
+derived from, or endorsed by any third-party benchmark program.
 
 Endpoints:
-  POST /cis-audit/check — Audit config against CIS benchmark rules
+  POST /hardening-audit/check — audit config (canonical)
+  POST /cis-audit/check       — same handler, legacy path
 """
 
 import re
@@ -116,7 +125,7 @@ def _extract_blocks(cfg: str, header_re: re.Pattern) -> List[str]:
 
 class AuditRequest(BaseModel):
     config_text: str = Field(..., min_length=3, description="Cisco IOS/IOS-XE running-config")
-    level: str = Field(default="1", description="CIS Level: 1 (basic) or 2 (hardened)")
+    level: str = Field(default="1", description="Audit level: 1 (baseline) or 2 (hardened)")
 
 
 class AuditRule(BaseModel):
@@ -128,7 +137,8 @@ class AuditRule(BaseModel):
     category: str
     evidence: str = ""  # what was found in config
     remediation: str = ""  # how to fix
-    cis_ref: str = ""  # CIS benchmark reference
+    references: List[str] = Field(default_factory=list)  # primary sources for this rule
+    cis_ref: str = ""  # DEPRECATED legacy field name: mirrors references[0]
 
 
 class AuditCategory(BaseModel):
@@ -157,7 +167,7 @@ class AuditResponse(BaseModel):
 
 
 # ----------------------------
-# CIS Benchmark Rules
+# Hardening Rules
 # ----------------------------
 
 # Each rule: (rule_id, title, category, severity, level, check_fn)
@@ -258,8 +268,20 @@ def _check_aaa_new_model(cfg):
 def _check_aaa_authentication(cfg):
     if not re.search(r"^aaa new-model", cfg, re.M):
         return "N/A", "AAA not enabled — skipping", ""
-    if re.search(r"^aaa authentication login\s+\S+\s+.*group\s+(tacacs|radius)", cfg, re.M):
-        return "PASS", "AAA authentication via TACACS+/RADIUS with fallback", ""
+    m = re.search(r"^aaa authentication login\s+\S+\s+(?P<methods>.*\bgroup\s+\S+.*)$", cfg, re.M)
+    if m:
+        methods = m.group("methods").split()
+        # "group <name>" consumes two tokens; anything after it is a fallback method
+        last_group = max(i for i, t in enumerate(methods) if t == "group")
+        fallback = methods[last_group + 2:]
+        if any(t in ("local", "local-case") for t in fallback):
+            return "PASS", "AAA authentication via central server group with local fallback", ""
+        return (
+            "WARNING",
+            "AAA authentication via central server group but no local fallback — "
+            "device is unmanageable if every AAA server is unreachable",
+            "Append local as the last method: aaa authentication login default group <GROUP> local",
+        )
     if re.search(r"^aaa authentication login\s+\S+\s+local", cfg, re.M):
         return "WARNING", "AAA authentication local only (no central server)", "Consider: aaa authentication login default group tacacs+ local"
     return "FAIL", "No AAA authentication list configured", "Add: aaa authentication login default group tacacs+ local"
@@ -267,8 +289,18 @@ def _check_aaa_authentication(cfg):
 def _check_aaa_accounting(cfg):
     if not re.search(r"^aaa new-model", cfg, re.M):
         return "N/A", "AAA not enabled — skipping", ""
-    if re.search(r"^aaa accounting\s+(exec|commands)", cfg, re.M):
-        return "PASS", "AAA accounting configured", ""
+    has_exec = bool(re.search(r"^aaa accounting\s+exec\b", cfg, re.M))
+    has_cmd15 = bool(re.search(r"^aaa accounting\s+commands\s+15\b", cfg, re.M))
+    if has_exec and has_cmd15:
+        return "PASS", "AAA accounting configured for exec sessions and privilege-15 commands", ""
+    if has_exec or re.search(r"^aaa accounting\s+commands\b", cfg, re.M):
+        missing = "privilege-15 commands" if not has_cmd15 else "exec sessions"
+        return (
+            "WARNING",
+            f"AAA accounting is partial — {missing} not recorded",
+            "Add: aaa accounting exec default start-stop group <GROUP>\n"
+            "Add: aaa accounting commands 15 default start-stop group <GROUP>",
+        )
     return "FAIL", "No AAA accounting — no audit trail", "Add: aaa accounting exec default start-stop group tacacs+"
 
 def _check_ssh_version_2(cfg):
@@ -324,6 +356,10 @@ def _check_no_telnet(cfg):
         return "WARNING", "No transport input specified on some VTY lines (telnet may be allowed by default)", "Add: transport input ssh"
     return "PASS", "VTY lines restricted to SSH only", ""
 
+EXEC_TIMEOUT_NSA_MINUTES = 5    # NSA NISG 7.5: "five minutes or less"
+EXEC_TIMEOUT_WARN_MINUTES = 15  # above this the rule stops passing
+
+
 def _check_exec_timeout(cfg):
     vty_blocks = _extract_blocks(cfg, VTY_HEADER_RE)
     con_blocks = _extract_blocks(cfg, CON_HEADER_RE)
@@ -337,6 +373,25 @@ def _check_exec_timeout(cfg):
     missing = [b for b in all_blocks if not re.search(r"^\s*exec-timeout\b", b, re.M)]
     if missing:
         return "FAIL", f"exec-timeout not set on {len(missing)} of {len(all_blocks)} management line block(s)", "Add: exec-timeout 10 0"
+    # exec-timeout <minutes> [seconds]
+    longest = 0.0
+    for block in all_blocks:
+        for m in re.finditer(r"^\s*exec-timeout\s+(\d+)(?:\s+(\d+))?", block, re.M):
+            longest = max(longest, int(m.group(1)) + int(m.group(2) or 0) / 60.0)
+    if longest > EXEC_TIMEOUT_WARN_MINUTES:
+        return (
+            "WARNING",
+            f"exec-timeout up to {longest:g} min on a management line "
+            f"(> {EXEC_TIMEOUT_WARN_MINUTES} min leaves idle sessions open to hijack)",
+            "Set: exec-timeout 5 0 (NSA recommends five minutes or less)",
+        )
+    if longest > EXEC_TIMEOUT_NSA_MINUTES:
+        return (
+            "PASS",
+            f"exec-timeout configured on all management lines (longest {longest:g} min; "
+            f"NSA recommends {EXEC_TIMEOUT_NSA_MINUTES} min or less)",
+            "",
+        )
     return "PASS", "exec-timeout configured on all management lines", ""
 
 def _check_access_class(cfg):
@@ -370,6 +425,8 @@ def _check_no_source_route(cfg):
 def _check_no_finger(cfg):
     if re.search(r"^no ip finger", cfg, re.M) or re.search(r"^no service finger", cfg, re.M):
         return "PASS", "Finger service disabled", ""
+    if re.search(r"^(ip finger|service finger)\b", cfg, re.M):
+        return "FAIL", "Finger service enabled (discloses logged-in users)", "Add: no ip finger"
     # In modern IOS, finger is off by default
     return "PASS", "Finger service not configured (off by default in modern IOS)", ""
 
@@ -458,6 +515,12 @@ def _check_ntp_configured(cfg):
     servers = [m.group("host") for m in NTP_SERVER_RE.finditer(cfg)]
     if servers:
         evidence = f"NTP server(s) configured: {', '.join(servers)}"
+        if len(set(servers)) < 2:
+            return (
+                "WARNING",
+                evidence + " — single time source (no redundancy; log timestamps drift if it fails)",
+                "Add a second trusted source: ntp server <NTP-server-2>",
+            )
         return "PASS", evidence, ""
     return "FAIL", "No NTP server configured", "Add: ntp server <NTP-server-IP-or-FQDN>"
 
@@ -575,6 +638,15 @@ def _check_no_snmpv2(cfg):
         evidence = f"SNMPv2c RW community: {', '.join(rw_any)}. All: {', '.join(all_communities)}"
         return "FAIL", evidence, "Remove RW SNMPv2c; migrate to SNMPv3 authPriv"
     evidence = f"SNMPv2c community string(s): {', '.join(all_communities)}"
+    no_acl = [m.group("name") for m in matches if not m.group("acl")]
+    if no_acl:
+        evidence += f". No ACL on: {', '.join(no_acl)} — readable from any routable source"
+        return (
+            "FAIL",
+            evidence,
+            "Remove SNMPv2c; migrate to SNMPv3: snmp-server group <grp> v3 priv\n"
+            "Until then restrict the source: snmp-server community <name> RO <ACL>",
+        )
     return "FAIL", evidence, "Remove SNMPv2c; migrate to SNMPv3: snmp-server group <grp> v3 priv"
 
 def _check_snmpv3_priv(cfg):
@@ -729,6 +801,7 @@ RULES = [
     ("1.2.7", "VTY login required", "Access", "critical", "1", _check_login_local),
     ("1.2.8", "Console authentication", "Access", "high", "2", _check_console_password),
     ("1.2.9", "Domain name", "Access", "low", "1", _check_domain_name),
+    ("1.2.10", "RSA key size", "Access", "high", "2", _check_rsa_key_size),
 
     # Services (2.x)
     ("2.1.1", "No HTTP server", "Services", "critical", "1", _check_no_http_server),
@@ -739,6 +812,7 @@ RULES = [
     ("2.1.6", "No CDP globally", "Services", "medium", "2", _check_no_cdp_global),
     ("2.1.7", "No BOOTP server", "Services", "low", "2", _check_no_ip_bootp),
     ("2.1.8", "No gratuitous ARPs", "Services", "low", "2", _check_no_gratuitous_arps),
+    ("2.1.9", "No finger service", "Services", "low", "2", _check_no_finger),
 
     # Logging & NTP (3.x)
     ("3.1.1", "Logging to buffer", "Logging & NTP", "high", "1", _check_logging_buffered),
@@ -765,6 +839,64 @@ RULES = [
 
 
 # ----------------------------
+# References (primary sources per rule)
+# ----------------------------
+# Section numbers verified against the documents' own tables of contents /
+# command text. Rules the NSA guide does not cover cite the Cisco document only.
+
+NSA_NISG = "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22)"
+CISCO_HARDEN = "Cisco: Harden IOS Devices (Document ID 13608)"
+CISCO_CMD_REF = "Cisco IOS command reference"
+
+
+def _nsa(section: str) -> str:
+    return f"{NSA_NISG} \u00a7{section}"
+
+
+REFERENCES = {
+    "1.1.1": [_nsa("5.4 Store passwords with secure algorithms"), CISCO_HARDEN],
+    "1.1.2": [_nsa("5.4 Store passwords with secure algorithms"), CISCO_HARDEN],
+    "1.1.3": [_nsa("5.4 Store passwords with secure algorithms"), CISCO_HARDEN],
+    "1.1.4": [_nsa("4.1 Implement centralized servers"), CISCO_HARDEN],
+    "1.1.5": [_nsa("4.2 Configure authentication"), CISCO_HARDEN],
+    "1.1.6": [_nsa("4.4 Configure accounting"), CISCO_HARDEN],
+    "1.2.1": [_nsa("7.11 Configure remote network administration services"), CISCO_HARDEN],
+    "1.2.2": [_nsa("7.5 Set an acceptable timeout period"), CISCO_HARDEN],
+    "1.2.3": [_nsa("4.6 Limit authentication attempts")],
+    "1.2.4": [_nsa("7.1 Disable clear text administration services"), CISCO_HARDEN],
+    "1.2.5": [_nsa("7.5 Set an acceptable timeout period"), CISCO_HARDEN],
+    "1.2.6": [_nsa("7.4 Limit access to services"), CISCO_HARDEN],
+    "1.2.7": [_nsa("4.2 Configure authentication"), CISCO_HARDEN],
+    "1.2.8": [_nsa("4.2 Configure authentication"), CISCO_HARDEN],
+    "1.2.9": [CISCO_HARDEN],
+    "1.2.10": [_nsa("7.11 Configure remote network administration services"), CISCO_HARDEN],
+    "2.1.1": [_nsa("7.1 Disable clear text administration services"), CISCO_HARDEN],
+    "2.1.2": [_nsa("7.11 Configure remote network administration services")],
+    "2.1.3": [_nsa("8.1 Disable IP source routing"), CISCO_HARDEN],
+    "2.1.4": [CISCO_HARDEN],
+    "2.1.5": [_nsa("7.6 Enable Transmission Control Protocol (TCP) keep-alive"), CISCO_HARDEN],
+    "2.1.6": [_nsa("7.10 Disable discovery protocols on specific interfaces"), CISCO_HARDEN],
+    "2.1.7": [CISCO_HARDEN],
+    "2.1.8": [CISCO_CMD_REF + ": ip gratuitous-arps"],
+    "2.1.9": [_nsa("7.9 Disable unnecessary network services"), CISCO_HARDEN],
+    "3.1.1": [_nsa("6.1 Enable logging"), CISCO_HARDEN],
+    "3.1.2": [_nsa("6.2 Establish centralized remote log servers"), CISCO_HARDEN],
+    "3.1.3": [_nsa("6.3 Capture necessary log information"), CISCO_HARDEN],
+    "3.1.4": [_nsa("6.4 Synchronize clocks"), CISCO_HARDEN],
+    "3.1.5": [_nsa("6.4 Synchronize clocks"), CISCO_HARDEN],
+    "4.1.1": [_nsa("10.1 Present a notification banner"), CISCO_HARDEN],
+    "5.1.1": [_nsa("7.8 Remove SNMP read-write community strings"), _nsa("7.1 Disable clear text administration services"), CISCO_HARDEN],
+    "5.1.2": [_nsa("7.11 Configure remote network administration services"), CISCO_HARDEN],
+    "6.1.1": [CISCO_HARDEN],
+    "6.1.2": [CISCO_HARDEN],
+    "6.1.3": [_nsa("9.2 Enable port security"), CISCO_HARDEN],
+    "6.1.4": [CISCO_HARDEN],
+    "6.1.5": [CISCO_CMD_REF + ": spanning-tree bpduguard"],
+    "6.1.6": [CISCO_CMD_REF + ": spanning-tree mode"],
+}
+
+
+# ----------------------------
 # Score and grade
 # ----------------------------
 
@@ -778,7 +910,7 @@ SEVERITY_WEIGHTS = {
 def _calculate_score(results: List[AuditRule]) -> tuple:
     """Calculate compliance score 0-100, letter grade, and score-capped flag.
 
-    Model (post CIS-010 refactor):
+    Model (post rule-010 refactor):
     - N/A excluded from both numerator and denominator
     - WARN worth 0.25 (reserved for rule-level ambiguity, not parser failures)
     - Severity-weighted
@@ -841,7 +973,7 @@ def _generate_summary(results: List[AuditRule], score: float, grade: str,
     warnings = sum(1 for r in results if r.result == "WARNING")
     na = sum(1 for r in results if r.result == "N/A")
 
-    summary.append(f"CIS Compliance Score: {score}% (Grade {grade})")
+    summary.append(f"Hardening Score: {score}% (Grade {grade})")
     summary.append(f"{passed} passed, {failed} failed, {warnings} warnings, {na} N/A")
 
     critical_fails = [r for r in results if r.result == "FAIL" and r.severity == "critical"]
@@ -872,9 +1004,10 @@ def _generate_summary(results: List[AuditRule], score: float, grade: str,
 # Endpoint
 # ----------------------------
 
-@router.post("/cis-audit/check", response_model=AuditResponse)
+@router.post("/hardening-audit/check", response_model=AuditResponse)
+@router.post("/cis-audit/check", response_model=AuditResponse, include_in_schema=False)
 def cis_audit(req: AuditRequest):
-    """Audit Cisco IOS/IOS-XE config against CIS Benchmark."""
+    """Audit Cisco IOS/IOS-XE config against NSA / Cisco hardening guidance."""
 
     level = req.level if req.level in ("1", "2") else "1"
 
@@ -901,13 +1034,14 @@ def cis_audit(req: AuditRequest):
         all_results.append(AuditRule(
             rule_id=rule_id,
             title=title,
-            description=f"CIS Benchmark {rule_id}",
+            description=f"Hardening rule {rule_id}",
             result=result,
             severity=severity,
             category=category,
             evidence=evidence,
             remediation=remediation,
-            cis_ref=f"CIS Cisco IOS Benchmark {rule_id}",
+            references=REFERENCES[rule_id],
+            cis_ref=REFERENCES[rule_id][0],
         ))
 
     # Group by category

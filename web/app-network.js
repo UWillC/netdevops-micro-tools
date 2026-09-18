@@ -1580,7 +1580,7 @@ if (cdForm) {
 }
 
 // =============================================
-// CIS COMPLIANCE AUDIT
+// HARDENING AUDIT (legacy ids: cis-*)
 // =============================================
 
 const cisForm = document.getElementById("cis-form");
@@ -1591,10 +1591,11 @@ const cisResults = document.getElementById("cis-results");
 function formatCisAudit(data) {
   let out = [];
 
-  out.push("CIS COMPLIANCE AUDIT REPORT");
+  out.push("HARDENING AUDIT REPORT");
   out.push("=".repeat(60));
   if (data.hostname) out.push(`Device: ${data.hostname}`);
-  out.push(`CIS Level: ${data.level}`);
+  out.push(`Audit level: ${data.level}`);
+  out.push("Aligned with: NSA Network Infrastructure Security Guide v1.2, Cisco Harden IOS Devices");
   out.push(`Score: ${data.score}% (Grade ${data.grade})`);
   out.push(`Passed: ${data.passed} | Failed: ${data.failed} | Warnings: ${data.warnings}`);
   out.push("");
@@ -1612,8 +1613,11 @@ function formatCisAudit(data) {
       const sev = r.severity === "critical" ? " [CRITICAL]" : r.severity === "high" ? " [HIGH]" : "";
       out.push(`  [${icon}] ${r.rule_id} ${r.title}${sev}`);
       out.push(`         ${r.evidence}`);
-      if (r.result === "FAIL" && r.remediation) {
-        out.push(`         FIX: ${r.remediation}`);
+      if ((r.result === "FAIL" || r.result === "WARNING") && r.remediation) {
+        out.push(`         FIX: ${r.remediation.split("\n").join("\n              ")}`);
+      }
+      if (r.result !== "PASS" && r.result !== "N/A" && r.references && r.references.length) {
+        out.push(`         REF: ${r.references.join("; ")}`);
       }
     });
     out.push("");
@@ -1672,12 +1676,12 @@ if (cisForm) {
       return;
     }
 
-    if (cisOutput) cisOutput.value = "Running CIS audit...";
+    if (cisOutput) cisOutput.value = "Running hardening audit...";
     if (cisSummary) cisSummary.style.display = "none";
     if (cisResults) cisResults.style.display = "none";
 
     try {
-      const data = await postJSON("/tools/cis-audit/check", {
+      const data = await postJSON("/tools/hardening-audit/check", {
         config_text: configText,
         level: level,
       });

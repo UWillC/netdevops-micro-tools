@@ -85,7 +85,7 @@ Last updated: 2026-03-13
 - [x] **Port Auditor** — unused port detection from `show interface status`
 - [x] **Config Explainer** — plain English explanations, 150+ patterns, zero LLM cost
 - [x] **Config Drift Detection** — compare two configs, risk flags, drift score
-- [x] **CIS Compliance Audit** — 37 CIS Benchmark rules, Level 1/2, grading A-F
+- [x] **Hardening Audit** — 39 rules aligned with NSA / Cisco hardening guidance, Level 1/2, grading A-F
 - [x] Frontend refactor: monolithic → modular (8 JS + 3 CSS files)
 - [x] 20 production modules total
 
@@ -139,7 +139,7 @@ Focus: Multi-user support and billing.
 - [x] CVE Mitigation Advisor — 19 CVEs with copy-paste commands
 - [x] Cisco PSIRT Advisory integration — auto-sync + on-demand
 - [x] Config drift detection — v1.0 LIVE
-- [x] CIS Compliance checking — 37 rules LIVE
+- [x] Hardening audit — 39 rules LIVE
 
 ### Remaining
 - [ ] Tenable vulnerability scanner integration

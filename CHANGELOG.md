@@ -4,6 +4,61 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.45] – 2026-09-18 (Hardening Audit: sourced rules, five tighter checks, no third-party benchmark mark)
+
+### Changed
+- The audit module is now **Hardening Audit**. The rule set was always built
+  from public hardening guidance; it now says so and proves it: every rule
+  carries `references` (API) / `REF:` (report) pointing at the NSA *Network
+  Infrastructure Security Guide* v1.2 (U/OO/118623-22) section and/or Cisco's
+  *Harden IOS Devices* (Document ID 13608). Section numbers were checked
+  against the documents themselves; rules the NSA guide does not cover
+  (L2 protections, PAD, BOOTP, domain name) cite the Cisco source only.
+  Cross-checked against the CERT Polska knowledge base (CC BY-SA 4.0).
+- All user-facing references to a third-party benchmark program are removed
+  (UI, report text, API descriptions, README, ROADMAP). This tool is not
+  affiliated with or derived from one. Historical entries below are left as
+  written.
+- Canonical endpoint is `POST /tools/hardening-audit/check`. The legacy
+  `/tools/cis-audit/check` path stays and returns the identical response.
+  The legacy response field `cis_ref` stays and mirrors `references[0]`.
+- Five rules no longer pass configurations they should question:
+  - **1.2.5 exec-timeout** — above 15 min is a WARNING (`exec-timeout 120 0`
+    used to PASS). 5–15 min passes and states that NSA recommends five
+    minutes or less. The worst management line decides.
+  - **3.1.4 NTP** — a single time source is a WARNING (NSA: at least two).
+    The same server listed twice counts once.
+  - **1.1.5 AAA authentication** — a server group with no `local` fallback is
+    a WARNING. A server group merely *named* "local" is not a fallback.
+  - **1.1.6 AAA accounting** — `exec` without `commands 15` (or the reverse)
+    is a WARNING that names the missing half. `commands 1` is not
+    `commands 15`.
+  - **5.1.1 SNMPv2c** — still a FAIL for any community; evidence now names
+    communities with no ACL and the remediation includes the interim ACL.
+- The text report prints `FIX:` for WARNINGs too (it only did for FAILs, so
+  the new warnings would have shown a problem without the command).
+
+### Added
+- Two checks that existed in the code but were never registered now run at
+  Level 2: **1.2.10 RSA key size** and **2.1.9 No finger service** (which now
+  FAILs on an explicitly enabled service instead of always passing).
+  Rule count: 37 → **39** (Level 1: 23).
+
+### Fixed
+- The level selector said Level 1 runs 28 rules; it runs 23. Counts in the
+  UI and README are now pinned to the engine by a test.
+
+### Tests
+- `tests/test_hardening_audit_hard01.py` (41 cases): thresholds, fallback
+  parsing, reference coverage and NSA section-number bounds, legacy/new
+  endpoint parity, de-branding of seven user-facing files and of the live
+  response, UI rule counts. Goldens regenerated; the only result change in
+  existing expectations was `hardened-baseline` L2 rule 1.1.6 PASS → WARNING,
+  resolved by adding `aaa accounting commands 15` to the fixture — a
+  "fully hardened" baseline should have had it. Suite: 1201 → 1242.
+
+---
+
 ## [v0.6.44] – 2026-09-18 (Timezone Converter: feature renamed to "Military DTG")
 
 ### Changed

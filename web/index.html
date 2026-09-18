@@ -4,14 +4,14 @@
   <meta charset="UTF-8" />
   <title>NetDevOps Micro-Tools – Web UI</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Audit-grade Cisco tools for network engineers. 21 live modules: CVE exposure, CIS compliance, config drift, hardened configs. Browser-based, free, no install." />
+  <meta name="description" content="Audit-grade Cisco tools for network engineers. 21 live modules: CVE exposure, hardening audit, config drift, hardened configs. Browser-based, free, no install." />
 
   <!-- Open Graph / LinkedIn -->
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://netdevops-tools.thebackroom.ai/" />
   <meta property="og:site_name" content="NetDevOps Micro-Tools" />
   <meta property="og:title" content="NetDevOps Micro-Tools | Free audit-grade Cisco tools for network engineers" />
-  <meta property="og:description" content="21 live modules: CVE exposure, CIS compliance, config drift, hardened Cisco configs. Browser-based, free, no install." />
+  <meta property="og:description" content="21 live modules: CVE exposure, hardening audit, config drift, hardened Cisco configs. Browser-based, free, no install." />
   <meta property="og:image" content="https://netdevops-tools.thebackroom.ai/static/og-card.jpg" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
@@ -21,7 +21,7 @@
   <!-- Twitter / X -->
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="NetDevOps Micro-Tools | Free audit-grade Cisco tools for network engineers" />
-  <meta name="twitter:description" content="21 live modules: CVE exposure, CIS compliance, config drift, hardened Cisco configs. Browser-based, free, no install." />
+  <meta name="twitter:description" content="21 live modules: CVE exposure, hardening audit, config drift, hardened Cisco configs. Browser-based, free, no install." />
   <meta name="twitter:image" content="https://netdevops-tools.thebackroom.ai/static/og-card.jpg" />
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <link rel="stylesheet" href="style-base.css?v=0.6.29" />
@@ -108,7 +108,7 @@
           <div class="nav-group-items collapsed" id="group-security">
             <button class="tab-button" data-tab="cve"><span class="tool-icon">🔍</span> CVE Analyzer</button>
             <button class="tab-button" data-tab="mitigation"><span class="tool-icon">🚨</span> CVE Mitigation</button>
-            <button class="tab-button" data-tab="cis-audit"><span class="tool-icon">📋</span> CIS Audit</button>
+            <button class="tab-button" data-tab="cis-audit"><span class="tool-icon">📋</span> Hardening Audit</button>
           </div>
         </div>
 
@@ -269,8 +269,8 @@
               </button>
               <button class="home-tool-card" data-tab="cis-audit">
                 <span class="tool-icon">📋</span>
-                <span class="tool-name">CIS Audit</span>
-                <span class="tool-desc">CIS Benchmark compliance</span>
+                <span class="tool-name">Hardening Audit</span>
+                <span class="tool-desc">NSA / Cisco hardening checks</span>
               </button>
             </div>
           </div>
@@ -3028,10 +3028,10 @@ from the device right now..." required></textarea>
         </div>
       </section>
 
-      <!-- CIS AUDIT TAB -->
+      <!-- HARDENING AUDIT TAB (legacy ids: cis-*) -->
       <section id="tab-cis-audit" class="tab-content">
-        <h2>CIS Compliance Audit <span class="version-badge">v1.3 — Cisco IOS Benchmark</span></h2>
-        <p class="tool-description">Audit your Cisco IOS/IOS-XE config against CIS Benchmark hardening rules. Get a compliance score, pass/fail per rule, and remediation commands.</p>
+        <h2>Hardening Audit <span class="version-badge">v1.4 — Cisco IOS / IOS-XE</span></h2>
+        <p class="tool-description">Audit your Cisco IOS/IOS-XE config against hardening rules aligned with the NSA Network Infrastructure Security Guide and Cisco's Harden IOS Devices guide. Get a score, pass/fail per rule, remediation commands, and the source reference for every finding.</p>
 
         <form id="cis-form" class="card" style="margin-top:12px;">
           <div class="form-section-title">Paste Running-Config</div>
@@ -3057,10 +3057,10 @@ line vty 0 15
           </div>
 
           <div class="form-row" style="margin-top: 0.75rem;">
-            <label>CIS Level:</label>
+            <label>Audit level:</label>
             <select id="cis-level" class="form-select" style="width:auto;">
-              <option value="1">Level 1 — Basic (28 rules, recommended)</option>
-              <option value="2">Level 2 — Hardened (37 rules, all checks)</option>
+              <option value="1">Level 1 — Baseline (23 rules, recommended)</option>
+              <option value="2">Level 2 — Hardened (39 rules, all checks)</option>
             </select>
           </div>
 
