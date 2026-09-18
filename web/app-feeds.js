@@ -64,6 +64,18 @@ async function loadThreatFeed() {
         kevBadge = `<span class="cisco-advisories-kev" title="${esc(tip)}">${label}</span>`;
       }
 
+      // CVE-007: a hardening release is one row but several CVEs, and each of
+      // those CVEs is a CWE category, not a single defect.
+      let bundledBadge = "";
+      if (item.bundled) {
+        const n = item.bundled.cve_count || 0;
+        const cats = (item.bundled.cwe_categories || []).join(", ");
+        const tip = "Hardening release: " + n + " CVEs, one per CWE category"
+          + (cats ? " (" + cats + ")" : "")
+          + ". Each CVE covers a class of defects and cannot be mitigated on its own.";
+        bundledBadge = `<span class="cisco-advisories-bundled" title="${esc(tip)}">${n} CVEs \u00b7 class</span>`;
+      }
+
       // Curated local records are labelled so a snapshot is never mistaken
       // for the live PSIRT feed.
       const srcBadge = item.source === "local"
@@ -75,6 +87,7 @@ async function loadThreatFeed() {
         <span class="cisco-advisories-cve">${esc(item.cve_id)}</span>
         <span class="cisco-advisories-desc">${esc(item.title)}</span>
         ${kevBadge}
+        ${bundledBadge}
         ${srcBadge}
         <span class="cisco-advisories-date">${item.updated ? esc(item.updated.slice(0, 10)) : ""}</span>
         <span class="cisco-advisories-severity ${cvssClass}">${esc(item.severity)}</span>

@@ -19,25 +19,22 @@ Records without both were left out rather than filled with guesses.
 | CVE-2026-20287 | 6.5 | Hardening release, Improper Privilege Management — CVSS/SIR divergence |
 | CVE-2026-20352 | 8.6 | RADIUS DoS — the one record where 3.1 and earlier are *not* vulnerable |
 
-## Two deliberate deviations from the ios_xe convention
+## Conventions specific to this directory
 
-**1. `first_fixed_version.fixes` is keyed by ISE train, not by product family.**
+**1. `first_fixed_version.fixes` is keyed by fix path: `ise-<train>`.**
 
-The docstring on `CVEFirstFixed` says the map is keyed by `ProductFamily` enum
-value (`"ios-xe"`, `"asa"`, …). That shape assumes one fix version per product
-family. ISE breaks the assumption: every fix belongs to family `ise`, but Cisco
-ships a *different* patch level per train:
+One fix per product family cannot express ISE: every fix belongs to family
+`ise`, but Cisco ships a different patch level per train.
 
 ```json
 "fixes": {"ise-3.1": "3.1 Patch 12", "ise-3.4": "3.4 Patch 7"}
 ```
 
-Keys are therefore `ise-<train>`. This is faithful to the advisory and keeps
-`data_confidence()` at `verified`, but it is a widened contract, not the
-documented one. Resolving it properly belongs to **CVE-007** (see
-`projects/netdevops/backlog.md` in the CEO repo), which revisits the record
-shape for Cisco's bundled-CVE model. Anything consuming `fixes` should treat
-the key as an opaque path label, which is what the matcher already does.
+This started as an undocumented widening of the `CVEFirstFixed` contract
+(v0.6.31). As of v0.6.34 it is the documented contract — a key is a
+`ProductFamily` value, optionally followed by `-<train>` — and consumers should
+call `CVEFirstFixed.fix_for("ise", "3.4")` / `.trains("ise")` instead of
+indexing the dict.
 
 **2. `severity` follows CVSS, `cisco_sir` follows the advisory.**
 
@@ -45,6 +42,13 @@ CVE-2026-20287 is CVSS 6.5 (medium) inside an advisory whose Cisco SIR is
 Critical, because the SIR describes the hardening release as a whole. The record
 keeps both and is tagged `sir-cvss-divergence` so the disagreement is visible
 rather than silently resolved in one direction.
+
+**3. CWE and CVSS vector come from NVD, never from the advisory title.**
+
+v0.6.31 shipped two CWE values inferred from titles: CVE-2026-20130 as CWE-707
+(NVD: CWE-74) and CVE-2026-20352 with none (NVD: CWE-119). Both were corrected
+in v0.6.34 and `tests/test_hardening_release.py::TestDatasetAgainstNvd` now pins
+every CWE, score and vector in this directory to the NVD values.
 
 ## Bundled CVEs are classes of bugs, not single bugs
 
@@ -57,7 +61,9 @@ Vulnerabilities", "Input Validation Vulnerabilities".
 
 Consequence for anyone reading this directory: `CVE-2026-20192` is not an
 exploit path you can reason about individually. It is a category with a shared
-fixed release. The `bundled-cve` tag marks these.
+fixed release. These records carry a typed `bundled` block (`advisory_id`,
+`cwe_categories`, `sibling_cves`, `one_cve_per_cwe`) plus the `bundled-cve` tag;
+detection lives in `services/hardening_release.py`.
 
 ## Version strings
 

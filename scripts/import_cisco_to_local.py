@@ -20,6 +20,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
+if PROJECT_DIR not in sys.path:
+    sys.path.insert(0, PROJECT_DIR)
+from services.hardening_release import bundled_info_from_advisory  # noqa: E402
 CACHE_FILE = os.path.join(PROJECT_DIR, "cache", "cisco", "iosxe.json")
 CVE_DATA_DIR = os.path.join(PROJECT_DIR, "cve_data", "ios_xe")
 MITIGATION_DIR = os.path.join(PROJECT_DIR, "cve_mitigations")
@@ -303,7 +306,17 @@ def build_cve_data(cve_id: str, adv: Dict[str, Any], ver_min: str, ver_max: str)
     cwe_list = adv.get("cwe", [])
     cwe = cwe_list[0] if cwe_list and cwe_list != ["NA"] else None
 
+    # CVE-007: see services/hardening_release.py. In a hardening release the
+    # `cves` and `cwe` lists are sorted independently, so cwe_list[0] would be
+    # the same wrong CWE on every CVE. Leave per-CVE CWE empty; the category
+    # list goes on the `bundled` block.
+    bundled_info = bundled_info_from_advisory(adv)
+    if bundled_info is not None:
+        cwe = None
+
     tags = ["cisco-psirt"]
+    if bundled_info is not None:
+        tags.extend(["hardening-release", "bundled-cve"])
     if severity == "critical":
         tags.append("critical")
 
@@ -338,6 +351,7 @@ def build_cve_data(cve_id: str, adv: Dict[str, Any], ver_min: str, ver_max: str)
         "published": published,
         "last_modified": last_modified,
         "references": [advisory_url] if advisory_url else [],
+        "bundled": bundled_info.model_dump() if bundled_info is not None else None,
     }
 
 

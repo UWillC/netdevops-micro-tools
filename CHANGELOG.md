@@ -4,6 +4,54 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.34] – 2026-09-18 (CVE-007 stage 2 — hardening releases made durable)
+
+v0.6.33 detected Cisco hardening-release CVEs on the fly. This release makes the
+fact part of the data: stamped at import, typed in the model, shown in the feed.
+
+### Fixed
+- **Two wrong CWE values shipped in v0.6.31.** In `cve_data/ise/`,
+  CVE-2026-20130 was recorded as CWE-707 and CVE-2026-20352 with no CWE. Both
+  were inferred from advisory titles rather than read from a source. NVD
+  (API 2.0, source `psirt@cisco.com`, read 2026-09-18) says CWE-74 and CWE-119.
+  Corrected; all eight records now also carry their CVSS 3.1 vector, which had
+  been left null. A regression test pins every CWE, score and vector in the
+  directory to the NVD values.
+- **Importers fabricated the per-CVE CWE for hardening releases.** Both
+  `CiscoAdvisoryProvider._parse_advisory` and `scripts/import_cisco_to_local.py`
+  took `cwe_list[0]` for every CVE of an advisory. PSIRT returns `cves` and
+  `cwe` as two independently sorted lists, so for a hardening release that
+  stamped the same, alphabetically-first CWE on all of its CVEs — wrong for all
+  but one. Per-CVE CWE is not knowable from PSIRT; it is now left empty for
+  these advisories and the full category list is kept on the `bundled` block.
+
+### Added
+- `services/hardening_release.py` — `is_hardening_advisory()`,
+  `bundled_info_from_advisory()`, `is_bundled_cve()`. No engine or provider
+  dependency, so importers, engine and API share it without import cycles.
+- `models.cve_model.CVEBundledInfo` + `CVEEntry.bundled`: `advisory_id`,
+  `cwe_categories`, `sibling_cves`, and `one_cve_per_cwe` — False when an
+  advisory matched on id/title but the counts disagree, so the odd case is
+  flagged rather than hidden.
+- Both PSIRT importers set the block and the `hardening-release` /
+  `bundled-cve` tags at import time.
+- `CVEFirstFixed.fix_for(family, train=None)` and `.trains(family)`. The
+  `ise-<train>` key form introduced in v0.6.31 was an undocumented widening of
+  the contract; it is now the documented one.
+- Threat feed: hardening-release rows show an **"N CVEs · class"** chip with the
+  CWE categories in the tooltip. Before, such a row read as a single CVE at
+  10.0. Applies to every platform — IOS XR and ASA/FTD/FMC hardening releases
+  are marked, not just ISE.
+- `tests/test_hardening_release.py` (37), including the shape of all six real
+  hardening advisories.
+
+### Changed
+- `is_bundled_cve()` moved out of the engine (still re-exported from
+  `services.cve_engine`). Evidence order: typed block, tag, advisory URL, title
+  — the weaker signals keep pre-CVE-007 records detectable without a re-import.
+- ISE matching resolves fixes through `fix_for()` and only trusts an explicit
+  train path, never a bare-family fix, across trains.
+
 ## [v0.6.33] – 2026-09-18 (ISE-03 + CVE-007 — ISE in the CVE Analyzer, hardening-release CVEs)
 
 ISE-01 added the data and ISE-02 put it in the threat feed, but the analyzer

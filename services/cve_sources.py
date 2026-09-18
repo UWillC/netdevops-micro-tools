@@ -16,6 +16,7 @@ from services.http_client import (
     HttpTimeoutError,
     HttpConnectionError,
 )
+from services.hardening_release import bundled_info_from_advisory
 from services.platform_taxonomy import (
     ProductFamily,
     normalize_cisco_product_names,
@@ -542,12 +543,24 @@ class CiscoAdvisoryProvider(CVEProvider):
         cwe_list = adv.get("cwe", [])
         cwe = cwe_list[0] if cwe_list and cwe_list != ["NA"] else None
 
+        # CVE-007: a hardening release carries one CVE per CWE category, and
+        # PSIRT returns `cves` and `cwe` as two independently sorted lists.
+        # Taking cwe_list[0] would stamp the SAME (alphabetically first) CWE on
+        # every CVE of the advisory — wrong for all but one. Per-CVE CWE is not
+        # knowable from PSIRT, so leave it empty and keep the full category
+        # list on the `bundled` block instead.
+        bundled_info = bundled_info_from_advisory(adv)
+        if bundled_info is not None:
+            cwe = None
+
         tags = []
         if severity == "critical":
             tags.append("critical")
         if "ipsSignatures" in adv and adv["ipsSignatures"] != ["NA"]:
             tags.append("ips-signature")
         tags.append("cisco-psirt")
+        if bundled_info is not None:
+            tags.extend(["hardening-release", "bundled-cve"])
 
         # ----- CVE-003 + CVE-006 Phase 4 enrichment (env-gated) -----
         detail_fetch_enabled = os.getenv("CVE_CISCO_DETAIL_FETCH", "0") == "1"
@@ -611,6 +624,7 @@ class CiscoAdvisoryProvider(CVEProvider):
                 product_families=product_families_str,
                 affected_versions_raw=affected_versions_raw,
                 first_fixed_version=first_fixed_version,
+                bundled=bundled_info,
             ))
         return entries
 

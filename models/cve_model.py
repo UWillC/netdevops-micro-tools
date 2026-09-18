@@ -8,9 +8,19 @@ class CVEAffectedRange(BaseModel):
 
 
 class CVEFirstFixed(BaseModel):
-    """First fixed version keyed by ProductFamily enum value.
+    """First fixed version, keyed by a fix *path*.
 
-    Flat map: {"ios-xe": "17.9.4a", "ios": "15.2(7)E8", "asa": "9.18.4"}
+    A path is either a ProductFamily enum value, or that value plus a release
+    train when the product is fixed per train:
+
+        {"ios-xe": "17.9.4a", "ios": "15.2(7)E8", "asa": "9.18.4"}
+        {"ise-3.3": "3.3 Patch 12", "ise-3.4": "3.4 Patch 7"}
+
+    The train form (CVE-007, 2026-09-18) exists because one fix per family
+    cannot express ISE: every fix belongs to family `ise`, yet Cisco ships a
+    different patch level on each train, and "3.4 Patch 7" says nothing about
+    3.3. Use `fix_for()` rather than indexing `fixes` directly — it resolves
+    the train form first and falls back to the bare family.
 
     CVE-006 Phase 3. Populated by _parse_advisory from PSIRT advisory-detail
     endpoint (`firstFixed` per productName). Multi-family advisories carry
@@ -19,6 +29,47 @@ class CVEFirstFixed(BaseModel):
     Single scalar `CVEEntry.fixed_in` loses this distinction.
     """
     fixes: Dict[str, str] = Field(default_factory=dict)
+
+    def fix_for(self, family: str, train: Optional[str] = None) -> Optional[str]:
+        """Fix on `family`, preferring the `family-train` path when given."""
+        if train:
+            hit = self.fixes.get("%s-%s" % (family, train))
+            if hit:
+                return hit
+        return self.fixes.get(family)
+
+    def trains(self, family: str) -> List[str]:
+        """Release trains that carry an explicit fix for `family`, sorted."""
+        prefix = family + "-"
+        return sorted(k[len(prefix):] for k in self.fixes if k.startswith(prefix))
+
+
+class CVEBundledInfo(BaseModel):
+    """Marks a CVE that stands for a *class* of defects, not a single bug.
+
+    CVE-007 (2026-09-18). Since July 2026 Cisco discloses on a fixed cadence
+    (1st and 3rd Wednesday, seven-day advance notice) and, in hardening
+    releases, assigns one CVE per CWE category instead of one per defect.
+    Russ Smoak, blogs.cisco.com, 2026-06-02: "Assessing security risk
+    CVE-by-CVE and applying point mitigations is no longer fit for purpose."
+
+    Consequence for every consumer of a record carrying this block: it cannot
+    be mitigated on its own and has no meaningful "is this one bug reachable
+    in my config" answer. The unit of remediation is the hardened release.
+
+    Not to be confused with `CVEEntry.bundle` (CVE-010), which marks a same-day
+    *publication* bundle of otherwise ordinary advisories.
+    """
+
+    advisory_id: str                      # e.g. "cisco-sa-hardening-ise-XU5EwX5T"
+    # Every CWE category the hardening release covers, across all its CVEs.
+    cwe_categories: List[str] = Field(default_factory=list)
+    # Every CVE in the same hardening release (this one included).
+    sibling_cves: List[str] = Field(default_factory=list)
+    # True when len(cves) == len(cwe) on the source advisory — the structural
+    # signature of "one CVE per CWE category". False means the advisory matched
+    # on id/title only and deserves a second look.
+    one_cve_per_cwe: bool = True
 
 
 class CVEKevStatus(BaseModel):
@@ -101,3 +152,7 @@ class CVEEntry(BaseModel):
     # CVE is in the KEV catalog. None means "not in KEV as of the last import",
     # NOT "not exploited" — absence of evidence only.
     kev: Optional[CVEKevStatus] = None
+
+    # CVE-007 (2026-09-18) — set when this CVE is a Cisco hardening-release
+    # CVE, i.e. a CWE category rather than a single defect. None = ordinary CVE.
+    bundled: Optional[CVEBundledInfo] = None

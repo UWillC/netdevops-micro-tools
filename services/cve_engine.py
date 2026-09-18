@@ -480,35 +480,10 @@ def published_date_demoted_ids(
     return out
 
 
-# CVE-007 (2026-09-18) — Cisco "hardening release" CVEs.
-#
-# Since July 2026 Cisco discloses on a fixed cadence (1st and 3rd Wednesday) and,
-# in hardening releases, no longer assigns one CVE per defect: each CVE covers
-# many fixes within a single CWE category. Russ Smoak, blogs.cisco.com,
-# 2026-06-02: "Assessing security risk CVE-by-CVE and applying point mitigations
-# is no longer fit for purpose."
-#
-# The signature is machine-readable and was verified against 6 hardening
-# advisories in the PSIRT cache (Crosswork, IOS XR, Secure Email, ISE, Nexus
-# Dashboard, ASA/FTD/FMC): advisoryId starts "cisco-sa-hardening-", the title
-# contains "Hardening Release", and len(cves) == len(cwe) — one CVE per CWE.
-#
-# This is NOT the same thing as `bundle` / detect_bundle() below. That field
-# marks a *publication* bundle (several ordinary advisories released the same
-# day). A bundled CVE is a different unit of meaning: a class of defects.
-_HARDENING_URL_MARK = "cisco-sa-hardening-"
-_HARDENING_TITLE_RE = re.compile(r"hardening\s+release", re.IGNORECASE)
-
-
-def is_bundled_cve(cve: "CVEEntry") -> bool:
-    """True when this CVE stands for a CWE class in a Cisco hardening release."""
-    tags = [t.lower() for t in (getattr(cve, "tags", []) or [])]
-    if "bundled-cve" in tags:
-        return True
-    url = (getattr(cve, "advisory_url", "") or "").lower()
-    if _HARDENING_URL_MARK in url:
-        return True
-    return bool(_HARDENING_TITLE_RE.search(getattr(cve, "title", "") or ""))
+# CVE-007: hardening-release detection lives in services.hardening_release
+# (no engine/provider dependency, so importers can use it too). Re-exported
+# here because callers historically import it from the engine.
+from services.hardening_release import is_bundled_cve  # noqa: E402,F401
 
 
 def detect_bundle(cve: "CVEEntry") -> Optional[str]:
@@ -698,12 +673,12 @@ def match_ise_record(cve: "CVEEntry", version: str) -> Optional[bool]:
         return None
     train = "%d.%d" % (running.major, running.minor)
 
-    fixes = {}
     ff = getattr(cve, "first_fixed_version", None)
-    if ff is not None:
-        fixes = getattr(ff, "fixes", None) or {}
-
-    fix_str = fixes.get("ise-" + train)
+    fix_str = ff.fix_for("ise", train) if ff is not None else None
+    # A bare-family "ise" fix cannot be trusted across trains; only an explicit
+    # train path counts here.
+    if fix_str and ff is not None and ("ise-" + train) not in ff.fixes:
+        fix_str = None
     if fix_str:
         fix = CiscoIseVersion.parse(fix_str)
         if fix is None:
@@ -729,6 +704,7 @@ def ise_fix_for_version(cve: "CVEEntry", version: str) -> Optional[str]:
     if running is None or ff is None:
         return None
     return (getattr(ff, "fixes", None) or {}).get("ise-%d.%d" % (running.major, running.minor))
+
 
 
 # -----------------------------

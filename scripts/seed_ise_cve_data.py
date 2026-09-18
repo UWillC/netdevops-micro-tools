@@ -44,6 +44,23 @@ FIXES_RADIUS = {
     "ise-3.5": "3.5 Patch 4",
 }
 
+# The `bundled` block shared by the six hardening-release CVEs. Category list
+# and sibling list are copied from the PSIRT advisory (len(cves) == len(cwe)).
+HARDENING_BUNDLE = {
+    "advisory_id": "cisco-sa-hardening-ise-XU5EwX5T",
+    "cwe_categories": ["CWE-20", "CWE-269", "CWE-284", "CWE-522", "CWE-669", "CWE-74"],
+    "sibling_cves": ["CVE-2026-20130", "CVE-2026-20192", "CVE-2026-20194",
+                     "CVE-2026-20234", "CVE-2026-20237", "CVE-2026-20287"],
+    "one_cve_per_cwe": True,
+}
+
+# CVSS 3.1 vectors, NVD API 2.0, source psirt@cisco.com, read 2026-09-18.
+V_10 = "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H"
+V_99 = "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H"
+V_91 = "CVSS:3.1/AV:N/AC:L/PR:H/UI:N/S:C/C:H/I:H/A:H"
+V_65 = "CVSS:3.1/AV:N/AC:L/PR:H/UI:N/S:U/C:H/I:H/A:N"
+V_86 = "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:N/I:N/A:H"
+
 EOSM_NOTE = (
     "Cisco ISE Software Release 3.0 has reached End of Software Maintenance; "
     "there is no fixed release on that train, customers must migrate. "
@@ -61,7 +78,8 @@ HARDENING_DESC = (
 
 
 def rec(cve_id, title, sev, sir, cvss, cwe, desc, fixes, amin, amax,
-        adv_slug, tags, workaround, exploited=False, kev=None):
+        adv_slug, tags, workaround, exploited=False, kev=None, vector=None,
+        bundled=False):
     r = {
         "cve_id": cve_id,
         "title": title,
@@ -76,7 +94,7 @@ def rec(cve_id, title, sev, sir, cvss, cwe, desc, fixes, amin, amax,
         "confidence": "cisco-psirt",
         "source": "cisco-psirt-cvrf",
         "cvss_score": cvss,
-        "cvss_vector": None,
+        "cvss_vector": vector,
         "cwe": cwe,
         "published": "2026-09-16",
         "last_modified": "2026-09-18",
@@ -89,6 +107,7 @@ def rec(cve_id, title, sev, sir, cvss, cwe, desc, fixes, amin, amax,
             "Cisco ISE 3.4", "Cisco ISE 3.5",
         ],
         "first_fixed_version": {"fixes": fixes},
+        "bundled": dict(HARDENING_BUNDLE) if bundled else None,
     }
     if exploited:
         r["references"].append(
@@ -119,6 +138,7 @@ RECORDS = [
         exploited=True,
         kev={"date_added": "2026-09-16", "due_date": "2026-09-19",
              "catalog_version": "2026.09.16", "directive": "BOD 26-04"},
+        vector=V_10,
     ),
     rec("CVE-2026-20192",
         "Cisco ISE Hardening Release - Access Control Vulnerabilities",
@@ -126,35 +146,40 @@ RECORDS = [
         HARDENING_DESC + " Category: Access Control. " + EOSM_NOTE,
         FIXES_FULL, "3.0", "3.5", "cisco-sa-hardening-ise-XU5EwX5T",
         ["cisco-psirt", "ise", "identity", "hardening-release", "bundled-cve", "bundle-2026-09"],
-        "No workarounds. Upgrade to the hardened release for your train."),
+        "No workarounds. Upgrade to the hardened release for your train.",
+        vector=V_10, bundled=True),
     rec("CVE-2026-20130",
         "Cisco ISE Hardening Release - Improper Neutralization Vulnerabilities",
-        "critical", "Critical", 10.0, "CWE-707",
+        "critical", "Critical", 10.0, "CWE-74",
         HARDENING_DESC + " Category: Improper Neutralization. " + EOSM_NOTE,
         FIXES_FULL, "3.0", "3.5", "cisco-sa-hardening-ise-XU5EwX5T",
         ["cisco-psirt", "ise", "identity", "hardening-release", "bundled-cve", "bundle-2026-09"],
-        "No workarounds. Upgrade to the hardened release for your train."),
+        "No workarounds. Upgrade to the hardened release for your train.",
+        vector=V_10, bundled=True),
     rec("CVE-2026-20234",
         "Cisco ISE Hardening Release - Insufficiently Protected Credential Vulnerabilities",
         "critical", "Critical", 9.9, "CWE-522",
         HARDENING_DESC + " Category: Insufficiently Protected Credentials. " + EOSM_NOTE,
         FIXES_FULL, "3.0", "3.5", "cisco-sa-hardening-ise-XU5EwX5T",
         ["cisco-psirt", "ise", "identity", "hardening-release", "bundled-cve", "bundle-2026-09"],
-        "No workarounds. Upgrade to the hardened release for your train."),
+        "No workarounds. Upgrade to the hardened release for your train.",
+        vector=V_99, bundled=True),
     rec("CVE-2026-20237",
         "Cisco ISE Hardening Release - Input Validation Vulnerabilities",
         "critical", "Critical", 9.1, "CWE-20",
         HARDENING_DESC + " Category: Input Validation. " + EOSM_NOTE,
         FIXES_FULL, "3.0", "3.5", "cisco-sa-hardening-ise-XU5EwX5T",
         ["cisco-psirt", "ise", "identity", "hardening-release", "bundled-cve", "bundle-2026-09"],
-        "No workarounds. Upgrade to the hardened release for your train."),
+        "No workarounds. Upgrade to the hardened release for your train.",
+        vector=V_91, bundled=True),
     rec("CVE-2026-20194",
         "Cisco ISE Hardening Release - Incorrect Resource Transfer Vulnerabilities",
         "critical", "Critical", 9.1, "CWE-669",
         HARDENING_DESC + " Category: Incorrect Resource Transfer. " + EOSM_NOTE,
         FIXES_FULL, "3.0", "3.5", "cisco-sa-hardening-ise-XU5EwX5T",
         ["cisco-psirt", "ise", "identity", "hardening-release", "bundled-cve", "bundle-2026-09"],
-        "No workarounds. Upgrade to the hardened release for your train."),
+        "No workarounds. Upgrade to the hardened release for your train.",
+        vector=V_91, bundled=True),
     rec("CVE-2026-20287",
         "Cisco ISE Hardening Release - Improper Privilege Management Vulnerabilities",
         "medium", "Critical", 6.5, "CWE-269",
@@ -164,16 +189,18 @@ RECORDS = [
         FIXES_FULL, "3.0", "3.5", "cisco-sa-hardening-ise-XU5EwX5T",
         ["cisco-psirt", "ise", "identity", "hardening-release", "bundled-cve", "bundle-2026-09",
          "sir-cvss-divergence"],
-        "No workarounds. Upgrade to the hardened release for your train."),
+        "No workarounds. Upgrade to the hardened release for your train.",
+        vector=V_65, bundled=True),
     rec("CVE-2026-20352",
         "Cisco Identity Services Engine RADIUS Denial of Service Vulnerability",
-        "high", "High", 8.6, None,
+        "high", "High", 8.6, "CWE-119",
         "A vulnerability in the RADIUS feature of Cisco Identity Services Engine (ISE) could allow "
         "an unauthenticated, remote attacker to cause a denial of service condition. "
         "Releases 3.1 and earlier are NOT vulnerable, which is why the affected range starts at 3.2.",
         FIXES_RADIUS, "3.2", "3.5", "cisco-sa-ise-RADIUS-dos-wR3hYPMw",
         ["cisco-psirt", "ise", "identity", "radius", "dos", "bundle-2026-09"],
-        "See Cisco advisory for details."),
+        "See Cisco advisory for details.",
+        vector=V_86),
 ]
 
 

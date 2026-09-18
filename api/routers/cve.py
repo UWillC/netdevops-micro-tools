@@ -33,6 +33,7 @@ def _read_app_version() -> str:
 
 _APP_VERSION = _read_app_version()
 from services.cve_sources import NvdEnricherProvider, CiscoAdvisoryProvider, CISCO_CACHE_DIR
+from services.hardening_release import bundled_info_from_advisory
 from models.cve_model import CVEEntry
 
 
@@ -132,6 +133,11 @@ class FeedItem(BaseModel):
     # policy in CVEAnalyzeResponse.severity_policy: being in KEV is evidence
     # of exploitation, not a higher CVSS. None = not in KEV as of last import.
     kev: Optional[dict] = None
+    # CVE-007 — set on rows that are a Cisco hardening release. The row is
+    # labelled with one CVE id (PSIRT rows use cves[0]) but stands for
+    # `cve_count` CVEs, each of which is a CWE category rather than one defect.
+    # Without this the feed shows "CVE-2026-20130 10.0" and reads as one bug.
+    bundled: Optional[dict] = None
 
 
 class CriticalFeedResponse(BaseModel):
@@ -426,6 +432,15 @@ def _advisories_to_feed(advisories: list, platform_filter: str = "all") -> list:
             except (ValueError, TypeError):
                 pass
 
+        binfo = bundled_info_from_advisory(adv)
+        bundled_block = None
+        if binfo is not None:
+            bundled_block = {
+                "cve_count": len(binfo.sibling_cves),
+                "cwe_categories": binfo.cwe_categories,
+                "one_cve_per_cwe": binfo.one_cve_per_cwe,
+            }
+
         feed_items.append(FeedItem(
             cve_id=cve_id,
             title=adv.get("advisoryTitle", ""),
@@ -435,6 +450,7 @@ def _advisories_to_feed(advisories: list, platform_filter: str = "all") -> list:
             updated=adv.get("lastUpdated"),
             url=adv.get("publicationUrl"),
             platforms=products[:3],
+            bundled=bundled_block,
         ))
 
     _sort_feed_items(feed_items)
@@ -507,6 +523,13 @@ def _local_records_to_feed(platform: str) -> list:
             platforms=(entry.platforms or _LOCAL_PLATFORM_LABELS.get(platform, []))[:3],
             source="local",
             kev=kev_block,
+            bundled=(
+                {
+                    "cve_count": len(entry.bundled.sibling_cves),
+                    "cwe_categories": entry.bundled.cwe_categories,
+                    "one_cve_per_cwe": entry.bundled.one_cve_per_cwe,
+                } if entry.bundled is not None else None
+            ),
         ))
     return items
 
