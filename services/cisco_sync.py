@@ -18,7 +18,7 @@ import time
 from typing import Any, Dict, List, Optional, Tuple
 
 from models.cve_model import CVEEntry
-from services.advisory_text import clean_advisory_text
+from services.advisory_text import clean_advisory_text, summarize_advisory_text
 from services.hardening_release import bundled_info_from_advisory
 from services.known_affected import extract_known_affected
 
@@ -532,7 +532,7 @@ def build_nxos_record(cve_id: str, adv: Dict[str, Any], details: Dict[str, Any])
         "affected": {"min": amin, "max": amax},
         "fixed_in": None,
         "tags": tags,
-        "description": clean_advisory_text(adv.get("summary") or "")[:1500],
+        "description": summarize_advisory_text(adv.get("summary") or ""),
         "workaround": "See Cisco advisory for details.",
         "advisory_url": url,
         "confidence": "cisco-psirt",

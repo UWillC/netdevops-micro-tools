@@ -55,15 +55,23 @@ if (cveForm && cveOutput) {
         if (data.eol_status && data.eol_status.is_eol) {
           header = `EoL platform: ${data.eol_status.banner_text}\n\n`;
         }
-        cveOutput.value = header + "No CVEs from current dataset matched this platform/version.\n";
+        // A result that was never computed must not read as a clean one.
+        const notEvaluated = typeof data.coverage_note === "string" && data.coverage_note.startsWith("NOT EVALUATED");
+        const emptyLine = notEvaluated
+          ? data.coverage_note
+          : "No CVEs from current dataset matched this platform/version.";
+        cveOutput.value = header + emptyLine + "\n" +
+          (!notEvaluated && data.coverage_note ? "\n" + data.coverage_note + "\n" : "");
+        if (cveCards) cveCards.innerHTML = "";
 
         if (cveSummary) {
-          cveSummary.innerHTML = `
-            <h3>Security posture</h3>
-            <p class="summary-muted">
-              No CVEs from the current dataset matched this platform/version.
-            </p>
-          `;
+          cveSummary.innerHTML = notEvaluated
+            ? `<h3>Security posture</h3>
+               <p style="color:#f97316; font-weight:600;">Not evaluated</p>
+               <p class="summary-muted">${esc(data.coverage_note)}</p>`
+            : `<h3>Security posture</h3>
+               <p class="summary-muted">No CVEs from the current dataset matched this platform/version.</p>
+               ${data.coverage_note ? `<p class="summary-muted">${esc(data.coverage_note)}</p>` : ""}`;
         }
         return;
       }
@@ -122,11 +130,46 @@ if (cveForm && cveOutput) {
 
       // Recount summary based on primary severity so the breakdown matches
       // what the badges show.
+      // What the page lists is "display items", not raw CVEs:
+      //  - a hardening release is ONE item (Cisco assigns one CVE per CWE
+      //    category; seven CVEs of one release are one job, not seven);
+      //  - confirmed matches come first, unconfirmed ones in their own section.
+      // The headline counts describe confirmed items only. Before this, an
+      // IOS XE 17.12.4 report read "10 CRITICAL" where 7 were one hardening
+      // release and 2 were unconfirmed matches from 2012 and 2015.
+      const uncertainIds = new Set(Array.isArray(data.coverage_uncertain) ? data.coverage_uncertain : []);
+      const bundledIdSet = new Set(Array.isArray(data.bundled_cves) ? data.bundled_cves : []);
+      const sevOrder = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3, NONE: 4, UNKNOWN: 5 };
+      const buildItems = (list) => {
+        const items = [];
+        const groups = {};
+        list.forEach((cve) => {
+          if (bundledIdSet.has(cve.cve_id) && cve.advisory_url) {
+            let g = groups[cve.advisory_url];
+            if (!g) {
+              g = { group: true, cves: [], advisory_url: cve.advisory_url, title: cve.title };
+              groups[cve.advisory_url] = g;
+              items.push(g);
+            }
+            g.cves.push(cve);
+          } else {
+            items.push({ group: false, cve });
+          }
+        });
+        return items;
+      };
+      const itemSeverity = (it) => it.group
+        ? it.cves.map(displaySeverity).sort((a, b) => (sevOrder[a] ?? 9) - (sevOrder[b] ?? 9))[0]
+        : displaySeverity(it.cve);
+      const confirmedItems = buildItems(data.matched.filter((c) => !uncertainIds.has(c.cve_id)));
+      const unconfirmedItems = buildItems(data.matched.filter((c) => uncertainIds.has(c.cve_id)));
+
       const primaryCounts = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0, NONE: 0, UNKNOWN: 0 };
-      data.matched.forEach((cve) => {
-        const sev = displaySeverity(cve);
+      confirmedItems.forEach((it) => {
+        const sev = itemSeverity(it);
         if (primaryCounts[sev] !== undefined) primaryCounts[sev] += 1;
       });
+      const hardeningGroups = confirmedItems.concat(unconfirmedItems).filter((it) => it.group);
 
       // Text report output
       let out = "";
@@ -150,8 +193,19 @@ if (cveForm && cveOutput) {
 
       const bundledCveIds = new Set(Array.isArray(data.bundled_cves) ? data.bundled_cves : []);
 
-      out += "Matched CVEs:\n";
-      data.matched.forEach((cve) => {
+      const writeGroup = (g) => {
+        const sev = itemSeverity(g);
+        const maxScore = Math.max(...g.cves.map((c) => Number(c.cvss_score) || 0));
+        out += `HARDENING RELEASE [${sev}] [${g.cves.length} CVEs, ONE JOB]\n`;
+        out += `  Title: ${g.title}\n`;
+        out += `  CVEs (one per CWE category): ${g.cves.map((c) => `${c.cve_id} (${formatCvss(c.cvss_score)})`).join(", ")}\n`;
+        out += `  Max CVSS: ${formatCvss(maxScore)}\n`;
+        out += "  Note: each CVE here stands for a category of fixes, not one defect. None can be\n";
+        out += "        mitigated on its own; the only remediation is the hardened release. Do not\n";
+        out += "        open one ticket per CVE.\n";
+        out += `  Advisory: ${g.advisory_url}\n\n`;
+      };
+      const writeCve = (cve) => {
         const primary = displaySeverity(cve);
         const d = sevDetails[cve.cve_id] || {};
         const bundle = bundles[cve.cve_id];
@@ -189,7 +243,22 @@ if (cveForm && cveOutput) {
           out += `  References: ${cve.references.join(" | ")}\n`;
         }
         out += "\n";
-      });
+      };
+      const writeItems = (items) => items.forEach((it) => (it.group ? writeGroup(it) : writeCve(it.cve)));
+
+      const confirmedCves = confirmedItems.reduce((n, it) => n + (it.group ? it.cves.length : 1), 0);
+      out += `Matched, confirmed for your release: ${confirmedItems.length} item(s) (${confirmedCves} CVE(s))\n`;
+      out += "=".repeat(60) + "\n";
+      writeItems(confirmedItems);
+      if (unconfirmedItems.length > 0) {
+        const unconfirmedCves = unconfirmedItems.reduce((n, it) => n + (it.group ? it.cves.length : 1), 0);
+        out += `Lower confidence, NOT confirmed for your release: ${unconfirmedCves} CVE(s)\n`;
+        out += "=".repeat(60) + "\n";
+        out += "(Cisco names the product in these advisories without listing releases, or the advisory\n";
+        out += " is years older than your release. Not counted in the severity breakdown below.\n";
+        out += " Check the advisory before acting on any of them.)\n\n";
+        writeItems(unconfirmedItems);
+      }
 
       // MATCH-01: say what was ruled out, and on whose authority.
       const notListed = Array.isArray(data.excluded_not_listed) ? data.excluded_not_listed : [];
@@ -218,7 +287,7 @@ if (cveForm && cveOutput) {
         out += " not one per defect. Read these as classes of bugs fixed together.)\n\n";
       }
 
-      out += "Severity breakdown (NVD CVSS v3.x):\n";
+      out += "Severity breakdown, confirmed matches only (NVD CVSS v3.x; a hardening release counts once):\n";
       ["CRITICAL", "HIGH", "MEDIUM", "LOW", "NONE", "UNKNOWN"].forEach((sev) => {
         if (primaryCounts[sev] > 0) out += `  ${sev}: ${primaryCounts[sev]}\n`;
       });
@@ -304,7 +373,40 @@ if (cveForm && cveOutput) {
         };
 
         cveCards.innerHTML = "";
-        data.matched.forEach((cve) => {
+        const sectionHeader = (text, sub) => {
+          const h = document.createElement("div");
+          h.className = "cve-section-header";
+          h.style.cssText = "margin:1rem 0 0.5rem; font-weight:700;";
+          h.innerHTML = `${esc(text)}${sub ? `<div class="cve-item-meta" style="font-weight:400;">${esc(sub)}</div>` : ""}`;
+          cveCards.appendChild(h);
+        };
+        const renderGroup = (g) => {
+          const card = document.createElement("div");
+          card.className = "cve-item";
+          const sev = itemSeverity(g);
+          const maxScore = Math.max(...g.cves.map((c) => Number(c.cvss_score) || 0));
+          card.innerHTML = `
+            <div class="cve-item-header">
+              <div>
+                <div class="cve-item-title">
+                  <span class="${badgeClass(sev)}">${sev}</span>
+                  <span class="secondary-tag tag-bundle" title="Cisco assigns one CVE per CWE category in a hardening release">Hardening release: ${g.cves.length} CVEs, one job</span>
+                  ${esc(g.title)}
+                </div>
+                <div class="cve-item-meta">Max CVSS: ${formatCvss(maxScore)} • ${g.cves.map((c) => esc(c.cve_id)).join(", ")}</div>
+              </div>
+              <div class="cve-item-meta">Click</div>
+            </div>
+            <div class="cve-item-body">
+              <div>Each CVE here stands for a category of fixes, not one defect. None can be mitigated on its own; the only remediation is the hardened release. Do not open one ticket per CVE.</div>
+              <div style="margin-top:8px;"><strong>Advisory:</strong> ${esc(g.advisory_url)}</div>
+            </div>`;
+          card.querySelector(".cve-item-header").addEventListener("click", () => {
+            card.querySelector(".cve-item-body").classList.toggle("open");
+          });
+          cveCards.appendChild(card);
+        };
+        const renderCve = (cve) => {
           const card = document.createElement("div");
           card.className = "cve-item";
 
@@ -394,7 +496,18 @@ if (cveForm && cveOutput) {
           });
 
           cveCards.appendChild(card);
-        });
+        };
+        const renderItems = (items) => items.forEach((it) => (it.group ? renderGroup(it) : renderCve(it.cve)));
+
+        sectionHeader(`Confirmed for your release (${confirmedItems.length})`);
+        renderItems(confirmedItems);
+        if (unconfirmedItems.length > 0) {
+          sectionHeader(
+            `Lower confidence, not confirmed (${unconfirmedItems.length})`,
+            "Cisco names the product without listing releases, or the advisory is years older than your release. Not counted in the severity breakdown."
+          );
+          renderItems(unconfirmedItems);
+        }
       }
 
       // Security posture summary — counts derived from PRIMARY severity
@@ -405,7 +518,9 @@ if (cveForm && cveOutput) {
         const medium = primaryCounts.MEDIUM;
         const low = primaryCounts.LOW;
 
+        // Confirmed matches only, like the counts above it.
         const scores = (data.matched || [])
+          .filter((x) => !uncertainIds.has(x.cve_id))
           .map((x) => Number(x.cvss_score))
           .filter((n) => !Number.isNaN(n));
 
@@ -436,7 +551,13 @@ if (cveForm && cveOutput) {
               <span class="severity-badge sev-low">LOW</span>
             </span>
           </div>
-          <div class="summary-row"><span>Counts</span><span>${critical} / ${high} / ${medium} / ${low}</span></div>
+          <div class="summary-row"><span>Confirmed</span><span>${critical} / ${high} / ${medium} / ${low}</span></div>
+          ${unconfirmedItems.length > 0
+            ? `<div class="summary-row summary-muted" title="Matches Cisco did not confirm for this exact release. Listed separately and not counted above."><span>Not confirmed</span><span>${unconfirmedItems.length} listed separately</span></div>`
+            : ""}
+          ${hardeningGroups.length > 0
+            ? `<div class="summary-row summary-muted" title="A hardening release is counted once: Cisco assigns one CVE per CWE category, and the release is the only remediation."><span>Hardening releases</span><span>${hardeningGroups.length} (${hardeningGroups.reduce((n, g) => n + g.cves.length, 0)} CVEs, counted once each)</span></div>`
+            : ""}
           <div class="summary-row"><span>Max CVSS</span><span>${formatCvss(maxCvss)}</span></div>
           ${
             sirDistinct > 0
@@ -540,3 +661,18 @@ if (cveForm && cveOutput) {
   });
 }
 
+// Platform select: keep the version example in step with the chosen platform,
+// and replace the version only while it is still an untouched example.
+(function () {
+  const sel = document.getElementById("cve-platform");
+  const ver = document.getElementById("cve-version");
+  const hint = document.getElementById("cve-version-hint");
+  if (!sel || !ver) return;
+  const examples = Array.from(sel.options).map((o) => o.dataset.example);
+  sel.addEventListener("change", () => {
+    const ex = sel.options[sel.selectedIndex].dataset.example || "";
+    if (!ver.value.trim() || examples.includes(ver.value.trim())) ver.value = ex;
+    ver.placeholder = ex;
+    if (hint) hint.innerHTML = `Example for this platform: <code>${ex}</code>`;
+  });
+})();

@@ -24,9 +24,9 @@
   <meta name="twitter:description" content="21 live modules: CVE exposure, hardening audit, config drift, hardened Cisco configs. Browser-based, free, no install." />
   <meta name="twitter:image" content="https://netdevops-tools.thebackroom.ai/static/og-card.jpg" />
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
-  <link rel="stylesheet" href="style-base.css?v=0.6.29" />
-  <link rel="stylesheet" href="style-home.css?v=0.6.29" />
-  <link rel="stylesheet" href="style-tools.css?v=0.6.29" />
+  <link rel="stylesheet" href="style-base.css?v=0.6.49" />
+  <link rel="stylesheet" href="style-home.css?v=0.6.49" />
+  <link rel="stylesheet" href="style-tools.css?v=0.6.49" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-SP6VHRYCNC"></script>
@@ -1627,16 +1627,21 @@ Requires: archive config">show archive config differences</code>
         <form id="cve-form" class="card">
           <div class="form-row">
             <label>Platform</label>
-            <input type="text" name="platform" value="ISR4451-X"
-                   title="Device model or product family: IOS XE, IOS, NX-OS, ISE" />
-            <small class="form-hint" style="display:block; margin-top:0.35rem; color:var(--text-dim);">Covered: <strong>IOS XE</strong>, <strong>IOS</strong>, <strong>NX-OS</strong>, <strong>ISE</strong>. A device model (ISR4451-X) is read as IOS XE / IOS. Other platforms are reported as not evaluated.</small>
+            <select name="platform" id="cve-platform" class="form-select"
+                    title="The platform decides which Cisco release lists your version is checked against">
+              <option value="IOS XE" data-example="17.9.4a" selected>Cisco IOS XE</option>
+              <option value="IOS" data-example="15.2(7)E8">Cisco IOS (classic)</option>
+              <option value="NX-OS" data-example="10.2(6)">Cisco NX-OS (standalone)</option>
+              <option value="ISE" data-example="3.4 Patch 5">Cisco ISE / ISE-PIC</option>
+            </select>
+            <small class="form-hint" style="display:block; margin-top:0.35rem; color:var(--text-dim);">Only platforms with a dataset are offered. ASA, FTD, IOS XR and ACI are not covered yet.</small>
           </div>
 
           <div class="form-row">
             <label>Software version</label>
-            <input type="text" name="version" value="17.5.1"
-                   title="IOS XE: 17.9.4a. NX-OS: 10.2(6). ISE: train plus patch level, e.g. 3.4 Patch 5" />
-            <small class="form-hint" style="display:block; margin-top:0.35rem; color:var(--text-dim);">IOS XE <code>17.9.4a</code> &middot; NX-OS <code>10.2(6)</code> &middot; ISE <code>3.4 Patch 5</code></small>
+            <input type="text" name="version" id="cve-version" value="17.9.4a" placeholder="17.9.4a"
+                   title="Write the release as the device prints it" />
+            <small class="form-hint" id="cve-version-hint" style="display:block; margin-top:0.35rem; color:var(--text-dim);">Example for this platform: <code>17.9.4a</code></small>
           </div>
 
           <div class="form-row">
@@ -3213,22 +3218,22 @@ line vty 0 15
   </footer>
 
   <!-- Gate: email gate for pro tools (must load BEFORE core) -->
-  <script src="app-gate.js?v=0.6.29"></script>
+  <script src="app-gate.js?v=0.6.49"></script>
   <!-- Core: theme, tabs, navigation, utilities -->
-  <script src="app-core.js?v=0.6.29"></script>
+  <script src="app-core.js?v=0.6.49"></script>
   <!-- Config Generators: SNMPv3, NTP, AAA, iPerf3 -->
-  <script src="app-config.js?v=0.6.29"></script>
+  <script src="app-config.js?v=0.6.49"></script>
   <!-- Golden Config form -->
-  <script src="app-golden.js?v=0.6.29"></script>
+  <script src="app-golden.js?v=0.6.49"></script>
   <!-- CVE Analyzer -->
-  <script src="app-security.js?v=0.6.29"></script>
+  <script src="app-security.js?v=0.6.49"></script>
   <!-- Profiles, Vuln Widget, Security Score, Export -->
-  <script src="app-profiles.js?v=0.6.29"></script>
+  <script src="app-profiles.js?v=0.6.49"></script>
   <!-- Hints, Tooltips, Golden Config UI, SNMP Multi-Host -->
-  <script src="app-ui.js?v=0.6.29"></script>
+  <script src="app-ui.js?v=0.6.49"></script>
   <!-- Subnet, MTU, Config Parser, CVE Mitigation, Timezone, Military DTG, IP Path Tracer -->
-  <script src="app-network.js?v=0.6.29"></script>
+  <script src="app-network.js?v=0.6.49"></script>
   <!-- Threat Feed, Port Auditor -->
-  <script src="app-feeds.js?v=0.6.29"></script>
+  <script src="app-feeds.js?v=0.6.49"></script>
 </body>
 </html>

@@ -9,30 +9,14 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from services.cve_engine import nxos_coverage_note, platform_coverage_note, uncovered_family, CVEEngine, CVEEngineConfig, cvss_rating_from_score, data_dir_for_platform, is_bundled_cve, ise_coverage_note, ise_lifecycle_note, severity_info, detect_bundle, data_confidence, coverage_uncertain_ids, published_date_demoted_ids
+from services.cve_engine import ambiguous_release, nxos_coverage_note, platform_coverage_note, uncovered_family, CVEEngine, CVEEngineConfig, cvss_rating_from_score, data_dir_for_platform, is_bundled_cve, ise_coverage_note, ise_lifecycle_note, severity_info, detect_bundle, data_confidence, coverage_uncertain_ids, published_date_demoted_ids
 from services.eol_registry import detect_eol
 from services.provenance import cve_provenance
 
 
 # Read once at module load so the response footer matches the running build.
-def _read_app_version() -> str:
-    """Read app version from api/main.py without importing it (avoids
-    circular import). Picks the LAST `version="..."` literal — that's the
-    canonical /meta/version value, after the FastAPI(version=...) declaration."""
-    try:
-        main_path = os.path.join(os.path.dirname(__file__), "..", "main.py")
-        last = None
-        with open(main_path, "r") as f:
-            for line in f:
-                stripped = line.strip()
-                if stripped.startswith("version=\""):
-                    last = stripped.split("\"")[1]
-        return last or "unknown"
-    except Exception:
-        return "unknown"
+from version import APP_VERSION as _APP_VERSION  # was parsed out of api/main.py with a line regex
 
-
-_APP_VERSION = _read_app_version()
 from services.cve_sources import NvdEnricherProvider, CiscoAdvisoryProvider, CISCO_CACHE_DIR
 from services.hardening_release import bundled_info_from_advisory
 from services import kev_catalog
@@ -240,7 +224,8 @@ def analyze_cve(req: CVEAnalyzeRequest):
     # browsed would match against lists as old as the last deploy. Non-blocking:
     # this request is answered from disk, the next one benefits.
     _sync_platform = _ANALYZER_SYNC_PLATFORM.get(_data_dir)
-    if _sync_platform and uncovered_family(req.platform) is None:
+    if (_sync_platform and uncovered_family(req.platform) is None
+            and not ambiguous_release(req.platform, req.version)):
         _age = _platform_cache_age_hours(_sync_platform)
         if _age is None or _age * 3600 > PLATFORM_CACHE_TTL:
             _refresh_platform_cache_in_background(_sync_platform)
@@ -342,7 +327,7 @@ def analyze_cve(req: CVEAnalyzeRequest):
         cisco_source_conflicts=sorted(getattr(base_engine, "cisco_source_conflicts", [])),
         coverage_note=(ise_coverage_note(base_engine.cves) if _data_dir == "cve_data/ise"
                        else nxos_coverage_note(base_engine.cves) if _data_dir == "cve_data/nx_os"
-                       else platform_coverage_note(req.platform)),
+                       else platform_coverage_note(req.platform, req.version)),
         lifecycle_note=ise_lifecycle_note(req.platform, req.version),
         excluded_not_listed=sorted(base_engine.excluded_by_known_affected),
         matched_on_known_affected=sum(1 for c in matched if any((c.known_affected or {}).values())),

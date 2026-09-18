@@ -4,6 +4,63 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.49] – 2026-09-18 (CVE Analyzer: platform is a choice, not free text; the report counts what is confirmed)
+
+Third review of production reports the same day, plus the owner's own suggestion
+(a select instead of a text box) — which a test input proved right: platform
+`bla bla bla` with release `10.2(6)` returned 322 CVEs.
+
+### Changed
+- **Platform is a select** (IOS XE, IOS, NX-OS, ISE): only platforms that have a
+  dataset are offered. The version field shows an example for the chosen
+  platform and swaps it only while the field still holds an untouched example.
+- **API guard for everything that does not come from our form.** An
+  unrecognised platform with a parenthesised release that is not 12.x/15.x
+  (`10.2(6)`, `7.0(3)I7(9)`) could be classic IOS or NX-OS: it is reported as
+  NOT EVALUATED with the list of platforms to choose from, instead of being
+  guessed as IOS. Device models with unambiguous releases (`ISR4451-X` +
+  `17.9.4a`, `Catalyst 2960` + `15.2(7)E8`) work as before.
+- **The report separates what is confirmed from what is not.** Confirmed
+  matches first; matches Cisco did not confirm for the exact release (product
+  named without releases, or an advisory years older than the release) go into
+  their own section, in the text report and on the cards. The severity
+  breakdown and Max CVSS describe confirmed matches only.
+- **A hardening release is one item, not seven.** Cisco assigns one CVE per CWE
+  category; the release is the only remediation. The seven August 2026 IOS XE
+  CVEs were seven CRITICAL rows and seven counts; they are now one entry
+  (`HARDENING RELEASE [CRITICAL] [7 CVEs, ONE JOB]`) counted once. On the
+  production `IOS XE 17.12.4` report this turns "10 CRITICAL" into the 2 that
+  are separate, confirmed problems.
+
+### Fixed
+- **An empty result hid NOT EVALUATED.** With zero matches the page printed only
+  "No CVEs matched" and dropped the coverage note, so an ASA or FTD query read
+  as clean. The note is now the headline of an empty result.
+- **KEV chip missing on cards** for every CVE flagged from the live CISA catalog
+  rather than from a curated tag (all NX-OS, all ISE imports, most of IOS XE).
+  The text report had the flag; the card did not.
+- **Browsers could run yesterday's JavaScript.** Every script and stylesheet was
+  requested as `?v=0.6.29` through nineteen releases. The cache-buster now
+  equals the app version, enforced by a test.
+- **Three different versions.** OpenAPI said `0.6.0`, `/meta/version` said the
+  real one, and the report read it by regex from `api/main.py` (which would
+  have printed `Tool: unknown` after the cleanup — caught before release). One
+  constant in `version.py` now feeds all of them.
+- NX-OS descriptions no longer carry Cisco's closing boilerplate and no longer
+  end mid-word: summaries are cut at a sentence end (287 records rewritten).
+
+### Added
+- `scripts/dev/ui_smoke.py`: drives headless Chrome over DevTools against a local
+  server and reports what the page actually rendered. pytest cannot see the
+  screen; twice today the API was right and the screen was not.
+
+### Tests
+- `tests/test_report_review_2026_09_18c.py` (19 cases). Verified in a real
+  browser: IOS XE (sections, counts), NX-OS (KEV chip), ISE (hardening group
+  "6 CVEs, one job", 45 items / 50 CVEs). Suite: 1317 → 1336.
+
+---
+
 ## [v0.6.48] – 2026-09-18 (NX-OS: a real dataset, matched on Cisco's release lists)
 
 ### Added

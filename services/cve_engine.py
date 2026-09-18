@@ -222,6 +222,15 @@ def severity_info(cve: "CVEEntry") -> Dict[str, Optional[str]]:
     label = (getattr(cve, "severity", "") or "").upper()
     explicit_sir = getattr(cve, "cisco_sir", None)
     reason = _escalation_reason(tags)
+    # The chip was driven by curated tags only, so a CVE stamped from the live
+    # CISA catalog (every imported record: NX-OS, ISE, most of IOS XE) showed
+    # "[CISA KEV]" in the text report and nothing on its card.
+    if getattr(cve, "kev", None) is not None:
+        kev_text = _ESCALATION_TAGS["kev"]
+        if not reason:
+            reason = kev_text
+        elif kev_text not in reason:
+            reason = kev_text + " + " + reason
 
     # Determine what the UI should treat as primary severity.
     if score is not None:
@@ -679,7 +688,33 @@ def uncovered_family(platform: str) -> Optional[ProductFamily]:
     return family
 
 
-def platform_coverage_note(platform: str) -> Optional[str]:
+def ambiguous_release(platform: str, version: str) -> bool:
+    """Unrecognised platform AND a release whose shape fits two product lines.
+
+    "10.2(6)" is an NX-OS release and, to a parser, also a classic IOS release
+    from the 1990s. With a recognised platform the platform decides. With
+    free text ("bla bla bla", a device model) only the version is left, and
+    guessing IOS here is how an NX-OS switch got 322 IOS findings. Classic IOS
+    trains still in the field are 12.x and 15.x; NX-OS has never used those
+    majors, so they stay unambiguous for model-name input ("Catalyst 2960").
+    """
+    if normalize_user_platform(platform or "") is not None:
+        return False
+    # Only the parenthesised form is shared by the two product lines; a dotted
+    # release ("17.9.4a") is IOS XE and stays unambiguous.
+    m = re.match(r"^\s*(\d+)\.\d+\(\d", version or "")
+    if not m:
+        return False
+    return int(m.group(1)) not in (12, 15)
+
+
+def platform_coverage_note(platform: str, version: Optional[str] = None) -> Optional[str]:
+    if version is not None and ambiguous_release(platform, version):
+        return (
+            f"NOT EVALUATED: platform \"{(platform or '').strip()[:40]}\" was not recognised and release "
+            f"{version.strip()[:30]} could be Cisco IOS or Cisco NX-OS. Choose the platform "
+            f"({_COVERED_PLATFORMS_TEXT}). An empty result here means \"not checked\", not \"not vulnerable\"."
+        )
     family = uncovered_family(platform)
     if family is None:
         return None
@@ -1113,7 +1148,7 @@ class CVEEngine:
 
         # A recognised platform we hold no data for: answer nothing, and let the
         # report say "not evaluated" (platform_coverage_note).
-        if uncovered_family(platform) is not None:
+        if uncovered_family(platform) is not None or ambiguous_release(platform, version):
             self.excluded_by_known_affected = []
             self.cisco_source_conflicts = []
             return []

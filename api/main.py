@@ -10,10 +10,15 @@ import os
 # to run backend cd /Users/uwillc/SaaS/netdevops-micro-tools
 # python3 -m uvicorn api.main:app --reload --port 8000
 
+# One version (version.py), read by the OpenAPI document, /meta/version, report
+# provenance and the asset cache-buster test. The OpenAPI document said "0.6.0"
+# for forty-nine releases while /meta/version moved on.
+from version import APP_VERSION  # noqa: E402
+
 app = FastAPI(
     title="NetDevOps Micro-Tools API",
     description="Small tools. Real automation. AI-assisted. Backend for generating secure Cisco configurations.",
-    version="0.6.0",
+    version=APP_VERSION,
 )
 
 # CORS for local frontend (dev)
@@ -117,7 +122,7 @@ def health():
 @app.get("/meta/version", response_model=MetaInfo)
 def meta_version():
     return MetaInfo(
-        version="0.6.48",
+        version=APP_VERSION,
         build_time=datetime.datetime.utcnow().isoformat() + "Z",
         feature_flags=["cve_engine_v3", "nvd_enrichment", "nvd_cache", "web_ui_v2", "profiles_v2", "profiles_cve", "security_score", "subnet_calc", "mtu_calc", "config_parser", "cloud_deploy", "export_pdf", "cve_mitigation_advisor", "timezone_converter", "ip_path_tracer", "port_auditor", "config_explainer", "config_drift", "cis_audit", "whoami", "ise_coverage", "threat_feed_local", "kev_badges", "ise_analyzer", "bundled_cve", "kev_catalog", "known_affected_match", "ise_full_coverage"]
     )
