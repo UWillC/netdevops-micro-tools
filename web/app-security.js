@@ -182,6 +182,10 @@ if (cveForm && cveOutput) {
         out += data.eol_status.banner_text + "\n\n";
       }
 
+      if (data.dataset_syncing) {
+        out += "NOTE: the dataset is still synchronising with Cisco after a server restart. " +
+               "This list may grow; run the analysis again in a minute.\n\n";
+      }
       if (data.coverage_note) {
         out += data.coverage_note + "\n\n";
       }

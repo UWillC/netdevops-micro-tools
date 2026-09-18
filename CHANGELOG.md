@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.50] – 2026-09-18 (same query, same answer: datasets warm up after a restart)
+
+### Fixed
+- Right after a deploy the disk holds only the repository copy of the IOS XE
+  dataset (141 records); a synced instance holds several hundred. Until some
+  request happened to trigger the PSIRT sync, `IOS XE 17.12.4` answered with 50
+  matches, and an hour later with 167. On startup one background thread now
+  refreshes every synced platform in sequence (iosxe, nxos, ise, ios; PSIRT
+  allows 30 calls a minute). `CVE_WARMUP_SYNC=0` switches it off.
+- While a dataset is synchronising the response carries `dataset_syncing: true`
+  and the report says the list may grow and to run the analysis again in a minute.
+
+### Tests
+- 3 cases (order, lock release, off switch, flag). Suite: 1336 → 1339.
+
+---
+
 ## [v0.6.49] – 2026-09-18 (CVE Analyzer: platform is a choice, not free text; the report counts what is confirmed)
 
 Third review of production reports the same day, plus the owner's own suggestion

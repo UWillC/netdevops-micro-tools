@@ -77,6 +77,9 @@ class CVEAnalyzeResponse(BaseModel):
     bundled_cves: List[str] = []
     # ISE-04: what this dataset covers and, above all, what it does not.
     coverage_note: Optional[str] = None
+    # True while the dataset behind this answer is being synchronised (right
+    # after a restart): the list may grow on the next run.
+    dataset_syncing: bool = False
     # EOSM-01 (2026-09-18): software-lifecycle caveat for the queried ISE train
     # (End of Software Maintenance / Software Maintenance / ISE-PIC end-of-sale).
     # One statement per report, and only when it applies to the caller.
@@ -328,6 +331,7 @@ def analyze_cve(req: CVEAnalyzeRequest):
         coverage_note=(ise_coverage_note(base_engine.cves) if _data_dir == "cve_data/ise"
                        else nxos_coverage_note(base_engine.cves) if _data_dir == "cve_data/nx_os"
                        else platform_coverage_note(req.platform, req.version)),
+        dataset_syncing=dataset_is_syncing(_sync_platform),
         lifecycle_note=ise_lifecycle_note(req.platform, req.version),
         excluded_not_listed=sorted(base_engine.excluded_by_known_affected),
         matched_on_known_affected=sum(1 for c in matched if any((c.known_affected or {}).values())),
@@ -880,6 +884,35 @@ def _refresh_platform_cache_in_background(platform: str) -> bool:
         _platform_refresh_running.add(platform)
     _spawn(_refresh_platform_cache, platform)
     return True
+
+
+def warm_up_datasets() -> bool:
+    """After a restart, bring every synced dataset up to date in ONE background thread.
+
+    The disk is rebuilt from the repository on each deploy (141 IOS XE records),
+    while a synced instance holds several hundred. Until somebody's request
+    happened to trigger the sync, the same query answered differently: `IOS XE
+    17.12.4` gave 50 matches right after a deploy and 167 an hour later.
+    Sequential on purpose: PSIRT allows 30 calls a minute.
+    """
+    if os.getenv("CVE_WARMUP_SYNC", "1").lower() in ("0", "false", "no"):
+        return False
+
+    def _run():
+        for platform in ("iosxe", "nxos", "ise", "ios"):
+            with _platform_refresh_lock:
+                if platform in _platform_refresh_running:
+                    continue
+                _platform_refresh_running.add(platform)
+            _refresh_platform_cache(platform)
+
+    _spawn(_run)
+    return True
+
+
+def dataset_is_syncing(platform_key: Optional[str]) -> bool:
+    with _platform_refresh_lock:
+        return bool(platform_key) and platform_key in _platform_refresh_running
 
 
 def _merge_advisories(*sources: list) -> list:

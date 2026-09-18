@@ -115,6 +115,14 @@ def api_root():
         "message": "NetDevOps Micro-Tools API is running.",
     }
 
+@app.on_event("startup")
+def _warm_up_cve_datasets():
+    try:
+        cve.warm_up_datasets()
+    except Exception as exc:   # never block startup on a data refresh
+        print(f"[WARN] dataset warm-up not started: {exc}")
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}

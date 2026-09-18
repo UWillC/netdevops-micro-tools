@@ -137,3 +137,40 @@ def test_one_version_everywhere():
     assert client.get("/meta/version").json()["version"] == APP_VERSION
     assert _analyze("IOS XE", "17.9.4")["provenance"]["tool_version"] == APP_VERSION
     assert re.match(r"^\d+\.\d+\.\d+$", APP_VERSION)
+
+
+# ---------- dataset warm-up after a restart ----------
+
+def test_warm_up_refreshes_every_synced_platform_in_order_and_releases_the_lock(monkeypatch):
+    from api.routers import cve as cve_router
+    calls = []
+    monkeypatch.setattr(cve_router, "_spawn", lambda fn, *a: fn(*a))          # run inline
+    def fake_refresh(platform):
+        calls.append(platform)
+        assert platform in cve_router._platform_refresh_running             # visible as "syncing" while it runs
+        cve_router._platform_refresh_running.discard(platform)
+    monkeypatch.setattr(cve_router, "_refresh_platform_cache", fake_refresh)
+    assert cve_router.warm_up_datasets() is True
+    assert calls == ["iosxe", "nxos", "ise", "ios"]
+    assert not cve_router._platform_refresh_running
+    from services.cve_sources import AUTO_SYNC_PLATFORMS
+    assert set(calls) == set(AUTO_SYNC_PLATFORMS)
+
+
+def test_warm_up_can_be_switched_off(monkeypatch):
+    from api.routers import cve as cve_router
+    monkeypatch.setenv("CVE_WARMUP_SYNC", "0")
+    monkeypatch.setattr(cve_router, "_spawn", lambda fn, *a: pytest.fail("must not start"))
+    assert cve_router.warm_up_datasets() is False
+
+
+def test_report_says_when_the_dataset_is_still_syncing():
+    from api.routers import cve as cve_router
+    assert _analyze("IOS XE", "17.9.4")["dataset_syncing"] is False
+    cve_router._platform_refresh_running.add("iosxe")
+    try:
+        assert _analyze("IOS XE", "17.9.4")["dataset_syncing"] is True
+        assert _analyze("NX-OS", "10.2(6)")["dataset_syncing"] is False
+    finally:
+        cve_router._platform_refresh_running.discard("iosxe")
+    assert "dataset_syncing" in _web("app-security.js")
