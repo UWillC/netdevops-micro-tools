@@ -266,6 +266,8 @@ def auto_sync_new_cves(cached_advisories: List[Dict[str, Any]], platform: str = 
         return 0
     if platform == "ise":
         return auto_sync_ise(cached_advisories)
+    if platform == "nxos":
+        return auto_sync_nxos(cached_advisories)
 
     os.makedirs(CVE_DATA_DIR, exist_ok=True)
     os.makedirs(MITIGATION_DIR, exist_ok=True)
@@ -458,6 +460,142 @@ def auto_sync_ise(cached_advisories: List[Dict[str, Any]], fetch_details=None) -
 
     if imported or refreshed:
         print(f"[SYNC] ISE: imported {imported} new CVE(s), refreshed {refreshed} list(s); "
+              f"{skipped_no_list} advisory(ies) without a release list left out")
+    return imported
+
+
+# ---------------------------------------------------------------------------
+# NX-OS-01 (2026-09-18) — NX-OS as its own auto-synced dataset
+# ---------------------------------------------------------------------------
+# Same design as ISE-04, for the same reason: an NX-OS release has the shape of
+# a classic IOS release ("10.2(6)"), so without its own dataset an NX-OS query
+# was answered from IOS lists of the 1990s. Measured on PSIRT the day this was
+# written: 246 NX-OS advisories, 222 of them with an NX-OS release list, 288 CVEs.
+#
+# Admission rule: an advisory enters only if Cisco enumerates standalone NX-OS
+# releases for it. No list, no record — every match must be checkable.
+# What Cisco does NOT give for NX-OS: a first fixed release (the advisories
+# defer to Software Checker). `fixed_in` therefore stays empty and the report
+# says so, instead of recommending a version nobody read.
+NXOS_DATA_DIR = os.path.join(PROJECT_DIR, "cve_data", "nx_os")
+
+
+def _nxos_train_bounds(versions: List[str]) -> Tuple[str, str]:
+    trains = []
+    for v in versions:
+        m = re.match(r"^(\d+)\.(\d+)", v)
+        if m:
+            trains.append((int(m.group(1)), int(m.group(2))))
+    if not trains:
+        return "0.0", "99.0"
+    return "%d.%d" % min(trains), "%d.%d" % max(trains)
+
+
+def build_nxos_record(cve_id: str, adv: Dict[str, Any], details: Dict[str, Any]) -> Dict[str, Any]:
+    """One cve_data/nx_os record. Per-CVE title/CVSS from CVRF when present."""
+    lists = extract_known_affected(adv)
+    listed = lists.get("nx-os") or []
+    amin, amax = _nxos_train_bounds(listed)
+    per_cve = (details.get("vulnerabilities") or {}).get(cve_id.upper(), {})
+    cves = [c for c in (adv.get("cves") or []) if isinstance(c, str) and c.startswith("CVE-")]
+    single = len(cves) == 1
+
+    tags = ["cisco-psirt", "nx-os"]
+    cvss = per_cve.get("cvss")
+    if cvss is None:
+        try:
+            cvss = float(adv.get("cvssBaseScore") or 0) or None
+        except (ValueError, TypeError):
+            cvss = None
+        if cvss is not None and not single:
+            tags.append("cvss-advisory-level")
+
+    from services.cve_engine import cvss_rating_from_score
+    sir = (adv.get("sir") or "").strip()
+    severity = cvss_rating_from_score(cvss).lower() if cvss is not None else (sir.lower() or "medium")
+    if severity not in ("critical", "high", "medium", "low"):
+        severity = "medium"
+    if details.get("exploited"):
+        tags.append("actively-exploited")
+
+    cwe_list = [c for c in (adv.get("cwe") or []) if isinstance(c, str) and c.startswith("CWE-")]
+    url = adv.get("publicationUrl") or ""
+    published = (adv.get("firstPublished") or "").split("T")[0]
+    known = {"nx-os": listed}
+    if lists.get("nx-os-aci"):
+        known["nx-os-aci"] = lists["nx-os-aci"]
+    return {
+        "cve_id": cve_id.upper(),
+        "title": per_cve.get("title") or clean_advisory_text(adv.get("advisoryTitle") or ""),
+        "severity": severity,
+        "platforms": ["NX-OS"],
+        "affected": {"min": amin, "max": amax},
+        "fixed_in": None,
+        "tags": tags,
+        "description": clean_advisory_text(adv.get("summary") or "")[:1500],
+        "workaround": "See Cisco advisory for details.",
+        "advisory_url": url,
+        "confidence": "cisco-psirt",
+        "source": "cisco-psirt-import",
+        "cvss_score": cvss,
+        "cvss_vector": per_cve.get("vector"),
+        "cwe": cwe_list[0] if (single and cwe_list) else None,
+        "published": published,
+        "last_modified": (adv.get("lastUpdated") or "").split("T")[0] or published,
+        "references": [u for u in (url, "https://nvd.nist.gov/vuln/detail/" + cve_id.upper()) if u],
+        "cisco_sir": sir or None,
+        "bundle": None,
+        "product_families": ["nx-os"],
+        "affected_versions_raw": ["Cisco NX-OS Software " + v for v in listed[:50]],
+        "first_fixed_version": None,
+        "bundled": None,
+        "known_affected": known,
+        "known_affected_as_of": datetime.date.today().isoformat(),
+    }
+
+
+def auto_sync_nxos(cached_advisories: List[Dict[str, Any]], fetch_details=None) -> int:
+    """Import NEW NX-OS CVEs, refresh the lists of existing ones. Returns imports."""
+    if fetch_details is None:
+        from services.ise_fixed_table import (
+            exploitation_confirmed_in_cvrf, fetch_cvrf, vulnerabilities_from_cvrf)
+
+        def fetch_details(adv):  # one CVRF request per advisory that has a NEW cve
+            xml = fetch_cvrf(adv.get("cvrfUrl"))
+            if not xml:
+                return {}
+            return {"vulnerabilities": vulnerabilities_from_cvrf(xml),
+                    "exploited": exploitation_confirmed_in_cvrf(xml)}
+
+    os.makedirs(NXOS_DATA_DIR, exist_ok=True)
+    existing = {f[:-5].upper() for f in os.listdir(NXOS_DATA_DIR) if f.endswith(".json")}
+    imported = refreshed = skipped_no_list = 0
+
+    for adv in cached_advisories:
+        if not extract_known_affected(adv).get("nx-os"):
+            skipped_no_list += 1
+            continue
+        details = None
+        for cve_id in adv.get("cves") or []:
+            if not isinstance(cve_id, str) or not cve_id.startswith("CVE-"):
+                continue
+            path = os.path.join(NXOS_DATA_DIR, cve_id.lower() + ".json")
+            if cve_id.upper() in existing:
+                refreshed += refresh_known_affected(path, adv)
+                continue
+            if details is None:
+                try:
+                    details = fetch_details(adv) or {}
+                except Exception:
+                    details = {}
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(build_nxos_record(cve_id, adv, details), f, indent=2, ensure_ascii=False)
+                f.write("\n")
+            existing.add(cve_id.upper())
+            imported += 1
+
+    if imported or refreshed:
+        print(f"[SYNC] NX-OS: imported {imported} new CVE(s), refreshed {refreshed} list(s); "
               f"{skipped_no_list} advisory(ies) without a release list left out")
     return imported
 

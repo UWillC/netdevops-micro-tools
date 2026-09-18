@@ -48,7 +48,7 @@ class TestLocalRecordsToFeed:
         assert all(i.source == "local" for i in items)
 
     def test_unknown_platform_is_empty_not_error(self):
-        assert _local_records_to_feed("nxos") == []
+        assert _local_records_to_feed("asa") == []     # was "nxos" until NX-OS-01 gave it a dataset
         assert _local_records_to_feed("") == []
 
     def test_kev_block_is_carried_through(self):

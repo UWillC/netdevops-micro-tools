@@ -4,6 +4,46 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.48] – 2026-09-18 (NX-OS: a real dataset, matched on Cisco's release lists)
+
+### Added
+- **NX-OS is a covered platform.** `cve_data/nx_os/`: 288 CVEs from the 222 (of
+  246) NX-OS advisories in which Cisco enumerates standalone NX-OS releases.
+  Admission rule as for ISE: no release list, no record. A match means the exact
+  release is on Cisco's list; there is no min/max range fallback for NX-OS.
+  `NX-OS 10.2(6)`: **19 CVEs, all NX-OS, all verified, 0 uncertain** — yesterday's
+  report for the same input listed 84 CVEs, none of them evaluated for NX-OS.
+- Release spelling: `10.2(6)`, `10.2.6`, `10.2(6)M` (as `show version` prints it on
+  10.x) and `NX-OS 10.2(6)` are one release. `7.0(3)I7(9)` is not `7.0(3)I7(10)`.
+  Input that is not an NX-OS release reports nothing instead of "288 ruled out".
+- ACI-mode images are a separate list key (`nx-os-aci`), never used for an NX-OS
+  query. Platform names `NX-OS`, `nxos`, `Nexus`, `Cisco NX-OS` all resolve.
+- The report names no upgrade target for NX-OS and says why: Cisco does not
+  publish first fixed NX-OS releases through its API. It points to Software
+  Checker rather than inventing a version. Every NX-OS report carries a coverage
+  note (what is in the dataset, what is not evaluated).
+- NX-OS joins the auto-sync platforms (own importer `auto_sync_nxos`, per-CVE
+  title/CVSS from CVRF), the Latest Threats local fallback, the weekly list
+  refresh and the advisory-reference audit.
+- The analyzer form now shows which platforms are covered and how to write a
+  release for each. Until now that was only in a tooltip.
+
+### Fixed
+- Provenance "age" was off by the UTC offset on any host not running in UTC
+  (`utcnow().timestamp()`); production runs in UTC and was unaffected.
+
+### Changed
+- `extract_known_affected()` returns `nx-os` / `nx-os-aci` for every advisory, so
+  multi-product records gained those keys on the first refresh (64 records).
+
+### Tests
+- `tests/test_nxos_dataset.py` (26 cases): spellings, neighbouring builds, ACI
+  separation, dataset invariants, the 10.2(6) report, dataset isolation from
+  IOS XE, provenance. Seven older tests that encoded "NX-OS is not supported"
+  updated. Suite: 1291 → 1317.
+
+---
+
 ## [v0.6.47] – 2026-09-18 (CVE Analyzer: a false CVSS 10.0, a whole false report, and eight bad curated records)
 
 Found by reading two production reports (`IOS-XE 17.12.04`, `NX-OS 10.2(6)`).

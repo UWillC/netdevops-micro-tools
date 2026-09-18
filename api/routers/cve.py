@@ -9,7 +9,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from services.cve_engine import platform_coverage_note, uncovered_family, CVEEngine, CVEEngineConfig, cvss_rating_from_score, data_dir_for_platform, is_bundled_cve, ise_coverage_note, ise_lifecycle_note, severity_info, detect_bundle, data_confidence, coverage_uncertain_ids, published_date_demoted_ids
+from services.cve_engine import nxos_coverage_note, platform_coverage_note, uncovered_family, CVEEngine, CVEEngineConfig, cvss_rating_from_score, data_dir_for_platform, is_bundled_cve, ise_coverage_note, ise_lifecycle_note, severity_info, detect_bundle, data_confidence, coverage_uncertain_ids, published_date_demoted_ids
 from services.eol_registry import detect_eol
 from services.provenance import cve_provenance
 
@@ -193,7 +193,7 @@ def _env_true(name: str) -> bool:
 
 # Dataset directory -> PSIRT platform whose sync keeps that dataset current.
 # ISE joined in ISE-04, when cve_data/ise became an auto-synced dataset.
-_ANALYZER_SYNC_PLATFORM = {"cve_data/ios_xe": "iosxe", "cve_data/ise": "ise"}
+_ANALYZER_SYNC_PLATFORM = {"cve_data/ios_xe": "iosxe", "cve_data/ise": "ise", "cve_data/nx_os": "nxos"}
 
 
 def _apply_kev_catalog(entries: list) -> list:
@@ -340,8 +340,9 @@ def analyze_cve(req: CVEAnalyzeRequest):
         coverage_uncertain=coverage_uncertain_list,
         bundled_cves=[c.cve_id for c in matched if is_bundled_cve(c)],
         cisco_source_conflicts=sorted(getattr(base_engine, "cisco_source_conflicts", [])),
-        coverage_note=(ise_coverage_note(base_engine.cves)
-                       if _data_dir == "cve_data/ise" else platform_coverage_note(req.platform)),
+        coverage_note=(ise_coverage_note(base_engine.cves) if _data_dir == "cve_data/ise"
+                       else nxos_coverage_note(base_engine.cves) if _data_dir == "cve_data/nx_os"
+                       else platform_coverage_note(req.platform)),
         lifecycle_note=ise_lifecycle_note(req.platform, req.version),
         excluded_not_listed=sorted(base_engine.excluded_by_known_affected),
         matched_on_known_affected=sum(1 for c in matched if any((c.known_affected or {}).values())),
@@ -653,6 +654,7 @@ def _advisories_to_feed(advisories: list, platform_filter: str = "all") -> list:
 _LOCAL_DATA_DIRS = {
     "ise": "ise",
     "iosxe": "ios_xe",
+    "nxos": "nx_os",
 }
 
 # CACHE-01: product family each local directory is supposed to contain. The IOS
@@ -663,6 +665,7 @@ _LOCAL_DATA_DIRS = {
 _LOCAL_DATA_FAMILIES = {
     "ise": ProductFamily.ISE,
     "iosxe": ProductFamily.IOS_XE,
+    "nxos": ProductFamily.NX_OS,
 }
 
 # What a record's own `platforms` field must say for it to belong to a view.
@@ -670,6 +673,7 @@ _LOCAL_DATA_FAMILIES = {
 # directory with correct `platforms`; the taxonomy cannot always name them from
 # the title alone, but the record itself already does.
 _LOCAL_PLATFORM_TOKENS = {
+    "nxos": ("nx-os", "nxos"),
     "ise": ("ise", "ise-pic"),
     "iosxe": ("ios xe", "ios-xe", "iosxe"),
 }
@@ -689,6 +693,7 @@ def _record_belongs_to(platform: str, entry) -> bool:
 
 # Platform label shown on locally-sourced rows.
 _LOCAL_PLATFORM_LABELS = {
+    "nxos": ["NX-OS"],
     "ise": ["ISE", "ISE-PIC"],
     "iosxe": ["IOS XE"],
 }

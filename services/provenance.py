@@ -19,6 +19,7 @@ directory listing for ruleset versioning. No external dependencies.
 from __future__ import annotations
 
 import datetime
+import time
 import os
 from typing import Dict, List, Optional
 
@@ -36,7 +37,7 @@ def _iso_utc(ts: float) -> str:
 
 
 def _hours_since(ts: float) -> float:
-    age = max(0.0, datetime.datetime.utcnow().timestamp() - ts)
+    age = max(0.0, time.time() - ts)   # utcnow().timestamp() is off by the UTC offset on any non-UTC host
     return round(age / 3600.0, 1)
 
 
@@ -186,7 +187,7 @@ def cve_provenance(
         "tool_version": tool_version,
         "cve_engine_version": cve_engine_version,
         "ruleset_version": ruleset_version,
-        "report_generated": _iso_utc(datetime.datetime.utcnow().timestamp()),
+        "report_generated": _iso_utc(time.time()),
         "sources": sources,
         "source_distribution": source_counts,
         "policy_note": (

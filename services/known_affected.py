@@ -39,6 +39,11 @@ _PATTERNS = (
     # the same release numbers and is filed under the same family.
     ("ise", re.compile(r"^Cisco Identity Services Engine Software\s+(\d.*?)\s*$")),
     ("ise", re.compile(r"^Cisco ISE Passive Identity Connector\s+(\d.*?)\s*$")),
+    # NX-OS-01: ACI-mode images are a different product line with their own
+    # numbering (14.2(1i)); they must not answer a standalone NX-OS query, so
+    # they get their own key and the ACI pattern is tried first.
+    ("nx-os-aci", re.compile(r"^Cisco NX-OS System Software in ACI Mode\s+(\d\S*)\s*$")),
+    ("nx-os", re.compile(r"^Cisco NX-OS Software\s+(\d\S*)\s*$")),
 )
 
 
@@ -60,6 +65,31 @@ def _norm(version: str) -> str:
     """Case-fold and drop zero padding: "17.09.04a" and "17.9.4A" -> "17.9.4a"."""
     v = (version or "").strip().lower()
     return re.sub(r"(?<![\d])0+(?=\d)", "", v)
+
+
+_NXOS_PREFIX_RE = re.compile(r"^(cisco\s+)?(nx-?os|nexus)(\s+software)?\s+", re.I)
+_NXOS_DOTTED_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+[a-z]?)$")
+
+
+def _nxos_key(version: str) -> str:
+    """Canonical spelling of an NX-OS release, "" if there is nothing to compare.
+
+    Cisco writes "10.2(6)" and "7.0(3)I7(9)". Operators also type "10.2.6", and
+    `show version` on 10.x prints "10.2(6)M" for the same release Cisco lists as
+    "10.2(6)" — the trailing M/F marks the release type, not a different build.
+    Everything else is compared exactly: "7.0(3)I7(9)" is not "7.0(3)I7(10)".
+    """
+    v = _NXOS_PREFIX_RE.sub("", (version or "").strip()).lower().replace(" ", "")
+    if not v:
+        return ""
+    m = _NXOS_DOTTED_RE.match(v)
+    if m:
+        v = "%s.%s(%s)" % m.groups()
+    v = re.sub(r"(?<![\d])0+(?=\d)", "", v)
+    v = re.sub(r"^(\d+\.\d+\(\d+[a-z]?\))[mf]$", r"\1", v)
+    # Not an NX-OS release at all ("garbage", "17.9.4"): nothing to compare, so
+    # the caller reports nothing rather than "288 advisories ruled out".
+    return v if re.match(r"^\d+\.\d+\(\d+[a-z]?\)", v) else ""
 
 
 def _ise_key(version: str):
@@ -92,6 +122,9 @@ def version_is_listed(version: str, listed: Iterable[str], family: Optional[str]
         if target_key is None:
             return False
         return any(_ise_key(v) == target_key for v in listed)
+    if family in ("nx-os", "nx-os-aci"):
+        target = _nxos_key(version)
+        return bool(target) and any(_nxos_key(v) == target for v in listed)
     target = _norm(version)
     if not target:
         return False

@@ -46,15 +46,23 @@ def test_ui_default_spelling_keeps_foreign_products_out():
 
 # ---------- a platform we hold no data for ----------
 
-def test_nxos_is_not_evaluated_instead_of_matched_as_1990s_ios():
-    data = _analyze("NX-OS", "10.2(6)")
+def test_a_platform_without_a_dataset_is_not_evaluated():
+    """Written for NX-OS 10.2(6), which was matched as classic IOS 10.2(6) from
+    the 1990s. NX-OS got its own dataset the same day (tests/test_nxos_dataset.py);
+    the rule still protects every platform that has none."""
+    data = _analyze("ASA", "9.18(4)")
     assert data["matched"] == []
     assert data["coverage_note"].startswith("NOT EVALUATED")
     assert "not vulnerable" in data["coverage_note"]
     assert data["recommended_upgrade"] is None
 
 
-@pytest.mark.parametrize("platform", ["ASA", "FTD", "IOS XR", "Nexus", "Meraki"])
+def test_nxos_is_never_answered_from_the_ios_datasets():
+    titles = " ".join(c["title"] for c in _analyze("NX-OS", "10.2(6)")["matched"])
+    assert "SD-WAN" not in titles and "cBR" not in titles and "OpenSSL" not in titles
+
+
+@pytest.mark.parametrize("platform", ["ASA", "FTD", "IOS XR", "FXOS", "Meraki"])
 def test_other_uncovered_platforms(platform):
     assert uncovered_family(platform) is not None
     assert _analyze(platform, "9.18.4")["matched"] == []
@@ -84,7 +92,7 @@ def test_advisory_ids_look_like_cisco_ids():
     the invented ones were plain readable slugs."""
     import glob
     import re
-    shape = re.compile(r"cisco-sa-(\d{8}-[\w-]+|[\w-]*-[A-Za-z0-9]{6,12}|[\w-]+)$")
+    shape = re.compile(r"cisco-sa-(\d{8}-[\w-]+|[\w-]*-[A-Za-z0-9]{6,12}|[\w-]+)$", re.I)   # 2013 ids: "Cisco-SA-..."
     readable_slug = re.compile(r"cisco-sa-[a-z]+(-[a-z]+)+$")
     bad = []
     for path in glob.glob(os.path.join(ROOT, "cve_data/*/cve-*.json")):

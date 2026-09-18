@@ -1628,13 +1628,15 @@ Requires: archive config">show archive config differences</code>
           <div class="form-row">
             <label>Platform</label>
             <input type="text" name="platform" value="ISR4451-X"
-                   title="Device model or product family. For Identity Services Engine enter: ISE" />
+                   title="Device model or product family: IOS XE, IOS, NX-OS, ISE" />
+            <small class="form-hint" style="display:block; margin-top:0.35rem; color:var(--text-dim);">Covered: <strong>IOS XE</strong>, <strong>IOS</strong>, <strong>NX-OS</strong>, <strong>ISE</strong>. A device model (ISR4451-X) is read as IOS XE / IOS. Other platforms are reported as not evaluated.</small>
           </div>
 
           <div class="form-row">
             <label>Software version</label>
             <input type="text" name="version" value="17.5.1"
-                   title="IOS XE: 17.9.4a. ISE: train plus patch level, e.g. 3.4 Patch 5" />
+                   title="IOS XE: 17.9.4a. NX-OS: 10.2(6). ISE: train plus patch level, e.g. 3.4 Patch 5" />
+            <small class="form-hint" style="display:block; margin-top:0.35rem; color:var(--text-dim);">IOS XE <code>17.9.4a</code> &middot; NX-OS <code>10.2(6)</code> &middot; ISE <code>3.4 Patch 5</code></small>
           </div>
 
           <div class="form-row">

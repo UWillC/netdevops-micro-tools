@@ -226,10 +226,15 @@ class TestAutoSyncScope:
         cve_sources.CiscoAdvisoryProvider(platform="ise").load()
         assert synced == [("ise", 1)]
 
-    @pytest.mark.parametrize("platform", ["asa", "nxos", "ftd"])
+    def test_nxos_syncs_into_its_own_dataset(self, synced):
+        """NX-OS-01: passed through with its platform, so auto_sync_nxos handles it."""
+        cve_sources.CiscoAdvisoryProvider(platform="nxos").load()
+        assert synced == [("nxos", 1)]
+
+    @pytest.mark.parametrize("platform", ["asa", "ftd"])
     def test_other_platforms_never_write_into_the_ios_xe_dataset(self, synced, platform):
         cve_sources.CiscoAdvisoryProvider(platform=platform).load()
         assert synced == []
 
     def test_constant_is_what_the_tests_assume(self):
-        assert cve_sources.AUTO_SYNC_PLATFORMS == ("iosxe", "ios", "ise")
+        assert cve_sources.AUTO_SYNC_PLATFORMS == ("iosxe", "ios", "ise", "nxos")

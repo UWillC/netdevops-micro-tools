@@ -654,6 +654,7 @@ def platform_matches(query_platform: str, cve_platforms: List[str]) -> bool:
 # silently returned zero matches for it.
 _FAMILY_DATA_DIRS = {
     ProductFamily.ISE: "cve_data/ise",
+    ProductFamily.NX_OS: "cve_data/nx_os",   # NX-OS-01
 }
 DEFAULT_DATA_DIR = "cve_data/ios_xe"
 
@@ -667,7 +668,7 @@ _IOS_XE_DATASET_FAMILIES = {
     ProductFamily.IOS_XE, ProductFamily.IOS,
     ProductFamily.IOS_XE_SDWAN, ProductFamily.IOS_XE_WLC,
 }
-_COVERED_PLATFORMS_TEXT = "Cisco IOS XE, Cisco IOS and Cisco ISE"
+_COVERED_PLATFORMS_TEXT = "Cisco IOS XE, Cisco IOS, Cisco NX-OS and Cisco ISE"
 
 
 def uncovered_family(platform: str) -> Optional[ProductFamily]:
@@ -777,6 +778,23 @@ _ISE_TRAIN_LIFECYCLE = {
 }
 _ISE_PIC_NOTE = ("Cisco ISE-PIC has reached its end-of-sale date; release 3.4 is "
                  "the last supported release.")
+
+
+def nxos_coverage_note(entries) -> Optional[str]:
+    """What the NX-OS dataset covers — said in every NX-OS report (NX-OS-01)."""
+    records = [e for e in entries if "nx-os" in (getattr(e, "product_families", None) or [])]
+    if not records:
+        return ("NX-OS dataset is empty on this instance: nothing was evaluated. "
+                "Use Cisco Software Checker.")
+    years = sorted({(getattr(e, "published", "") or "")[:4] for e in records} - {""})
+    span = f"{years[0]} to {years[-1]}" if years else "all years"
+    return (
+        f"NX-OS coverage: {len(records)} CVEs from Cisco advisories ({span}) that enumerate "
+        f"standalone NX-OS releases; a match means your exact release is on Cisco's list. "
+        f"Advisories without a release list, and ACI-mode images, are not evaluated. "
+        f"Cisco does not publish first fixed NX-OS releases through its API, so this report "
+        f"names no upgrade target: take the matched advisories to Cisco Software Checker."
+    )
 
 
 def ise_coverage_note(entries) -> Optional[str]:
@@ -1132,6 +1150,26 @@ class CVEEngine:
                     matched.append(cve)
             return self._sort_matched(matched)
 
+        # NX-OS-01: every NX-OS record exists because Cisco enumerated NX-OS
+        # releases for it (admission rule), so the list is the whole answer.
+        # No range fallback: "10.2(6)" against a min/max pair is exactly the
+        # guesswork this dataset was built to remove.
+        if query_family == ProductFamily.NX_OS:
+            self.excluded_by_known_affected = []
+            self.cisco_source_conflicts = []
+            from services.known_affected import _nxos_key
+            if not _nxos_key(version):
+                return []
+            for cve in self.cves:
+                if "nx-os" not in (getattr(cve, "product_families", None) or []):
+                    continue
+                listed = (getattr(cve, "known_affected", None) or {}).get("nx-os") or []
+                if version_is_listed(version, listed, "nx-os"):
+                    matched.append(cve)
+                else:
+                    self.excluded_by_known_affected.append(cve.cve_id)
+            return self._sort_matched(matched)
+
         # The version's own shape picks the list: a device model in the
         # platform box ("ISR4451-X") names no software family.
         ka_family = family_for_version(version)
@@ -1349,6 +1387,12 @@ class CVEEngine:
         """
         if platform and version and normalize_user_platform(platform) == ProductFamily.ISE:
             return self._recommended_upgrade_ise(matched, version)
+        if platform and normalize_user_platform(platform) == ProductFamily.NX_OS:
+            if not matched:
+                return None
+            return ("No target computed for NX-OS: Cisco does not publish first fixed releases "
+                    "through its API. Enter your release in Cisco Software Checker for the "
+                    "combined first fixed release.")
 
         # Collect (fixed_in_string, parsed_version_tuple, driver_cve) for each
         # critical/high CVE that has a fix version. Skip CVEs without fixed_in.

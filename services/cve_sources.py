@@ -37,7 +37,7 @@ CISCO_CACHE_TTL = 6 * 3600  # 6 hours
 # Platforms with an auto-synced dataset. "iosxe"/"ios" go to cve_data/ios_xe;
 # "ise" (ISE-04) has its own importer and goes to cve_data/ise. Anything else
 # has no dataset and must not be filed into somebody else's.
-AUTO_SYNC_PLATFORMS = ("iosxe", "ios", "ise")
+AUTO_SYNC_PLATFORMS = ("iosxe", "ios", "ise", "nxos")
 CISCO_CREDENTIALS_PATH = os.path.expanduser("~/.config/cisco-psirt/credentials.json")
 
 # CVE-006 Phase 4: per-advisory detail cache.

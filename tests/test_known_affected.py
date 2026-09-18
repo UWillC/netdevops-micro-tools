@@ -28,7 +28,8 @@ class TestExtract:
     def test_families_are_separated(self):
         adv = {"productNames": ["Cisco IOS XE Software 17.9.4", "Cisco IOS XE Software 17.9.4a",
                                 "Cisco IOS 15.2(7)E8", "Cisco NX-OS Software 9.3(5)"]}
-        assert extract_known_affected(adv) == {"ios-xe": ["17.9.4", "17.9.4a"], "ios": ["15.2(7)E8"]}
+        assert extract_known_affected(adv) == {"ios-xe": ["17.9.4", "17.9.4a"], "ios": ["15.2(7)E8"],
+                                               "nx-os": ["9.3(5)"]}   # NX-OS is a family of its own since NX-OS-01
 
     def test_ios_xe_is_never_read_as_ios_classic(self):
         assert "ios" not in extract_known_affected({"productNames": ["Cisco IOS XE Software 17.9.4"]})

@@ -34,10 +34,10 @@ PROJECT_DIR = os.path.dirname(HERE)
 if PROJECT_DIR not in sys.path:
     sys.path.insert(0, PROJECT_DIR)
 
-from services.cisco_sync import CVE_DATA_DIR, ISE_DATA_DIR, refresh_known_affected  # noqa: E402
+from services.cisco_sync import CVE_DATA_DIR, ISE_DATA_DIR, NXOS_DATA_DIR, refresh_known_affected  # noqa: E402
 from services.cve_sources import AUTO_SYNC_PLATFORMS, CiscoAdvisoryProvider  # noqa: E402
 
-DATA_DIR_FOR = {"iosxe": CVE_DATA_DIR, "ios": CVE_DATA_DIR, "ise": ISE_DATA_DIR}
+DATA_DIR_FOR = {"iosxe": CVE_DATA_DIR, "ios": CVE_DATA_DIR, "ise": ISE_DATA_DIR, "nxos": NXOS_DATA_DIR}
 
 
 def refresh_platform(platform, advisories, data_dir, dry_run=False):
