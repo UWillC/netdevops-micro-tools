@@ -88,6 +88,7 @@ All notable changes to this project will be documented in this file.
   Rule count: 37 → **39** (Level 1: 23).
 
 ### Fixed
+- Link-preview card (`web/og-card.jpg`) still read "CIS compliance" as pixels, which no text search or test can see. Re-rendered as "hardening audit" (same day, follow-up commit); the card now has a kept HTML source.
 - The level selector said Level 1 runs 28 rules; it runs 23. Counts in the
   UI and README are now pinned to the engine by a test.
 
