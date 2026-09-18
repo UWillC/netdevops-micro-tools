@@ -372,6 +372,19 @@
   color: #fb923c;
 }
 
+/* SIR-01 — the feed used to have only critical/high, so every score below 9.0
+   was painted orange. Medium and low get their own, calmer colours. */
+.cisco-advisories-cvss.medium {
+  background: rgba(250, 204, 21, 0.16);
+  color: #facc15;
+}
+
+.cisco-advisories-cvss.low,
+.cisco-advisories-cvss.unknown {
+  background: rgba(148, 163, 184, 0.16);
+  color: #94a3b8;
+}
+
 .cisco-advisories-cve {
   font-size: 0.75rem;
   font-family: monospace;
@@ -414,6 +427,32 @@
 .cisco-advisories-severity.high {
   background: rgba(251, 146, 60, 0.15);
   color: #fb923c;
+}
+
+.cisco-advisories-severity.medium {
+  background: rgba(250, 204, 21, 0.12);
+  color: #facc15;
+}
+
+.cisco-advisories-severity.low,
+.cisco-advisories-severity.unknown {
+  background: rgba(148, 163, 184, 0.12);
+  color: #94a3b8;
+}
+
+/* Cisco SIR chip — outlined, not filled: it is a second opinion sitting next to
+   the severity chip, and must not compete with it or with the KEV badge. */
+.cisco-advisories-sir {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  background: transparent;
+  color: #cbd5e1;
+  border: 1px dashed rgba(203, 213, 225, 0.45);
 }
 
 /* ISE-02 (2026-09-18) — CISA KEV badge.
@@ -491,7 +530,8 @@
   /* The KEV badge survives on mobile; the provenance chip is the one that
      goes, because a deadline matters more than where the row came from. */
   .cisco-advisories-src,
-  .cisco-advisories-bundled {
+  .cisco-advisories-bundled,
+  .cisco-advisories-sir {
     display: none;
   }
 }

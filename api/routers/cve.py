@@ -9,7 +9,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from services.cve_engine import CVEEngine, CVEEngineConfig, data_dir_for_platform, is_bundled_cve, severity_info, detect_bundle, data_confidence, coverage_uncertain_ids, published_date_demoted_ids
+from services.cve_engine import CVEEngine, CVEEngineConfig, cvss_rating_from_score, data_dir_for_platform, is_bundled_cve, severity_info, detect_bundle, data_confidence, coverage_uncertain_ids, published_date_demoted_ids
 from services.eol_registry import detect_eol
 from services.provenance import cve_provenance
 
@@ -128,6 +128,11 @@ class FeedItem(BaseModel):
     updated: Optional[str]
     url: Optional[str]
     platforms: List[str]
+    # SIR-01 (2026-09-18) — Cisco Security Impact Rating, set ONLY when it
+    # differs from `severity`. `severity` is the NVD CVSS v3.x bucket, exactly as
+    # in the analyzer (CVEAnalyzeResponse.severity_policy); the feed used to put
+    # Cisco's SIR there instead, which rendered "CVSS 5.3 — HIGH".
+    cisco_sir: Optional[str] = None
     # ISE-02 (2026-09-18) — where this row came from. "psirt" = live Cisco
     # PSIRT API (needs credentials), "local" = curated cve_data/ record. The
     # UI labels local rows so a stale dataset is never mistaken for a live feed.
@@ -411,6 +416,25 @@ def _fetch_latest_advisories() -> list:
     return advisories
 
 
+def _feed_severity(cvss: Optional[float], sir: Optional[str]) -> tuple:
+    """Return (severity, cisco_sir) for a feed row.
+
+    Same rule as services.cve_engine.severity_info(): the primary severity is
+    the NVD CVSS v3.x bucket; Cisco's SIR is a separate scale and is reported
+    only when it disagrees. Cisco legitimately rates some advisories above
+    their CVSS (an exploited 5.3 can be SIR High) — that is information worth
+    showing, but as Cisco's opinion next to the score, not in place of it.
+    With no score at all, SIR is the only signal and becomes the severity.
+    """
+    sir_norm = (sir or "").strip().lower() or None
+    if cvss is None:
+        return (sir_norm or "unknown"), None
+    bucket = cvss_rating_from_score(cvss).lower()
+    if sir_norm and sir_norm != bucket:
+        return bucket, sir_norm
+    return bucket, None
+
+
 def _kev_block(hit: Optional[dict], local: Optional[dict] = None) -> Optional[dict]:
     """Merge a live catalog hit with a curated local KEV block.
 
@@ -533,10 +557,13 @@ def _advisories_to_feed(advisories: list, platform_filter: str = "all") -> list:
                 "one_cve_per_cwe": binfo.one_cve_per_cwe,
             }
 
+        severity, cisco_sir = _feed_severity(cvss, sir)
+
         feed_items.append(FeedItem(
             cve_id=cve_id,
             title=adv.get("advisoryTitle", ""),
-            severity=sir,
+            severity=severity,
+            cisco_sir=cisco_sir,
             cvss=cvss,
             published=adv.get("firstPublished"),
             updated=adv.get("lastUpdated"),
@@ -649,10 +676,14 @@ def _local_records_to_feed(platform: str) -> list:
             }
         kev_block = _kev_block(kev_catalog.kev_status(entry.cve_id), local_kev)
 
+        severity, cisco_sir = _feed_severity(
+            entry.cvss_score, entry.cisco_sir or entry.severity)
+
         items.append(FeedItem(
             cve_id=entry.cve_id,
             title=entry.title,
-            severity=(entry.severity or "").lower(),
+            severity=severity,
+            cisco_sir=cisco_sir,
             cvss=entry.cvss_score,
             published=entry.published,
             updated=entry.last_modified or entry.published,

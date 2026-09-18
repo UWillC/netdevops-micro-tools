@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.37] – 2026-09-18 (SIR-01 — feed severity follows CVSS, Cisco SIR is a tag)
+
+### Fixed
+- **"CVSS 5.3 — HIGH" in Latest Threats.** The feed put Cisco's Security Impact
+  Rating in the severity slot. The analyzer has had the opposite, documented
+  policy since v0.6.16 (`CVEAnalyzeResponse.severity_policy`): primary severity
+  is the NVD CVSS v3.x bucket, Cisco SIR is a separate tag when it differs. The
+  feed now follows the same rule, through the same `cvss_rating_from_score()`.
+  Seen on production with CVE-2026-20316 (FMC static credentials): CVSS 5.3,
+  SIR High — an exploited vulnerability Cisco rates above its score. That is
+  worth showing, as Cisco's opinion next to the score rather than in its place.
+- **Everything below 9.0 was painted orange.** The row colour was
+  `critical ? "critical" : "high"`. Medium and low now have their own colours.
+
+### Added
+- `FeedItem.cisco_sir`, set only when SIR disagrees with the CVSS bucket, and a
+  dashed `SIR <rating>` chip with an explanatory tooltip. Divergence is reported
+  in both directions. With no CVSS score at all, SIR remains the severity — it
+  is then the only signal there is.
+- `tests/test_feed_severity.py` (22), including the invariant that no local row
+  carries a severity label contradicting its own score.
+
+### Notes
+- Measured on the live PSIRT "latest" cache: 1 of 47 rows diverges. The chip is
+  rare by construction, so when it appears it means something.
+
 ## [v0.6.36] – 2026-09-18 (CACHE-01 — stale platform cache, feed scope, auto-sync scope)
 
 One symptom — the "IOS XE" filter in Latest Threats showing half-year-old

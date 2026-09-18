@@ -67,7 +67,10 @@ async function loadThreatFeed() {
       a.target = "_blank";
       a.rel = "noopener";
 
-      const cvssClass = item.severity === "critical" ? "critical" : "high";
+      // SIR-01: colour follows the actual CVSS bucket. This used to be
+      // critical-or-high, which painted a 5.3 orange and labelled it HIGH.
+      const SEV_CLASSES = ["critical", "high", "medium", "low"];
+      const cvssClass = SEV_CLASSES.includes(item.severity) ? item.severity : "unknown";
       const cvssText = item.cvss != null ? item.cvss.toFixed(1) : "—";
 
       // CISA KEV gets its own badge and is never folded into severity:
@@ -108,6 +111,12 @@ async function loadThreatFeed() {
         bundledBadge = `<span class="cisco-advisories-bundled" title="${esc(tip)}">${n} CVEs \u00b7 class</span>`;
       }
 
+      // SIR-01: Cisco's own rating, shown only when it disagrees with the CVSS
+      // bucket. It is Cisco's opinion next to the score, not a replacement.
+      const sirBadge = item.cisco_sir
+        ? `<span class="cisco-advisories-sir" title="Cisco Security Impact Rating: ${esc(item.cisco_sir)}. Cisco rates this advisory differently from its CVSS ${esc(String(item.cvss))} (${esc(item.severity)}). SIR is a separate scale; both are shown.">SIR ${esc(item.cisco_sir)}</span>`
+        : "";
+
       // Curated local records are labelled so a snapshot is never mistaken
       // for the live PSIRT feed.
       const srcBadge = item.source === "local"
@@ -120,6 +129,7 @@ async function loadThreatFeed() {
         <span class="cisco-advisories-desc">${esc(item.title)}</span>
         ${kevBadge}
         ${bundledBadge}
+        ${sirBadge}
         ${srcBadge}
         <span class="cisco-advisories-date">${item.updated ? esc(item.updated.slice(0, 10)) : ""}</span>
         <span class="cisco-advisories-severity ${cvssClass}">${esc(item.severity)}</span>
