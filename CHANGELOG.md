@@ -11,7 +11,7 @@ All notable changes to this project will be documented in this file.
   246) NX-OS advisories in which Cisco enumerates standalone NX-OS releases.
   Admission rule as for ISE: no release list, no record. A match means the exact
   release is on Cisco's list; there is no min/max range fallback for NX-OS.
-  `NX-OS 10.2(6)`: **19 CVEs, all NX-OS, all verified, 0 uncertain** — yesterday's
+  `NX-OS 10.2(6)`: **19 CVEs, all NX-OS, all verified, 0 uncertain** — this morning's
   report for the same input listed 84 CVEs, none of them evaluated for NX-OS.
 - Release spelling: `10.2(6)`, `10.2.6`, `10.2(6)M` (as `show version` prints it on
   10.x) and `NX-OS 10.2(6)` are one release. `7.0(3)I7(9)` is not `7.0(3)I7(10)`.
