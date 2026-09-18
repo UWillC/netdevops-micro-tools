@@ -459,35 +459,33 @@ if (cveForm && cveOutput) {
                 <div class="cve-item-title">
                   <span class="${badgeClass(primary)}">${primary}</span>
                   ${secondaryTags.join("")}
-                  ${cve.cve_id} — ${cve.title}
+                  ${esc(cve.cve_id)} — ${esc(cve.title)}
                 </div>
                 <div class="cve-item-meta">
                   ${metaBits.join(" • ")}
                 </div>
                 <div class="cve-item-meta">
-                  Tags: ${(cve.tags || []).join(", ")}
+                  Tags: ${esc((cve.tags || []).join(", "))}
                 </div>
               </div>
               <div class="cve-item-meta">Click</div>
             </div>
 
             <div class="cve-item-body">
-              <div><strong>Description:</strong> ${cve.description}</div>
+              <div><strong>Description:</strong> ${esc(cve.description)}</div>
               ${
                 cve.workaround
-                  ? `<div style="margin-top:8px;"><strong>Workaround:</strong> ${cve.workaround}</div>`
+                  ? `<div style="margin-top:8px;"><strong>Workaround:</strong> ${esc(cve.workaround)}</div>`
                   : ""
               }
               ${
                 cve.advisory_url
-                  ? `<div style="margin-top:8px;"><strong>Advisory:</strong> ${cve.advisory_url}</div>`
+                  ? `<div style="margin-top:8px;"><strong>Advisory:</strong> ${esc(cve.advisory_url)}</div>`
                   : ""
               }
               ${
                 cve.references && cve.references.length > 0
-                  ? `<div style="margin-top:8px;"><strong>References:</strong> ${cve.references.join(
-                      " | "
-                    )}</div>`
+                  ? `<div style="margin-top:8px;"><strong>References:</strong> ${esc(cve.references.join(" | "))}</div>`
                   : ""
               }
             </div>

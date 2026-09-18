@@ -254,7 +254,13 @@ def severity_info(cve: "CVEEntry") -> Dict[str, Optional[str]]:
         sir_display: Optional[str] = (
             None if (score is not None and sir_upper == cvss) else sir_upper
         )
-    elif score is not None and label and label != cvss:
+    elif (score is not None and label and label != cvss
+          and (getattr(cve, "source", "") or "") == "cisco-psirt-import"):
+        # Only an imported record's label IS Cisco's SIR (the importer copies
+        # it). On a hand-written record the label is the author's opinion, and
+        # presenting it as "Cisco SIR" put a rating on CVE-2025-20352
+        # ("CRITICAL") that Cisco never gave (Cisco: High). Hand-written
+        # records must carry an explicit `cisco_sir` to show one.
         sir_display = label
     else:
         sir_display = None

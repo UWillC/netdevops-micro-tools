@@ -49,11 +49,29 @@ def classify(record, psirt_advisory_ids):
     return None
 
 
+def classify_facts(record, advisory):
+    """Hand-written records only: do the facts we state about Cisco match Cisco?
+
+    Added after CVE-2025-20352 showed "Cisco SIR: CRITICAL" (Cisco: High) and a
+    CVSS 8.8 that existed in no source. Returns a list of findings.
+    """
+    out = []
+    sir = (advisory.get("sir") or "").strip()
+    if sir in ("Critical", "High", "Medium", "Low") and record.get("cisco_sir") != sir:
+        out.append(f"cisco_sir is {record.get('cisco_sir')!r}, Cisco says {sir!r}")
+    cves = [c for c in advisory.get("cves") or [] if isinstance(c, str) and c.startswith("CVE-")]
+    cwes = [c for c in advisory.get("cwe") or [] if isinstance(c, str) and c.startswith("CWE-")]
+    if len(cves) == 1 and len(cwes) == 1 and record.get("cwe") and record["cwe"] != cwes[0]:
+        out.append(f"cwe is {record['cwe']}, Cisco says {cwes[0]}")
+    return out
+
+
 def main(argv=None, lookup=None, sleep=2.1):
     ap = argparse.ArgumentParser()
     ap.add_argument("--all", action="store_true")
     args = ap.parse_args(argv)
 
+    fetch_advisory = None
     if lookup is None:
         provider = CiscoAdvisoryProvider(platform="iosxe")
         creds = provider._load_credentials()
@@ -68,18 +86,30 @@ def main(argv=None, lookup=None, sleep=2.1):
             advs = (data or {}).get("advisories") or []
             return [a["advisoryId"] for a in advs] or None
 
+        def fetch_advisory(advisory_id):
+            data = provider._api_get(f"{base}/advisory/{advisory_id}")
+            time.sleep(sleep)
+            return ((data or {}).get("advisories") or [None])[0]
+
     findings = checked = 0
     for dataset in DATASETS:
         for path in sorted(glob.glob(os.path.join(PROJECT_DIR, dataset, "cve-*.json"))):
             with open(path, encoding="utf-8") as f:
                 rec = json.load(f)
-            if not args.all and any((rec.get("known_affected") or {}).values()):
+            if (not args.all and rec.get("source") != "local-json"
+                    and any((rec.get("known_affected") or {}).values())):
                 continue  # a list could only attach through a matching advisory id
             checked += 1
             problem = classify(rec, lookup(rec["cve_id"]))
             if problem:
                 findings += 1
                 print(f"FINDING {rec['cve_id']} ({dataset}): {problem}")
+            elif rec.get("source") == "local-json" and fetch_advisory is not None:
+                m = _ADV_RE.search(rec.get("advisory_url") or "")
+                adv = fetch_advisory(m.group(1)) if m else None
+                for fact in classify_facts(rec, adv or {}):
+                    findings += 1
+                    print(f"FINDING {rec['cve_id']} ({dataset}): {fact}")
     print(f"checked {checked} record(s), {findings} finding(s)")
     return 1 if findings else 0
 

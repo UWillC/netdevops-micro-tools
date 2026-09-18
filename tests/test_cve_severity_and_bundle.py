@@ -49,11 +49,22 @@ def test_severity_info_cisco_sir_distinct_from_cvss():
     Tool must show MEDIUM as primary and flag Cisco SIR HIGH as secondary.
     """
     cve = _make(cve_id="CVE-2024-20265", severity="high", cvss=5.9)
+    cve.source = "cisco-psirt-import"      # the real record: its label IS Cisco's SIR
     info = severity_info(cve)
     assert info["cvss_rating"] == "MEDIUM"
     assert info["primary_severity"] == "MEDIUM"
     assert info["cisco_sir"] == "HIGH"
     assert info["label_matches_cvss"] is False
+
+
+def test_an_authors_label_is_not_presented_as_cisco_sir():
+    """v0.6.51. CVE-2025-20352 was hand-labelled "critical"; the report printed
+    "[Cisco SIR: CRITICAL]" while Cisco rates the advisory High."""
+    cve = _make(cve_id="CVE-2025-20352", severity="critical", cvss=7.7)
+    cve.source = "local-json"
+    assert severity_info(cve)["cisco_sir"] is None
+    cve.cisco_sir = "Critical"             # an explicit value is a statement about Cisco, and is shown
+    assert severity_info(cve)["cisco_sir"] == "CRITICAL"
 
 
 def test_severity_info_aligned_no_secondary_tag():

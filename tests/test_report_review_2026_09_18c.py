@@ -174,3 +174,56 @@ def test_report_says_when_the_dataset_is_still_syncing():
     finally:
         cve_router._platform_refresh_running.discard("iosxe")
     assert "dataset_syncing" in _web("app-security.js")
+
+
+# ---------- v0.6.51: hand-written records against Cisco and NVD ----------
+
+def _rec(cve_id):
+    import json
+    return json.load(open(os.path.join(ROOT, "cve_data/ios_xe", cve_id.lower() + ".json"), encoding="utf-8"))
+
+
+def test_snmp_kev_record_carries_the_score_that_exists():
+    """8.8 with C:H/I:H/A:H was in no source. NVD holds one metric, Cisco's: 7.7."""
+    r = _rec("CVE-2025-20352")
+    assert r["cvss_score"] == 7.7 and r["cvss_vector"].endswith("S:C/C:N/I:N/A:H")
+    assert r["severity"] == "high" and r["cisco_sir"] == "High"
+    assert "on the Cisco devices themselves" in r["description"]          # Trend Micro: 9400, 9300, 3750G
+    top = _analyze("IOS XE", "17.9.4")["matched"][:3]
+    assert "CVE-2025-20352" in [c["cve_id"] for c in top]                 # still leads: KEV
+    assert _analyze("IOS XE", "17.9.4")["severity_details"]["CVE-2025-20352"]["cisco_sir"] is None   # High == HIGH bucket
+
+
+def test_tacacs_record_is_a_software_vulnerability_not_a_config_tip():
+    r = _rec("CVE-2025-20160")
+    assert r["fixed_in"] is None and r["cwe"] == "CWE-287" and "misconfiguration" not in r["tags"]
+    assert "does not properly check" in r["description"]
+
+
+def test_hand_written_records_state_cisco_sir_explicitly():
+    import glob
+    import json
+    for path in glob.glob(os.path.join(ROOT, "cve_data/ios_xe/cve-*.json")):
+        d = json.load(open(path, encoding="utf-8"))
+        if d.get("source") == "local-json" and "CiscoSecurityAdvisory/" in (d.get("advisory_url") or ""):
+            assert d.get("cisco_sir") in ("Critical", "High", "Medium", "Low"), d["cve_id"]
+
+
+def test_cards_escape_text_that_comes_from_cisco():
+    """A Cisco title contains "<TBD>"; unescaped it disappears from the card (and is an injection path)."""
+    js = _web("app-security.js")
+    card = js[js.index("const renderCve = (cve) =>"):js.index("const renderItems")]
+    for field in ("cve.title", "cve.description", "cve.workaround", "cve.advisory_url"):
+        assert f"esc({field})" in card, field
+
+
+def test_audit_checks_facts_stated_about_cisco():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("audit2", os.path.join(ROOT, "scripts/audit_advisory_refs.py"))
+    audit = importlib.util.module_from_spec(spec); spec.loader.exec_module(audit)
+    adv = {"sir": "High", "cves": ["CVE-1"], "cwe": ["CWE-287"]}
+    assert audit.classify_facts({"cisco_sir": "High", "cwe": "CWE-287"}, adv) == []
+    found = audit.classify_facts({"cisco_sir": None, "cwe": "CWE-319"}, adv)
+    assert len(found) == 2 and "Cisco says 'High'" in found[0] and "CWE-287" in found[1]
+    # a multi-CVE advisory has no per-CVE CWE: nothing to compare
+    assert audit.classify_facts({"cisco_sir": "High", "cwe": "CWE-1"}, {"sir": "High", "cves": ["CVE-1", "CVE-2"], "cwe": ["CWE-2"]}) == []

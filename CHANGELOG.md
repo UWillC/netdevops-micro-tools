@@ -4,6 +4,43 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.51] – 2026-09-18 (hand-written records checked against Cisco and NVD; a rating Cisco never gave)
+
+Fourth report review of the day (`IOS XE 17.9.4`).
+
+### Fixed
+- **"[Cisco SIR: CRITICAL]" on CVE-2025-20352 — Cisco rates it High.** When a
+  record's severity label differed from its CVSS bucket the label was shown as
+  "Cisco SIR". True for imported records (the importer copies Cisco's SIR into
+  the label); on a hand-written record the label is the author's opinion. The
+  inference now applies to imported records only; hand-written records must
+  state `cisco_sir` explicitly, and all twelve now do, read from PSIRT.
+- **CVE-2025-20352 carried CVSS 8.8 with a vector (`C:H/I:H/A:H`) that exists in
+  no source.** NVD holds exactly one metric for it, Cisco's: 7.7,
+  `AV:N/AC:L/PR:L/UI:N/S:C/C:N/I:N/A:H`. Corrected, with Cisco's title. The
+  description said rootkits were deployed "on Linux systems through compromised
+  Cisco devices"; Trend Micro's report (Operation Zero Disco) says on the Cisco
+  devices themselves (Catalyst 9400, 9300, legacy 3750G). Corrected and cited.
+- **CVE-2025-20160 (TACACS+) was written up as a misconfiguration** with
+  `Fixed in: "Configure shared secret..."` and CWE-319. Cisco: a software
+  vulnerability (the shared-secret check is missing), CWE-287, with fixed
+  releases; configuring the secret is the workaround. Rewritten from the advisory.
+- CWE corrected from Cisco on five single-CVE advisories (CVE-2019-1652,
+  CVE-2019-1653, CVE-2025-20160, CVE-2025-20188, CVE-2026-20079).
+- Card text from Cisco is HTML-escaped. A Cisco title contains `<TBD>`, which
+  the browser swallowed as a tag.
+
+### Added
+- The weekly audit now also checks, for hand-written records, that `cisco_sir`
+  and (on single-CVE advisories) `cwe` equal what PSIRT publishes, and it checks
+  hand-written records even when they already carry a release list. Live run:
+  20 records, 0 findings.
+
+### Tests
+- 6 cases. Suite: 1339 → 1345.
+
+---
+
 ## [v0.6.50] – 2026-09-18 (same query, same answer: datasets warm up after a restart)
 
 ### Fixed
