@@ -169,7 +169,8 @@ class TestSorting:
     def test_kev_outranks_a_higher_cvss(self):
         items = [
             self.item("CVE-A", 10.0, "critical", "2026-09-18"),
-            self.item("CVE-B", 6.5, "medium", "2026-09-10", kev={"due_date": "2026-09-19"}),
+            self.item("CVE-B", 6.5, "medium", "2026-09-10",
+                      kev={"date_added": "2026-09-16", "due_date": "2026-09-19"}),
         ]
         _sort_feed_items(items)
         assert items[0].cve_id == "CVE-B"

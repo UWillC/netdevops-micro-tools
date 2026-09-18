@@ -954,6 +954,10 @@ class CVEEngine:
     def _sort_matched(matched: List[CVEEntry]) -> List[CVEEntry]:
         """KEV / actively-exploited first, then severity, then CVE id."""
         def _kev_flag(c: CVEEntry) -> int:
+            # KEV-X: the typed block (set from the live CISA catalog) counts as
+            # much as the curated tags — most KEV CVEs have no tag at all.
+            if getattr(c, "kev", None) is not None:
+                return 0
             tags = [t.lower() for t in (getattr(c, "tags", []) or [])]
             return 0 if any(t in tags for t in ("kev", "actively-exploited", "zero-day")) else 1
 

@@ -34,6 +34,7 @@ def _read_app_version() -> str:
 _APP_VERSION = _read_app_version()
 from services.cve_sources import NvdEnricherProvider, CiscoAdvisoryProvider, CISCO_CACHE_DIR
 from services.hardening_release import bundled_info_from_advisory
+from services import kev_catalog
 from models.cve_model import CVEEntry
 
 
@@ -145,11 +146,38 @@ class CriticalFeedResponse(BaseModel):
     total_advisories: int
     cache_age_hours: Optional[float]
     timestamp: str
+    # KEV-X: which CISA KEV catalog the badges were checked against. None means
+    # no catalog was obtainable, so a missing badge proves nothing.
+    kev_catalog_version: Optional[str] = None
 
 
 def _env_true(name: str) -> bool:
     v = os.getenv(name, "").strip().lower()
     return v in ("1", "true", "yes", "on")
+
+
+def _apply_kev_catalog(entries: list) -> list:
+    """Set `kev` on matched CVEs from the live catalog, then re-rank.
+
+    The catalog wins on dates; a curated local block keeps its `directive` when
+    the catalog note names none. Entries absent from the catalog keep whatever
+    they had — a local KEV block is never erased by a lookup miss, since a miss
+    can also mean "no catalog was obtainable".
+    """
+    from models.cve_model import CVEKevStatus
+
+    for entry in entries:
+        hit = kev_catalog.kev_status(entry.cve_id)
+        if hit is None:
+            continue
+        local_directive = entry.kev.directive if entry.kev is not None else None
+        entry.kev = CVEKevStatus(
+            date_added=hit.get("date_added") or "",
+            due_date=hit.get("due_date") or "",
+            catalog_version=hit.get("catalog_version"),
+            directive=hit.get("directive") or local_directive,
+        )
+    return CVEEngine._sort_matched(entries)
 
 
 @router.post("/cve", response_model=CVEAnalyzeResponse)
@@ -161,6 +189,10 @@ def analyze_cve(req: CVEAnalyzeRequest):
         engine_version="0.3.7", data_dir=data_dir_for_platform(req.platform)))
     base_engine.load_all()
     matched_base = base_engine.match(req.platform, req.version)
+
+    # KEV-X: stamp live CISA KEV status on the matches. Done on the base run so
+    # it applies whether or not NVD enrichment is enabled.
+    _apply_kev_catalog(matched_base)
 
     # 2) Optional enrichment from NVD for ONLY those CVEs (fast + cheap + avoids scanning the whole world)
     if _env_true("CVE_NVD_ENRICH") and matched_base:
@@ -175,7 +207,7 @@ def analyze_cve(req: CVEAnalyzeRequest):
             ],
         )
         enriched_engine.load_all()
-        matched = enriched_engine.match(req.platform, req.version)
+        matched = _apply_kev_catalog(enriched_engine.match(req.platform, req.version))
         summary = enriched_engine.summary(matched)
         recommendation = enriched_engine.recommended_upgrade(matched, req.platform, req.version) if req.include_suggestions else None
     else:
@@ -372,8 +404,57 @@ def _fetch_latest_advisories() -> list:
     return advisories
 
 
+def _kev_block(hit: Optional[dict], local: Optional[dict] = None) -> Optional[dict]:
+    """Merge a live catalog hit with a curated local KEV block.
+
+    KEV-X: the catalog is authoritative for dates (it is live, the local record
+    is a snapshot). The local block only fills what the catalog does not carry —
+    today that is `directive`, when the catalog note names none.
+    """
+    if hit is None and local is None:
+        return None
+    if hit is None:
+        return dict(local)
+    block = {
+        "cve_id": hit.get("cve_id"),
+        "date_added": hit.get("date_added"),
+        "due_date": hit.get("due_date"),
+        "catalog_version": hit.get("catalog_version"),
+        "directive": hit.get("directive") or (local or {}).get("directive"),
+        "ransomware": hit.get("ransomware"),
+    }
+    return block
+
+
+# KEV-X: how long a KEV listing keeps its place at the top of the feed.
+KEV_PRIORITY_WINDOW_DAYS = 30
+
+
+def _today() -> datetime.date:
+    """Indirection so tests can freeze the clock (see tests/conftest.py)."""
+    return datetime.date.today()
+
+
+def _kev_is_fresh(kev: Optional[dict], today: Optional[datetime.date] = None) -> bool:
+    """True while a KEV listing is recent enough to outrank newer advisories.
+
+    With the whole catalog in play, "KEV first" without a time limit would put
+    2023 entries above this week's advisories and turn "Latest Threats" into a
+    historical list. A KEV badge is a permanent fact and always shown; the
+    ranking boost is news, and news expires. Unparseable dates get no boost.
+    """
+    if not kev:
+        return False
+    today = today or _today()
+    try:
+        added = datetime.date.fromisoformat((kev.get("date_added") or "")[:10])
+    except ValueError:
+        return False
+    return (today - added).days <= KEV_PRIORITY_WINDOW_DAYS
+
+
 def _sort_feed_items(feed_items: list) -> None:
-    """Order the threat feed in place: KEV first, then newest, severity, CVSS.
+    """Order the threat feed in place: fresh KEV first, then newest, severity, CVSS.
 
     Putting CISA KEV entries on top is triage ordering, not a severity
     escalation — the row keeps its own CVSS and severity, exactly as required
@@ -383,7 +464,7 @@ def _sort_feed_items(feed_items: list) -> None:
     """
     feed_items.sort(
         key=lambda x: (
-            1 if getattr(x, "kev", None) else 0,
+            1 if _kev_is_fresh(getattr(x, "kev", None)) else 0,
             x.updated or "0",
             0 if x.severity == "critical" else -1,
             x.cvss or 0,
@@ -432,6 +513,10 @@ def _advisories_to_feed(advisories: list, platform_filter: str = "all") -> list:
             except (ValueError, TypeError):
                 pass
 
+        # KEV-X: a row is labelled with cves[0] but stands for the whole
+        # advisory, and the exploited CVE can be any of them.
+        kev_block = _kev_block(kev_catalog.first_kev_hit(cves))
+
         binfo = bundled_info_from_advisory(adv)
         bundled_block = None
         if binfo is not None:
@@ -450,6 +535,7 @@ def _advisories_to_feed(advisories: list, platform_filter: str = "all") -> list:
             updated=adv.get("lastUpdated"),
             url=adv.get("publicationUrl"),
             platforms=products[:3],
+            kev=kev_block,
             bundled=bundled_block,
         ))
 
@@ -503,14 +589,16 @@ def _local_records_to_feed(platform: str) -> list:
         except Exception:
             continue
 
-        kev_block = None
+        local_kev = None
         if entry.kev is not None:
-            kev_block = {
+            local_kev = {
+                "cve_id": entry.cve_id,
                 "date_added": entry.kev.date_added,
                 "due_date": entry.kev.due_date,
                 "catalog_version": entry.kev.catalog_version,
                 "directive": entry.kev.directive,
             }
+        kev_block = _kev_block(kev_catalog.kev_status(entry.cve_id), local_kev)
 
         items.append(FeedItem(
             cve_id=entry.cve_id,
@@ -651,6 +739,7 @@ def _get_advisories_feed(platform: str = "all"):
         total_advisories=len(advisories) + len(local_items),
         cache_age_hours=cache_age_hours,
         timestamp=datetime.datetime.utcnow().isoformat() + "Z",
+        kev_catalog_version=kev_catalog.catalog_version(),
     )
 
 

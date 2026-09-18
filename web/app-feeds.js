@@ -29,7 +29,12 @@ async function loadThreatFeed() {
     const data = await resp.json();
 
     if (data.cache_age_hours != null && threatFeedAge) {
-      threatFeedAge.textContent = `Cache: ${data.cache_age_hours}h ago · ${data.total_advisories} advisories`;
+      // KEV-X: name the catalog the badges were checked against. When there is
+      // none, say so — a missing badge then proves nothing.
+      const kevNote = data.kev_catalog_version
+        ? ` · KEV ${data.kev_catalog_version}`
+        : " · KEV catalog unavailable";
+      threatFeedAge.textContent = `Cache: ${data.cache_age_hours}h ago · ${data.total_advisories} advisories${kevNote}`;
     }
 
     if (!data.items || data.items.length === 0) {
@@ -55,11 +60,23 @@ async function loadThreatFeed() {
       let kevBadge = "";
       if (item.kev) {
         const due = item.kev.due_date || "";
-        const label = due ? "KEV \u00b7 due " + esc(due) : "KEV";
+        const added = item.kev.date_added || "";
+        // A deadline that passed long ago is history, not a call to action:
+        // show "due" while it is near, "since" once it is old news.
+        const dueMs = due ? Date.parse(due) : NaN;
+        const recent = !isNaN(dueMs) && (Date.now() - dueMs) < 14 * 86400000;
+        let label = "KEV";
+        if (due && recent) label = "KEV \u00b7 due " + esc(due);
+        else if (added) label = "KEV \u00b7 since " + esc(added);
+        const otherCve = item.kev.cve_id && item.kev.cve_id !== item.cve_id
+          ? "Exploited CVE in this advisory: " + item.kev.cve_id : "";
         const tip = [
-          item.kev.date_added ? "Added to CISA KEV " + item.kev.date_added : "",
+          otherCve,
+          added ? "Added to CISA KEV " + added : "",
           due ? "Federal remediation deadline " + due : "",
           item.kev.directive || "",
+          item.kev.ransomware === "Known" ? "Known ransomware campaign use" : "",
+          item.kev.catalog_version ? "Catalog " + item.kev.catalog_version : "",
         ].filter(Boolean).join(" — ");
         kevBadge = `<span class="cisco-advisories-kev" title="${esc(tip)}">${label}</span>`;
       }

@@ -41,6 +41,7 @@ Thumbs.db
 # Project-specific
 cache/nvd/
 cache/cisco/
+cache/kev/
 !cache/.gitkeep
 profiles/*.json
 !profiles/.gitkeep

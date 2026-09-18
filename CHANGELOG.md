@@ -4,6 +4,57 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.35] – 2026-09-18 (KEV-X — CISA KEV status for every row, not just curated ones)
+
+### Fixed
+- **KEV badges appeared on some exploited CVEs and not others.** The badge came
+  only from curated local records, because the Cisco PSIRT API does not expose
+  KEV status. On production CVE-2026-76460 carried a badge while CVE-2026-76461
+  (Secure Email Gateway, in KEV since 2026-09-14) sat two rows below without
+  one. On the "All Platforms" view five advisories were in KEV and one was
+  marked. A badge that is present on some exploited CVEs and absent on others
+  reads as "this one is not being exploited", which is worse than no badge.
+
+### Added
+- `services/kev_catalog.py` — CISA KEV catalog lookup. One fetch per 6 h under a
+  5 s timeout; falls back to the last good copy on disk, then to an empty
+  catalog; failures are negatively cached for 10 min so an outage cannot add a
+  timeout to every page load. First call measured at 0.85 s, cached calls 9 ms.
+- Feed rows check **every** CVE of an advisory, not only `cves[0]` which labels
+  the row. When the exploited CVE is a different one, the badge tooltip names
+  it. Several KEV CVEs in one advisory: the nearest federal deadline wins.
+- `/analyze/cve` stamps live KEV status on matched CVEs and re-ranks, so a KEV
+  CVE with no curated `kev` tag still rises to the top of the report.
+- `CriticalFeedResponse.kev_catalog_version`, shown next to the cache age. When
+  no catalog was obtainable the UI says so — a missing badge then proves
+  nothing, and the page should not imply otherwise.
+- Badge parses `BOD nn-nn` from the catalog note and flags known ransomware use.
+- `tests/conftest.py` — suite-wide guard: KEV fetch disabled, disk cache pointed
+  at a temp dir, clock frozen. `tests/test_kev_catalog.py` (34).
+
+### Changed
+- **KEV ranking boost now expires after 30 days** (`KEV_PRIORITY_WINDOW_DAYS`).
+  "KEV first" was safe while one local record carried KEV. With the whole
+  catalog in play it would have put 2021 and 2023 listings above this week's
+  advisories and turned "Latest Threats" into a historical list. The badge is a
+  permanent fact and always shown; the top slot is news, and news expires.
+- Badge label reads `KEV · due <date>` while the deadline is within 14 days and
+  `KEV · since <date>` afterwards — a deadline long past is not a call to action.
+- Merge rule: the catalog is authoritative for KEV dates (live beats snapshot); a
+  curated record only fills what the catalog lacks, today the directive. A
+  lookup miss never erases a local KEV block, because a miss can also mean that
+  no catalog was obtainable.
+- `CVEEngine._sort_matched` treats the typed `kev` block as equal to the curated
+  tags; most KEV CVEs carry no tag at all.
+- `.gitignore`: `cache/kev/`. Only `cache/nvd/` and `cache/cisco/` were listed,
+  so the new cache would have been committed.
+
+### Notes
+- The clock is frozen in the suite on purpose. The freshness window compares
+  against today, and every "KEV row is first" assertion uses September 2026
+  dates; unfrozen, they would all start failing on 2026-10-17 for reasons
+  unrelated to the code.
+
 ## [v0.6.34] – 2026-09-18 (CVE-007 stage 2 — hardening releases made durable)
 
 v0.6.33 detected Cisco hardening-release CVEs on the fly. This release makes the
