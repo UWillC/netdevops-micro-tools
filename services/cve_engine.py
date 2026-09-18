@@ -961,9 +961,24 @@ class CVEEngine:
         return self._sort_matched(matched)
 
     @staticmethod
-    def _sort_matched(matched: List[CVEEntry]) -> List[CVEEntry]:
-        """KEV / actively-exploited first, then severity, then CVE id."""
+    def _sort_matched(matched: List[CVEEntry],
+                      uncertain_ids: Optional[set] = None) -> List[CVEEntry]:
+        """Exploited-and-confirmed first, then severity, then CVE id.
+
+        `uncertain_ids` — CVE ids whose MATCH is low-confidence (PSIRT max-bound
+        range, or published years before the target release). For those the
+        exploitation boost is withheld: "this CVE is in KEV" is a fact about
+        the CVE, but "it affects your version" is what the top of the report
+        claims, and that part is unproven. Without this, stamping KEV from the
+        live catalog (v0.6.35) lifted nine 2017 SNMP CVEs with a 0.0.0–999
+        placeholder range above a verified CVSS 10.0 on an IOS XE 17.9.4
+        report. They keep their KEV flag; they lose the top slot.
+        """
+        uncertain = uncertain_ids or set()
+
         def _kev_flag(c: CVEEntry) -> int:
+            if c.cve_id in uncertain:
+                return 1
             # KEV-X: the typed block (set from the live CISA catalog) counts as
             # much as the curated tags — most KEV CVEs have no tag at all.
             if getattr(c, "kev", None) is not None:

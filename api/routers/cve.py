@@ -169,7 +169,10 @@ def _env_true(name: str) -> bool:
 
 
 def _apply_kev_catalog(entries: list) -> list:
-    """Set `kev` on matched CVEs from the live catalog, then re-rank.
+    """Set `kev` on matched CVEs from the live catalog. Does NOT rank.
+
+    Ranking happens once, at the end of analyze_cve(), when it is known which
+    matches are low-confidence (see CVEEngine._sort_matched).
 
     The catalog wins on dates; a curated local block keeps its `directive` when
     the catalog note names none. Entries absent from the catalog keep whatever
@@ -189,7 +192,7 @@ def _apply_kev_catalog(entries: list) -> list:
             catalog_version=hit.get("catalog_version"),
             directive=hit.get("directive") or local_directive,
         )
-    return CVEEngine._sort_matched(entries)
+    return entries
 
 
 @router.post("/cve", response_model=CVEAnalyzeResponse)
@@ -250,6 +253,10 @@ def analyze_cve(req: CVEAnalyzeRequest):
         if cid not in _seen:
             coverage_uncertain_list.append(cid)
             _seen.add(cid)
+    # v0.6.39: final ranking. An exploited CVE goes to the top only when its
+    # match is confirmed; a KEV flag on a low-confidence match stays visible
+    # on the row but does not outrank verified findings.
+    matched = CVEEngine._sort_matched(matched, uncertain_ids=set(coverage_uncertain_list))
     # v0.6.18 CVE-009: EoL platform check (independent of CVE matches —
     # populated even when matched is empty).
     eol_status = detect_eol(req.platform, req.version)

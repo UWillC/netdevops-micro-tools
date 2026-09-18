@@ -4,6 +4,30 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.39] – 2026-09-18 (analyzer: KEV boost needs a confirmed match)
+
+### Fixed
+- **Regression from v0.6.35 (KEV-X): low-confidence matches on top of the
+  report.** Stamping KEV status from the live CISA catalog made
+  `_sort_matched` lift every KEV CVE to the top. On an `IOS XE 17.9.4` report
+  that placed nine 2017 SNMP CVEs, a 2017 BGP EVPN 6.8 and a 2023 GET VPN 6.6 —
+  all imported with a `0.0.0–999` placeholder range and all already listed under
+  "Coverage uncertain" — above a verified CVSS 10.0. "This CVE is in KEV" is a
+  fact about the CVE; the top of the report claims more, namely that it affects
+  the queried version. The exploitation boost now requires both. Eleven such
+  entries on that report keep their `[CISA KEV, due …]` flag and lose the top
+  slot; the order becomes three confirmed KEV matches, then the verified 10.0,
+  then severity as before.
+- The threat feed got a freshness window for this same problem in v0.6.35. The
+  analyzer did not, because there KEV age is not the issue — match confidence
+  is, and the two were not thought about together.
+
+### Changed
+- `CVEEngine._sort_matched(matched, uncertain_ids=None)`. `_apply_kev_catalog()`
+  only stamps; `analyze_cve()` ranks once, at the end, when it knows which
+  matches are uncertain. Callers that pass nothing get the previous ordering.
+- `tests/test_analyzer_kev_ranking.py` (10).
+
 ## [v0.6.38] – 2026-09-18 (analyzer report: three false statements about itself)
 
 Found by reading a production report for `ISE 3.4 Patch 3` as a reviewer would.
