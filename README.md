@@ -369,6 +369,13 @@ are persisted across container restarts.
 
 ---
 
+## 🚦 How a change reaches production
+
+1. Push to `main` starts the **Tests** workflow (GitHub Actions, clean runner, no PSIRT cache).
+2. Render deploys **only after the checks pass** (`autoDeployTrigger: checksPass`, since 2026-09-18).
+   A red run means no deploy; an urgent fix with red tests needs a Manual Deploy in the Render panel.
+3. After every push: `sh scripts/dev/ci_status.sh` waits for the run of HEAD and prints the verdict.
+
 ## 🧪 CVE Data Disclaimer (Important)
 
 - CVE entries are **demo-only**
