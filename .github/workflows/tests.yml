@@ -28,3 +28,24 @@ jobs:
           pip install pytest
       - name: Run tests
         run: pytest tests/ -v
+
+  # Deploy only what passed. Render's own "After CI Checks Pass" trigger held the
+  # deploy back but never released it after a green run (tested 2026-09-18), so the
+  # release is ours: auto-deploy is OFF in Render and this job calls the deploy hook.
+  deploy:
+    needs: pytest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render deploy for this commit
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
+            echo "::error::RENDER_DEPLOY_HOOK_URL is not set - tests passed but nothing was deployed."
+            exit 1
+          fi
+          # -o /dev/null: the response echoes the deploy id only, but keep logs clean
+          code=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "${RENDER_DEPLOY_HOOK_URL}&ref=${GITHUB_SHA}")
+          echo "Render deploy hook answered HTTP $code for $GITHUB_SHA"
+          [ "$code" -ge 200 ] && [ "$code" -lt 300 ]

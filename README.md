@@ -372,8 +372,10 @@ are persisted across container restarts.
 ## 🚦 How a change reaches production
 
 1. Push to `main` starts the **Tests** workflow (GitHub Actions, clean runner, no PSIRT cache).
-2. Render deploys **only after the checks pass** (`autoDeployTrigger: checksPass`, since 2026-09-18).
-   A red run means no deploy; an urgent fix with red tests needs a Manual Deploy in the Render panel.
+2. When `pytest` is green, the `deploy` job of the same workflow calls the Render deploy hook for that
+   exact commit. Auto-deploy is OFF in Render, so a red run deploys nothing. (Render's own "After CI
+   Checks Pass" trigger was tried on 2026-09-18: it held deploys back but never released them.)
+   An urgent fix with red tests needs a Manual Deploy in the Render panel.
 3. After every push: `sh scripts/dev/ci_status.sh` waits for the run of HEAD and prints the verdict.
 
 ## 🧪 CVE Data Disclaimer (Important)
