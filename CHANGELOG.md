@@ -4,6 +4,34 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.54] – 2026-09-18 (mitigations: 90 CVEs were told to disable the HTTP server for no reason)
+
+### Fixed
+- **Feature classifier.** It searched the whole advisory summary for substrings.
+  Every Cisco summary ends with "available at the following link:https://...",
+  so "http" filed unrelated CVEs under web UI; "unauthenticated" counted as
+  "auth"; and the `auth` / `aaa` types were aliased to the web UI template.
+  Result: auto-generated mitigations for bugs in Ethernet frame handling, IKEv1,
+  ARP on ASR 903 or Secure Boot told the reader to run `no ip http server`.
+  The title now decides, on word boundaries; the summary is a fallback reduced
+  to its first sentence with URLs removed; `auth` and `aaa` use the generic
+  template ("review the advisory"), which is honest.
+- `scripts/reclassify_psirt_records.py` re-ran the classifier over machine-made
+  content only: 56 imported IOS XE records retagged, 125 mitigation files
+  rebuilt. Files that carry the web UI workaround: 107 -> 17, all of them about
+  the web UI / HTTP server. Hand-written records and mitigations untouched.
+- Posture panel: "Cisco SIR ≠ CVSS" counted unconfirmed matches too (21 shown,
+  9 in the confirmed list). Confirmed only, like every other number there.
+- Posture panel: the reason line under "Not confirmed" wrapped to two lines;
+  shortened to "N no release list · M far older than yours".
+
+### Tests
+- `tests/test_report_review_2026_09_18d.py` (12): title decides, the advisory
+  link does not, no substrings inside words, and a data guard: no mitigation
+  file may disable HTTP for a CVE whose title and summary never mention it.
+
+---
+
 ## [v0.6.53] – 2026-09-18 (posture panel: the row added an hour earlier did not fit)
 
 ### Fixed

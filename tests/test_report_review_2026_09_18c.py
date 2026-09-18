@@ -235,7 +235,7 @@ def test_posture_says_not_confirmed_once_with_the_reason():
     js = _web("app-security.js")
     panel = js[js.index("<h3>Security posture</h3>", js.index("cveSummary.innerHTML = `")):]
     assert "<span>Data quality</span>" not in panel and "<span>Coverage uncertain</span>" not in panel
-    assert "without a Cisco release list" in js and "noListCount" in js
+    assert "no release list" in js and "noListCount" in js
 
 
 def test_snmp_record_does_not_send_every_train_to_17_15():

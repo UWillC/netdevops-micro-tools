@@ -59,21 +59,43 @@ def _strip_html(text: str) -> str:
     return re.sub(r"\s+", " ", clean)
 
 
+# Feature keywords, matched on word boundaries. Order matters: the first hit wins,
+# so the specific feature comes before the generic effect (dos / rce).
+_VULN_KEYWORDS = [
+    (r"snmp(v[123]c?)?", "snmp"),
+    (r"web ui|webui|web-based|web services|https? server|http api|lobby ambassador", "webui"),
+    (r"ssh|scp|secure copy", "ssh"), (r"bgp", "bgp"), (r"ospf(v3)?", "ospf"),
+    (r"dhcp(v6)?|bootp", "dhcp"), (r"m?dns", "dns"),
+    (r"ipsec|ikev?[12]?|internet key exchange|vpn", "vpn"),
+    (r"aaa|tacacs\+?|radius", "aaa"),
+    (r"privilege escalation|authentication bypass|authorization bypass|secure boot bypass", "auth"),
+    (r"denial of service|dos", "dos"),
+    (r"remote code execution|code execution|buffer overflow|command injection", "rce"),
+]
+_URL_RE = re.compile(r"https?://\S+")
+
+
 def _classify_vuln(title: str, summary: str) -> str:
-    text = (title + " " + summary).lower()
-    for keyword, vtype in [
-        ("snmp", "snmp"), ("web", "webui"), ("http", "webui"),
-        ("ssh", "ssh"), ("bgp", "bgp"), ("ospf", "ospf"),
-        ("dhcp", "dhcp"), ("dns", "dns"), ("ipsec", "vpn"),
-        ("vpn", "vpn"), ("aaa", "aaa"), ("tacacs", "aaa"),
-        ("radius", "aaa"), ("privilege", "auth"), ("escalat", "auth"),
-        ("bypass", "auth"), ("denial", "dos"), ("dos", "dos"),
-        ("crash", "dos"), ("reload", "dos"), ("buffer", "rce"),
-        ("overflow", "rce"), ("code exec", "rce"),
-    ]:
-        if keyword in text:
-            return vtype
-    return "generic"
+    """Name the feature a CVE lives in. Drives the tag AND the mitigation template.
+
+    The title decides. The summary is only a fallback, reduced to its first
+    sentence with URLs removed: Cisco closes every summary with "This advisory
+    is available at the following link:https://..." and a substring search for
+    "http" over that text filed 87 unrelated CVEs (Ethernet frames, IKEv1, ARP)
+    under web UI, each with "no ip http server" as its workaround.
+    """
+    def first_hit(text: str) -> str:
+        text = _URL_RE.sub(" ", text.lower())
+        for pattern, vtype in _VULN_KEYWORDS:
+            if re.search(r"(?<![a-z0-9])(?:" + pattern + r")(?![a-z0-9])", text):
+                return vtype
+        return ""
+
+    hit = first_hit(title or "")
+    if hit:
+        return hit
+    first_sentence = re.split(r"(?<=[.!?])\s", _URL_RE.sub(" ", summary or ""), maxsplit=1)[0]
+    return first_hit(first_sentence) or "generic"
 
 
 # Mitigation templates keyed by vuln type
@@ -146,9 +168,9 @@ _MIT_TEMPLATES = {
 }
 
 # Aliases
-for _alias, _target in [("rce", "generic"), ("auth", "webui"), ("ssh", "generic"),
+for _alias, _target in [("rce", "generic"), ("auth", "generic"), ("ssh", "generic"),
                          ("bgp", "dos"), ("ospf", "dos"), ("dhcp", "dos"),
-                         ("dns", "dos"), ("vpn", "generic"), ("aaa", "webui")]:
+                         ("dns", "dos"), ("vpn", "generic"), ("aaa", "generic")]:
     if _alias not in _MIT_TEMPLATES:
         _MIT_TEMPLATES[_alias] = _MIT_TEMPLATES[_target]
 
