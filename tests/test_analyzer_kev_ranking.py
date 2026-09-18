@@ -83,14 +83,16 @@ class TestIosXeReport:
         assert top_block, "expected at least one confirmed KEV match on top"
         assert not [c for c in top_block if c in uncertain], top_block
 
-    def test_the_2017_snmp_cves_are_flagged_but_not_on_top(self, kev_index):
+    def test_the_2017_snmp_cves_no_longer_reach_the_report(self, kev_index):
+        """v0.6.39 demoted these (KEV flag kept, top slot lost). v0.6.40 went
+        further: Cisco's Known Affected lists do not include 17.9.4, so they
+        are ruled out and reported under `excluded_not_listed`. The ranking
+        rule itself is still covered by TestSortMatched above."""
         r = self.report(kev_index)
-        ids = [c.cve_id for c in r.matched]
-        by_id = {c.cve_id: c for c in r.matched}
+        ids = {c.cve_id for c in r.matched}
         for c in self.SNMP_2017:
-            assert by_id[c].kev is not None, c            # the fact survives
-            assert c in r.coverage_uncertain, c           # the match is unproven
-        assert ids.index("CVE-2025-20188") < min(ids.index(c) for c in self.SNMP_2017)
+            assert c not in ids, c
+            assert c in r.excluded_not_listed, c
 
     def test_confirmed_kev_is_still_first(self, kev_index):
         assert self.report(kev_index).matched[0].cve_id == "CVE-2023-20198"

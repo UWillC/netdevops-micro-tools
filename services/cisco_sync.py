@@ -10,6 +10,7 @@ legacy `source=cisco-psirt-import` records with `first_fixed_version` +
 endpoint.
 """
 
+import datetime
 import json
 import os
 import re
@@ -17,7 +18,9 @@ import time
 from typing import Any, Dict, List, Optional, Tuple
 
 from models.cve_model import CVEEntry
+from services.advisory_text import clean_advisory_text
 from services.hardening_release import bundled_info_from_advisory
+from services.known_affected import extract_known_affected
 
 PROJECT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 CVE_DATA_DIR = os.path.join(PROJECT_DIR, "cve_data", "ios_xe")
@@ -51,7 +54,8 @@ def _extract_xe_version_range(product_names: List[str]) -> Tuple[str, str]:
 
 
 def _strip_html(text: str) -> str:
-    clean = re.sub(r"<[^>]+>", "", text).strip()
+    # HTML-01: shared cleaner — also decodes entities (&nbsp; and friends).
+    clean = clean_advisory_text(text)
     return re.sub(r"\s+", " ", clean)
 
 
@@ -208,6 +212,9 @@ def _build_cve_json(cve_id: str, adv: Dict[str, Any], ver_min: str, ver_max: str
         "cwe": cwe, "published": published, "last_modified": last_modified,
         "references": [advisory_url] if advisory_url else [],
         "bundled": bundled_info.model_dump() if bundled_info is not None else None,
+        # MATCH-01: the full Known Affected list, not the first-50 display slice.
+        "known_affected": extract_known_affected(adv),
+        "known_affected_as_of": datetime.date.today().isoformat(),
     }
 
 

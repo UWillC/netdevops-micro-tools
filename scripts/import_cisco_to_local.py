@@ -12,6 +12,7 @@ Writes to:   cve_data/ios_xe/cve-XXXX-XXXXX.json  (CVE matching data)
 Skips CVEs that already exist locally unless --force is given.
 """
 
+import datetime
 import json
 import os
 import re
@@ -22,7 +23,9 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
 if PROJECT_DIR not in sys.path:
     sys.path.insert(0, PROJECT_DIR)
+from services.advisory_text import clean_advisory_text  # noqa: E402
 from services.hardening_release import bundled_info_from_advisory  # noqa: E402
+from services.known_affected import extract_known_affected  # noqa: E402
 CACHE_FILE = os.path.join(PROJECT_DIR, "cache", "cisco", "iosxe.json")
 CVE_DATA_DIR = os.path.join(PROJECT_DIR, "cve_data", "ios_xe")
 MITIGATION_DIR = os.path.join(PROJECT_DIR, "cve_mitigations")
@@ -64,7 +67,8 @@ def parse_severity(sir: str) -> str:
 
 
 def strip_html(text: str) -> str:
-    clean = re.sub(r"<[^>]+>", "", text).strip()
+    # HTML-01: shared cleaner — also decodes entities (&nbsp; and friends).
+    clean = clean_advisory_text(text)
     # Collapse whitespace
     clean = re.sub(r"\s+", " ", clean)
     return clean
@@ -352,6 +356,9 @@ def build_cve_data(cve_id: str, adv: Dict[str, Any], ver_min: str, ver_max: str)
         "last_modified": last_modified,
         "references": [advisory_url] if advisory_url else [],
         "bundled": bundled_info.model_dump() if bundled_info is not None else None,
+        # MATCH-01: the full Known Affected list, not the first-50 display slice.
+        "known_affected": extract_known_affected(adv),
+        "known_affected_as_of": datetime.date.today().isoformat(),
     }
 
 

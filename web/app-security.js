@@ -164,6 +164,15 @@ if (cveForm && cveOutput) {
         out += "\n";
       });
 
+      // MATCH-01: say what was ruled out, and on whose authority.
+      const notListed = Array.isArray(data.excluded_not_listed) ? data.excluded_not_listed : [];
+      if ((data.matched_on_known_affected || 0) > 0 || notListed.length > 0) {
+        out += `Cisco Known Affected lists: ${data.matched_on_known_affected || 0} match(es) are an exact hit on your release; `;
+        out += `${notListed.length} advisory CVE(s) were ruled out because your release is not listed.\n`;
+        out += "(The list is Cisco's statement as of each advisory's last revision. A release that\n";
+        out += " shipped after that revision may be absent without having been assessed.)\n\n";
+      }
+
       if (bundledCveIds.size > 0) {
         out += `Hardening-release CVEs: ${bundledCveIds.size} / ${data.matched.length}\n`;
         out += "(Since July 2026 Cisco assigns one CVE per CWE category in hardening releases,\n";

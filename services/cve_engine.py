@@ -11,6 +11,7 @@ from services.cve_sources import (
     CiscoAdvisoryProvider,
     TenableProvider,
 )
+from services.known_affected import family_for_version, version_is_listed
 from services.platform_taxonomy import (
     ProductFamily,
     detect_all_families,
@@ -299,6 +300,22 @@ def data_confidence(cve: "CVEEntry") -> Dict[str, Optional[str]]:
     # v0.6.24 (CVE-006 Phase 3) — strongest signal: per-family fixes from
     # PSIRT advisory-detail fetch. Richer than scalar fixed_in because it
     # preserves multi-family nuance (e.g. different fix per ASA vs IOS XE).
+    # MATCH-01: an exact hit on Cisco's Known Affected list is the strongest
+    # statement available for an imported record — stronger than a range.
+    ka = getattr(cve, "known_affected", None) or {}
+    if any(ka.values()):
+        total = sum(len(v) for v in ka.values())
+        as_of = getattr(cve, "known_affected_as_of", None)
+        fams = ", ".join(sorted(k for k, v in ka.items() if v))
+        return {
+            "confidence": "verified",
+            "rationale": (
+                f"Exact match on Cisco's Known Affected release list "
+                f"({total} releases across {fams}"
+                + (f", as of {as_of}" if as_of else "") + ")."
+            ),
+        }
+
     ff = getattr(cve, "first_fixed_version", None)
     if ff is not None:
         fixes = getattr(ff, "fixes", None) or {}
@@ -801,6 +818,9 @@ class CVEEngine:
                 self.providers.append(TenableProvider())
 
         self.cves: List[CVEEntry] = []
+        # MATCH-01: ids dropped by the last match() because the queried version
+        # is not on Cisco's Known Affected list. Reported, not hidden.
+        self.excluded_by_known_affected: List[str] = []
 
     # -------------------------
     # Merge strategy (v0.3.3)
@@ -916,6 +936,11 @@ class CVEEngine:
                     matched.append(cve)
             return self._sort_matched(matched)
 
+        # The version's own shape picks the list: a device model in the
+        # platform box ("ISR4451-X") names no software family.
+        ka_family = family_for_version(version)
+        self.excluded_by_known_affected = []
+
         for cve in self.cves:
             if not platform_matches(platform, cve.platforms):
                 continue
@@ -928,6 +953,21 @@ class CVEEngine:
                 # Skip placeholder/policy entries: if fixed_in is prose (no version)
                 # AND title doesn't match any family, it's likely not a real CVE.
                 if not is_cve_in_scope_for_query(query_family, cve_families):
+                    continue
+
+            # MATCH-01 (2026-09-18): when Cisco's Known Affected list exists for
+            # the queried software family, exact membership decides and the
+            # min/max range is ignored — on PSIRT imports that range is a
+            # 0.0.0–999 placeholder which matches every version. No list for
+            # the family (Cisco named the product without enumerating releases)
+            # means we genuinely do not know, and the old logic below applies.
+            if ka_family:
+                listed = (getattr(cve, "known_affected", None) or {}).get(ka_family)
+                if listed:
+                    if version_is_listed(version, listed):
+                        matched.append(cve)
+                    else:
+                        self.excluded_by_known_affected.append(cve.cve_id)
                     continue
 
             # v0.3.4 (2026-04-19): P2.1 placeholder filter — CVEs whose fixed_in

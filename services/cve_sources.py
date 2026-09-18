@@ -1,3 +1,4 @@
+import datetime
 import json
 import os
 import re
@@ -16,7 +17,9 @@ from services.http_client import (
     HttpTimeoutError,
     HttpConnectionError,
 )
+from services.advisory_text import clean_advisory_text
 from services.hardening_release import bundled_info_from_advisory
+from services.known_affected import extract_known_affected
 from services.platform_taxonomy import (
     ProductFamily,
     normalize_cisco_product_names,
@@ -532,7 +535,7 @@ class CiscoAdvisoryProvider(CVEProvider):
         title = adv.get("advisoryTitle", "")
         summary = adv.get("summary", "")
         # Strip HTML tags from summary
-        summary_clean = re.sub(r"<[^>]+>", "", summary).strip()
+        summary_clean = clean_advisory_text(summary)  # HTML-01: tags + entities
         if len(summary_clean) > 500:
             summary_clean = summary_clean[:497] + "..."
 
@@ -629,6 +632,9 @@ class CiscoAdvisoryProvider(CVEProvider):
                 affected_versions_raw=affected_versions_raw,
                 first_fixed_version=first_fixed_version,
                 bundled=bundled_info,
+                # MATCH-01: full Known Affected list for exact-version matching.
+                known_affected=extract_known_affected(adv),
+                known_affected_as_of=datetime.date.today().isoformat(),
             ))
         return entries
 

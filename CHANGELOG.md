@@ -4,6 +4,56 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.40] – 2026-09-18 (MATCH-01 + HTML-01 — exact matching on Cisco's Known Affected lists)
+
+### Fixed
+- **100 of 104 matches for `IOS XE 17.9.4` were guesses.** Records imported from
+  PSIRT carry `affected: 0.0.0–999.999.999`, a placeholder, because the PSIRT
+  list endpoint has no version range — so they match every release. The tool
+  said so itself ("Coverage uncertain 100 / 104") and then printed all hundred,
+  among them nine SNMP bugs from 2017.
+  Cisco publishes the answer in the same payload: each advisory's `productNames`
+  is its complete Known Affected release list (median 192 entries). The importer
+  kept the first 50 "for display" in `affected_versions_raw` and never matched
+  on them. The matcher now uses exact membership whenever a list exists for the
+  queried software family, and ignores the placeholder range.
+  Same query, after: **71 matches, 66 verified, 5 uncertain.** The 33 removed
+  are exactly the records whose advisory enumerates releases and does not list
+  17.9.4; nothing was added; all four previously verified findings remain.
+- **`&nbsp;` in descriptions (HTML-01).** Three importers each stripped tags with
+  their own regex and none decoded entities. 49 stored fields read
+  "Protocol&nbsp;(SNMP)". One shared cleaner, used by all three and by the
+  migration.
+
+### Added
+- `services/known_affected.py` — `extract_known_affected()`,
+  `version_is_listed()` (case-folds and drops zero padding: `17.09.04a` equals
+  `17.9.4A`, while `17.10.1` never collapses into `17.1.1`),
+  `family_for_version()` so a device model in the platform box still selects the
+  right list.
+- `CVEEntry.known_affected` / `.known_affected_as_of`; all three importers store
+  the full list, no longer capped at 50.
+- `scripts/migrate_known_affected.py` — idempotent; filled 124 of 142 records
+  from the PSIRT cache, cleaned 49 text fields, and compares content rather than
+  bytes so curated records with compact formatting are not rewritten.
+- `CVEAnalyzeResponse.excluded_not_listed` and `.matched_on_known_affected`, and
+  a paragraph in the report: what was ruled out, and on whose authority.
+- `data_confidence()` returns `verified` for an exact Known Affected hit and
+  says so, with the list's as-of date.
+- `tests/test_known_affected.py` (34).
+
+### Notes
+- **What a list does not say.** It is Cisco's statement as of the advisory's
+  last revision. A release that is absent is one Cisco did not list —
+  overwhelmingly because it carries the fix — but that is not proof about a
+  release that shipped after the revision. The as-of date is stored and the
+  report states the caveat.
+- **"We were not told" stays uncertain.** Seven advisories name the product
+  with no release at all ("Cisco IOS XE Software "). That yields no list rather
+  than an empty one, so the record falls back to the old logic and remains in
+  the uncertain bucket instead of being silently vetoed.
+- Dataset size 568 KB → 2.6 MB; engine load + match measured at 29 ms.
+
 ## [v0.6.39] – 2026-09-18 (analyzer: KEV boost needs a confirmed match)
 
 ### Fixed

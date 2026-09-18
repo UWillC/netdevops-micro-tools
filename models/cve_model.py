@@ -153,6 +153,17 @@ class CVEEntry(BaseModel):
     # NOT "not exploited" — absence of evidence only.
     kev: Optional[CVEKevStatus] = None
 
+    # MATCH-01 (2026-09-18) — Cisco's complete Known Affected release list for
+    # this advisory, per software family: {"ios-xe": ["17.9.4", …], "ios": […]}.
+    # When the queried family has a list, the matcher uses exact membership and
+    # ignores `affected.min/max`, which on PSIRT imports is a 0.0.0–999
+    # placeholder that matches every version. `affected_versions_raw` above is
+    # the display-only first-50 slice of the same data and must not be matched on.
+    known_affected: Dict[str, List[str]] = Field(default_factory=dict)
+    # Date the list was read from Cisco (ISO). A release absent from the list
+    # is "not listed as of this date", not proof about later releases.
+    known_affected_as_of: Optional[str] = None
+
     # CVE-007 (2026-09-18) — set when this CVE is a Cisco hardening-release
     # CVE, i.e. a CWE category rather than a single defect. None = ordinary CVE.
     bundled: Optional[CVEBundledInfo] = None

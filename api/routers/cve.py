@@ -91,6 +91,13 @@ class CVEAnalyzeResponse(BaseModel):
     # single bug. SUBSET of `matched`. The UI marks these so nobody reads a
     # category as one patchable vulnerability.
     bundled_cves: List[str] = []
+    # MATCH-01 (2026-09-18): CVE ids dropped because the queried release is not
+    # on Cisco's Known Affected list for that advisory. Reported so the reader
+    # can see what was ruled out and on whose authority, instead of the list
+    # silently getting shorter. Not a subset of `matched`.
+    excluded_not_listed: List[str] = []
+    # How many matches rest on an exact Known Affected hit.
+    matched_on_known_affected: int = 0
     # v0.6.18 CVE-009: end-of-life status for the queried platform.
     # When non-null, the UI renders a top-banner above the CVE list:
     # "no patches available; replace the hardware". The recommendation
@@ -298,6 +305,8 @@ def analyze_cve(req: CVEAnalyzeRequest):
         data_quality=data_quality,
         coverage_uncertain=coverage_uncertain_list,
         bundled_cves=[c.cve_id for c in matched if is_bundled_cve(c)],
+        excluded_not_listed=sorted(base_engine.excluded_by_known_affected),
+        matched_on_known_affected=sum(1 for c in matched if any((c.known_affected or {}).values())),
         eol_status=eol_status,
         provenance=provenance,
         timestamp=datetime.datetime.utcnow().isoformat() + "Z",
