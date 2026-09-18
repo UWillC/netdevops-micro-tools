@@ -150,6 +150,11 @@ def test_warm_up_refreshes_every_synced_platform_in_order_and_releases_the_lock(
         assert platform in cve_router._platform_refresh_running             # visible as "syncing" while it runs
         cve_router._platform_refresh_running.discard(platform)
     monkeypatch.setattr(cve_router, "_refresh_platform_cache", fake_refresh)
+    monkeypatch.setenv("CVE_WARMUP_SYNC", "0")                               # the switch CI uses
+    assert cve_router.warm_up_datasets() is False and calls == []
+    monkeypatch.setenv("CVE_WARMUP_SYNC", "1")
+    with cve_router._platform_refresh_lock:
+        cve_router._platform_refresh_running.clear()
     assert cve_router.warm_up_datasets() is True
     assert calls == ["iosxe", "nxos", "ise", "ios"]
     assert not cve_router._platform_refresh_running
