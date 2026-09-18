@@ -105,5 +105,5 @@ class TestLowerBound:
         assert "CVE-2026-20352" not in ids
 
     def test_supported_trains_are_unchanged(self):
-        assert len(analyze("ISE", "3.4 Patch 3").matched) == 8
+        assert len(analyze("ISE", "3.4 Patch 3").matched) == 54
         assert len(analyze("ISE", "3.4 Patch 7").matched) == 0

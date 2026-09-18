@@ -50,8 +50,13 @@ class TestSirIsReportedOnlyWhenItDiffers:
 
     def test_the_production_report(self):
         r = analyze("ISE", "3.4 Patch 3")
-        diverging = [cid for cid, d in r.severity_details.items() if d.get("cisco_sir")]
-        assert diverging == ["CVE-2026-20287"]
+        diverging = {cid for cid, d in r.severity_details.items() if d.get("cisco_sir")}
+        # The rule, not a count: reported exactly when SIR and CVSS bucket differ.
+        for c in r.matched:
+            bucket = r.severity_details[c.cve_id]["cvss_rating"]
+            differs = bool(c.cisco_sir) and c.cisco_sir.upper() != bucket
+            assert (c.cve_id in diverging) == differs, c.cve_id
+        assert "CVE-2026-20287" in diverging and "CVE-2026-76460" not in diverging
 
 
 class TestProvenanceNamesTheDatasetThatWasRead:
@@ -61,7 +66,7 @@ class TestProvenanceNamesTheDatasetThatWasRead:
     def test_ise_analysis_names_the_ise_dataset(self):
         local = self.sources("ISE", "3.4 Patch 3")["local-json"]
         assert "cve_data/ise" in local["description"]
-        assert local["file_count"] == 8
+        assert local["file_count"] == 56
 
     def test_ios_xe_analysis_still_names_the_ios_xe_dataset(self):
         local = self.sources("ISR4451-X", "17.5.1")["local-json"]

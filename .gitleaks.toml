@@ -1,0 +1,16 @@
+# gitleaks config — NetDevOps Micro-Tools (repo PUBLIC). Wdrożenie @cto 04.09.2026 po recon @ciso.
+# Egzekwowane przez .git/hooks/pre-commit (gitleaks git --pre-commit --staged).
+# Allowlista = WYŁĄCZNIE potwierdzone false-positive z recon 04.09 (przykładowe hasła SNMPv3/TACACS w generatorze konfiguracji — dane demonstracyjne, nie sekrety).
+title = "NetDevOps Micro-Tools gitleaks config"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "recon 04.09: przykładowe hasła SNMPv3/TACACS w profilach i generatorze (placeholdery demo)"
+targetRules = ["generic-api-key"]
+paths = [
+  '''^profiles/[^/]+\.json$''',
+  '''^api/routers/aaa\.py$''',
+  '''^web/app-core\.js$''',
+]

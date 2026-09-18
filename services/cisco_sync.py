@@ -250,15 +250,20 @@ def _build_mitigation(cve_id: str, adv: Dict[str, Any], tags: list) -> Dict[str,
     }
 
 
-def auto_sync_new_cves(cached_advisories: List[Dict[str, Any]]) -> int:
+def auto_sync_new_cves(cached_advisories: List[Dict[str, Any]], platform: str = "iosxe") -> int:
     """
     Import NEW Cisco PSIRT CVEs to local files. Returns count of new CVEs imported.
 
     Called automatically by CVEEngine after Cisco provider loads data.
     Skips CVEs that already exist locally (preserves curated data).
+
+    `platform` selects the dataset. ISE has its own importer (ISE-04): different
+    directory, different record shape, and a stricter admission rule.
     """
     if not cached_advisories:
         return 0
+    if platform == "ise":
+        return auto_sync_ise(cached_advisories)
 
     os.makedirs(CVE_DATA_DIR, exist_ok=True)
     os.makedirs(MITIGATION_DIR, exist_ok=True)
@@ -319,6 +324,139 @@ def auto_sync_new_cves(cached_advisories: List[Dict[str, Any]]) -> int:
     if refreshed > 0:
         print(f"[SYNC] Refreshed Known Affected lists on {refreshed} existing CVE record(s)")
 
+    return imported
+
+
+ISE_DATA_DIR = os.path.join(PROJECT_DIR, "cve_data", "ise")
+
+
+def _train_bounds(versions: List[str]) -> Tuple[str, str]:
+    """Lowest and highest ISE train on a Known Affected list, e.g. ("3.1", "3.5")."""
+    from services.known_affected import _ise_key
+    trains = sorted({k[:2] for k in (_ise_key(v) for v in versions) if k})
+    if not trains:
+        return "0.0", "99.0"
+    return "%d.%d" % trains[0], "%d.%d" % trains[-1]
+
+
+def build_ise_record(cve_id: str, adv: Dict[str, Any], details: Dict[str, Any]) -> Dict[str, Any]:
+    """One cve_data/ise record from a PSIRT advisory plus its CVRF details.
+
+    Per-CVE title, CVSS and vector come from CVRF. PSIRT's `cvssBaseScore` is
+    the ADVISORY maximum — right for a single-CVE advisory, wrong for the rest —
+    so it is used only as a last resort and the record is tagged when it is.
+    """
+    listed = extract_known_affected(adv).get("ise") or []
+    amin, amax = _train_bounds(listed)
+    per_cve = (details.get("vulnerabilities") or {}).get(cve_id.upper(), {})
+    cves = [c for c in (adv.get("cves") or []) if isinstance(c, str) and c.startswith("CVE-")]
+    single = len(cves) == 1
+
+    tags = ["cisco-psirt", "ise", "identity"]
+    cvss = per_cve.get("cvss")
+    if cvss is None:
+        try:
+            cvss = float(adv.get("cvssBaseScore") or 0) or None
+        except (ValueError, TypeError):
+            cvss = None
+        if cvss is not None and not single:
+            tags.append("cvss-advisory-level")
+
+    from services.cve_engine import cvss_rating_from_score
+    sir = (adv.get("sir") or "").strip()
+    severity = cvss_rating_from_score(cvss).lower() if cvss is not None else (sir.lower() or "medium")
+
+    bundled_info = bundled_info_from_advisory(adv)
+    if bundled_info is not None:
+        tags.extend(["hardening-release", "bundled-cve"])
+    if details.get("exploited"):
+        tags.append("actively-exploited")
+
+    cwe_list = [c for c in (adv.get("cwe") or []) if isinstance(c, str) and c.startswith("CWE-")]
+    cwe = cwe_list[0] if (single and cwe_list) else None   # per-CVE CWE is not in PSIRT or CVRF
+
+    url = adv.get("publicationUrl") or ""
+    published = (adv.get("firstPublished") or "").split("T")[0]
+    return {
+        "cve_id": cve_id.upper(),
+        "title": per_cve.get("title") or clean_advisory_text(adv.get("advisoryTitle") or ""),
+        "severity": severity,
+        "platforms": ["ISE", "ISE-PIC"],
+        "affected": {"min": amin, "max": amax},
+        "fixed_in": None,
+        "tags": tags,
+        "description": clean_advisory_text(adv.get("summary") or "")[:1500],
+        "workaround": "See Cisco advisory for details.",
+        "advisory_url": url,
+        "confidence": "cisco-psirt",
+        "source": "cisco-psirt-import",
+        "cvss_score": cvss,
+        "cvss_vector": per_cve.get("vector"),
+        "cwe": cwe,
+        "published": published,
+        "last_modified": (adv.get("lastUpdated") or "").split("T")[0] or published,
+        "references": [u for u in (url, "https://nvd.nist.gov/vuln/detail/" + cve_id.upper()) if u],
+        "cisco_sir": sir or None,
+        "bundle": None,
+        "product_families": ["ise"],
+        "affected_versions_raw": ["Cisco ISE " + v for v in listed[:50]],
+        "first_fixed_version": {"fixes": details.get("fixes") or {}} if details.get("fixes") else None,
+        "bundled": bundled_info.model_dump() if bundled_info is not None else None,
+        "known_affected": {"ise": listed},
+        "known_affected_as_of": datetime.date.today().isoformat(),
+    }
+
+
+def auto_sync_ise(cached_advisories: List[Dict[str, Any]], fetch_details=None) -> int:
+    """Import new ISE CVEs and refresh lists on existing ones. Returns new count.
+
+    ADMISSION RULE: an advisory is imported only when it carries a Known Affected
+    release list for ISE. Measured 2026-09-18: all 25 ISE advisories published
+    in 2026 have one; none of the 168 from 2013–2025 do — they name the product
+    with no release. Importing those would mean a 0.0–99.0 placeholder range
+    that matches every deployment, i.e. re-creating for ISE the "100 of 104
+    matches are guesses" problem MATCH-01 removed from IOS XE. What cannot be
+    verified is left out and the report says so (see `ise_coverage_note`).
+
+    No mitigation templates are generated: the templates in this module are IOS
+    configuration snippets and would be wrong on an ISE node.
+    """
+    if fetch_details is None:
+        from services.ise_fixed_table import fetch_cvrf, ise_advisory_details
+
+        def fetch_details(adv):  # one CVRF request per advisory that has a NEW cve
+            return ise_advisory_details(fetch_cvrf(adv.get("cvrfUrl")))
+
+    os.makedirs(ISE_DATA_DIR, exist_ok=True)
+    existing = {f[:-5].upper() for f in os.listdir(ISE_DATA_DIR) if f.endswith(".json")}
+    imported = refreshed = skipped_no_list = 0
+
+    for adv in cached_advisories:
+        if not extract_known_affected(adv).get("ise"):
+            skipped_no_list += 1
+            continue
+        details = None
+        for cve_id in adv.get("cves") or []:
+            if not isinstance(cve_id, str) or not cve_id.startswith("CVE-"):
+                continue
+            path = os.path.join(ISE_DATA_DIR, cve_id.lower() + ".json")
+            if cve_id.upper() in existing:
+                refreshed += refresh_known_affected(path, adv)
+                continue
+            if details is None:
+                try:
+                    details = fetch_details(adv) or {}
+                except Exception:
+                    details = {}
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(build_ise_record(cve_id, adv, details), f, indent=2, ensure_ascii=False)
+                f.write("\n")
+            existing.add(cve_id.upper())
+            imported += 1
+
+    if imported or refreshed:
+        print(f"[SYNC] ISE: imported {imported} new CVE(s), refreshed {refreshed} list(s); "
+              f"{skipped_no_list} advisory(ies) without a release list left out")
     return imported
 
 

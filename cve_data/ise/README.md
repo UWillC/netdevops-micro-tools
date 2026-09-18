@@ -5,19 +5,39 @@ CI drift guard: `python3 scripts/seed_ise_cve_data.py --check`.
 
 ## What is in here
 
-The Cisco ISE advisory bundle published **2026-09-16** — 8 of the ~40 CVEs from
-that day, chosen because each one has a CVSS base score from NVD (source
-`psirt@cisco.com`) *and* a fixed-release table read from the advisory CVRF XML.
-Records without both were left out rather than filled with guesses.
+Two kinds of record (since v0.6.43, ISE-04):
 
-| CVE | CVSS | Why it is here |
-|---|---|---|
-| CVE-2026-76460 | 10.0 | Auth bypass, **in CISA KEV**, PSIRT confirms active exploitation |
-| CVE-2026-20192 / 20130 | 10.0 | Hardening release, Access Control / Improper Neutralization |
-| CVE-2026-20234 | 9.9 | Hardening release, Insufficiently Protected Credentials |
-| CVE-2026-20237 / 20194 | 9.1 | Hardening release, Input Validation / Incorrect Resource Transfer |
-| CVE-2026-20287 | 6.5 | Hardening release, Improper Privilege Management — CVSS/SIR divergence |
-| CVE-2026-20352 | 8.6 | RADIUS DoS — the one record where 3.1 and earlier are *not* vulnerable |
+- **8 curated** — `scripts/seed_ise_cve_data.py`. The authentication bypass in
+  CISA KEV, the six CVEs of the September 2026 hardening release, and the RADIUS
+  DoS. Hand-checked against CVRF and NVD; `--check` is a drift guard.
+- **48 imported** — `services.cisco_sync.auto_sync_ise()`, from the PSIRT API plus
+  one CVRF read per advisory (per-CVE title, CVSS, vector; Fixed Software table;
+  exploitation statement).
+
+Together: 56 CVEs from 25 advisories, 2026-01-07 to 2026-09-16, including all
+42 CVEs / 15 advisories of the 2026-09-16 publication.
+
+### Admission rule — and what is deliberately absent
+
+An advisory is admitted **only when Cisco publishes a Known Affected release
+list for it**, so that every match can be checked. Measured 2026-09-18: all 25
+ISE advisories of 2026 carry one; **none of the 168 from 2013–2025 do** — they
+name the product with no release. Importing those would mean a placeholder range
+that matches every deployment. They are left out, and every ISE report states it
+(`CVEAnalyzeResponse.coverage_note`) and points to the Cisco Software Checker.
+
+### When Cisco's two sources disagree
+
+For 30 of 217 (CVE, train) pairs the release list includes exactly the release
+that the advisory's own Fixed Software table names as first fixed. Each advisory
+says PSIRT validates what is "documented in this advisory", i.e. the table, so
+the table wins and the case is counted in `cisco_source_conflicts`.
+
+### Who owns which field
+
+The seed script owns the curated fields. The PSIRT sync owns `known_affected`
+and `known_affected_as_of` on **every** record, curated ones included; the seed
+script carries those over when it rewrites a file and ignores them in `--check`.
 
 ## Conventions specific to this directory
 

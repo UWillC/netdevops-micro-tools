@@ -36,6 +36,13 @@ FIXES_FULL = {
     "ise-3.4": "3.4 Patch 7",
     "ise-3.5": "3.5 Patch 4",
 }
+# cisco-sa-hardening-ise-XU5EwX5T only: "3.0 and earlier — Migrate to fixed
+# release". Stored as an explicit "migrate" so that "Cisco says there is no fix
+# here" is distinguishable from "we have no table for this CVE" (ISE-04). The
+# authentication-bypass table has no 3.0 row, so FIXES_FULL stays without one.
+FIXES_HARDENING = dict(FIXES_FULL)
+FIXES_HARDENING.update({"ise-3.0": "migrate", "ise-<3.0": "migrate"})
+
 # cisco-sa-ise-RADIUS-dos-wR3hYPMw: "3.1 and earlier — Not vulnerable".
 FIXES_RADIUS = {
     "ise-3.2": "3.2 Patch 11",
@@ -158,7 +165,7 @@ RECORDS = [
         "Cisco ISE Hardening Release - Access Control Vulnerabilities",
         "critical", "Critical", 10.0, "CWE-284",
         HARDENING_DESC + " Category: Access Control.",
-        FIXES_FULL, HARDENING_MIN, "3.5", "cisco-sa-hardening-ise-XU5EwX5T",
+        FIXES_HARDENING, HARDENING_MIN, "3.5", "cisco-sa-hardening-ise-XU5EwX5T",
         ["cisco-psirt", "ise", "identity", "hardening-release", "bundled-cve", SCHEDULED_DROP],
         "No workarounds. Upgrade to the hardened release for your train.",
         vector=V_10, bundled=True),
@@ -166,7 +173,7 @@ RECORDS = [
         "Cisco ISE Hardening Release - Improper Neutralization Vulnerabilities",
         "critical", "Critical", 10.0, "CWE-74",
         HARDENING_DESC + " Category: Improper Neutralization.",
-        FIXES_FULL, HARDENING_MIN, "3.5", "cisco-sa-hardening-ise-XU5EwX5T",
+        FIXES_HARDENING, HARDENING_MIN, "3.5", "cisco-sa-hardening-ise-XU5EwX5T",
         ["cisco-psirt", "ise", "identity", "hardening-release", "bundled-cve", SCHEDULED_DROP],
         "No workarounds. Upgrade to the hardened release for your train.",
         vector=V_10, bundled=True),
@@ -174,7 +181,7 @@ RECORDS = [
         "Cisco ISE Hardening Release - Insufficiently Protected Credential Vulnerabilities",
         "critical", "Critical", 9.9, "CWE-522",
         HARDENING_DESC + " Category: Insufficiently Protected Credentials.",
-        FIXES_FULL, HARDENING_MIN, "3.5", "cisco-sa-hardening-ise-XU5EwX5T",
+        FIXES_HARDENING, HARDENING_MIN, "3.5", "cisco-sa-hardening-ise-XU5EwX5T",
         ["cisco-psirt", "ise", "identity", "hardening-release", "bundled-cve", SCHEDULED_DROP],
         "No workarounds. Upgrade to the hardened release for your train.",
         vector=V_99, bundled=True),
@@ -182,7 +189,7 @@ RECORDS = [
         "Cisco ISE Hardening Release - Input Validation Vulnerabilities",
         "critical", "Critical", 9.1, "CWE-20",
         HARDENING_DESC + " Category: Input Validation.",
-        FIXES_FULL, HARDENING_MIN, "3.5", "cisco-sa-hardening-ise-XU5EwX5T",
+        FIXES_HARDENING, HARDENING_MIN, "3.5", "cisco-sa-hardening-ise-XU5EwX5T",
         ["cisco-psirt", "ise", "identity", "hardening-release", "bundled-cve", SCHEDULED_DROP],
         "No workarounds. Upgrade to the hardened release for your train.",
         vector=V_91, bundled=True),
@@ -190,7 +197,7 @@ RECORDS = [
         "Cisco ISE Hardening Release - Incorrect Resource Transfer Vulnerabilities",
         "critical", "Critical", 9.1, "CWE-669",
         HARDENING_DESC + " Category: Incorrect Resource Transfer.",
-        FIXES_FULL, HARDENING_MIN, "3.5", "cisco-sa-hardening-ise-XU5EwX5T",
+        FIXES_HARDENING, HARDENING_MIN, "3.5", "cisco-sa-hardening-ise-XU5EwX5T",
         ["cisco-psirt", "ise", "identity", "hardening-release", "bundled-cve", SCHEDULED_DROP],
         "No workarounds. Upgrade to the hardened release for your train.",
         vector=V_91, bundled=True),
@@ -200,7 +207,7 @@ RECORDS = [
         HARDENING_DESC + " Category: Improper Privilege Management. "
         "NOTE: CVSS base score (6.5) and the advisory-level Cisco SIR (Critical) disagree here "
         "because the SIR applies to the hardening release as a whole.",
-        FIXES_FULL, HARDENING_MIN, "3.5", "cisco-sa-hardening-ise-XU5EwX5T",
+        FIXES_HARDENING, HARDENING_MIN, "3.5", "cisco-sa-hardening-ise-XU5EwX5T",
         ["cisco-psirt", "ise", "identity", "hardening-release", "bundled-cve", SCHEDULED_DROP,
          "sir-cvss-divergence"],
         "No workarounds. Upgrade to the hardened release for your train.",
@@ -218,16 +225,38 @@ RECORDS = [
 ]
 
 
+# Fields this script does NOT own. The PSIRT sync maintains Cisco's Known
+# Affected lists on every record, curated ones included (LISTS-01 / ISE-04).
+# Rewriting a record must carry them over, and --check must not call a list
+# refresh "drift".
+SYNC_OWNED = ("known_affected", "known_affected_as_of")
+
+
+def _merged_with_disk(record, path):
+    """The seeded record plus whatever sync-owned fields are already on disk."""
+    out = dict(record)
+    if os.path.exists(path):
+        try:
+            with open(path, encoding="utf-8") as f:
+                on_disk = json.load(f)
+        except Exception:
+            on_disk = {}
+        for key in SYNC_OWNED:
+            if key in on_disk:
+                out[key] = on_disk[key]
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--check", action="store_true",
-                    help="exit 1 if on-disk files differ (CI drift guard)")
+                    help="exit 1 if the curated fields on disk differ (CI drift guard)")
     args = ap.parse_args()
     os.makedirs(OUT_DIR, exist_ok=True)
     drift = []
     for r in RECORDS:
         path = os.path.join(OUT_DIR, r["cve_id"].lower() + ".json")
-        payload = json.dumps(r, indent=2, ensure_ascii=False) + "\n"
+        payload = json.dumps(_merged_with_disk(r, path), indent=2, ensure_ascii=False) + "\n"
         if args.check:
             existing = open(path, encoding="utf-8").read() if os.path.exists(path) else None
             if existing != payload:
@@ -240,7 +269,7 @@ def main():
         if drift:
             print("DRIFT:", ", ".join(drift))
             return 1
-        print("cve_data/ise/ matches seed (%d records)" % len(RECORDS))
+        print("cve_data/ise/: %d curated records match the seed" % len(RECORDS))
     return 0
 
 

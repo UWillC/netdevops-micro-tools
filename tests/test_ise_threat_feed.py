@@ -44,7 +44,7 @@ def psirt_adv(advisory_id, cves, sir="critical", score="9.0", products=None,
 class TestLocalRecordsToFeed:
     def test_ise_records_are_returned(self):
         items = _local_records_to_feed("ise")
-        assert len(items) == 8
+        assert len(items) == 56          # 8 curated + 48 imported (ISE-04)
         assert all(i.source == "local" for i in items)
 
     def test_unknown_platform_is_empty_not_error(self):
@@ -112,16 +112,16 @@ class TestMerge:
         assert merged[0].kev["due_date"] == "2026-09-19"
 
     def test_local_only_rows_collapse_per_advisory(self):
-        """With no PSIRT at all, the 8 ISE records become 3 rows.
+        """With no PSIRT at all, the ISE records become one row per advisory.
 
-        Six of them are the September hardening release and share one advisory
-        URL; the other two (auth bypass, RADIUS DoS) have their own. The widget
+        e.g. six of them are the September hardening release and share one
+        advisory URL. The widget
         is a per-advisory triage list, so one row per advisory is correct — and
         the link target is the advisory either way.
         """
         merged = _merge_feed_items([], _local_records_to_feed("ise"))
-        assert len(merged) == 3
-        assert len({i.url for i in merged}) == 3
+        assert len(merged) == 25         # 56 CVEs, 25 advisories (ISE-04)
+        assert len({i.url for i in merged}) == 25
         assert all(i.source == "local" for i in merged)
 
     def test_local_only_keeps_the_kev_row_distinct(self):
@@ -261,7 +261,7 @@ class TestEndpointWithoutNetwork:
         assert KEV_CVE in ids
 
     def test_total_counts_local_records(self):
-        assert cve_router._get_advisories_feed("ise").total_advisories == 8
+        assert cve_router._get_advisories_feed("ise").total_advisories == 56
 
     def test_at_most_ten_items(self):
         assert len(cve_router._get_advisories_feed("all").items) <= 10

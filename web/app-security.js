@@ -139,6 +139,10 @@ if (cveForm && cveOutput) {
         out += data.eol_status.banner_text + "\n\n";
       }
 
+      if (data.coverage_note) {
+        out += data.coverage_note + "\n\n";
+      }
+
       if (data.lifecycle_note) {
         out += "*** SOFTWARE LIFECYCLE NOTICE ***\n";
         out += data.lifecycle_note + "\n\n";
@@ -192,6 +196,12 @@ if (cveForm && cveOutput) {
       if ((data.matched_on_known_affected || 0) > 0 || notListed.length > 0) {
         out += `Cisco Known Affected lists: ${data.matched_on_known_affected || 0} match(es) are an exact hit on your release; `;
         out += `${notListed.length} advisory CVE(s) were ruled out because your release is not listed.\n`;
+        const conflicts = Array.isArray(data.cisco_source_conflicts) ? data.cisco_source_conflicts : [];
+        if (conflicts.length > 0) {
+          out += `${conflicts.length} CVE(s) not reported: Cisco's release list includes your release, but the advisory's own\n`;
+          out += "Fixed Software table names it as the first fixed release. The table is the part PSIRT validates,\n";
+          out += `so it was followed (${conflicts.slice(0, 3).join(", ")}${conflicts.length > 3 ? ", …" : ""}). Check those advisories if in doubt.\n`;
+        }
         const kaDates = data.known_affected_as_of;
         if (kaDates && kaDates.oldest) {
           out += kaDates.oldest === kaDates.newest

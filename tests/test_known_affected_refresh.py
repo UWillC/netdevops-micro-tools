@@ -181,11 +181,11 @@ class TestAnalyzerStartsTheSync:
         self.analyze("IOS XE", "17.9.4")
         assert spawned == []
 
-    def test_ise_never_does(self, spawned, monkeypatch):
-        """cve_data/ise is a curated seed; there is no sync that feeds it."""
+    def test_ise_does_too_since_it_became_a_synced_dataset(self, spawned, monkeypatch):
+        """Until ISE-04 cve_data/ise was a curated seed with no sync behind it."""
         monkeypatch.setattr(cve_router, "_platform_cache_age_hours", lambda p: None)
         self.analyze("ISE", "3.4 Patch 3")
-        assert spawned == []
+        assert spawned == [("ise",)]
 
     def test_the_request_is_answered_without_waiting(self, spawned, monkeypatch):
         monkeypatch.setattr(cve_router, "_platform_cache_age_hours", lambda p: None)
@@ -195,4 +195,4 @@ class TestAnalyzerStartsTheSync:
     def test_report_states_how_current_the_lists_are(self):
         r = self.analyze("IOS XE", "17.9.4")
         assert r.known_affected_as_of["oldest"] <= r.known_affected_as_of["newest"]
-        assert self.analyze("ISE", "3.4 Patch 3").known_affected_as_of is None
+        assert self.analyze("ISE", "3.4 Patch 3").known_affected_as_of is not None

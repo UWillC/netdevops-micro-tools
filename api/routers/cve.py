@@ -9,7 +9,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from services.cve_engine import CVEEngine, CVEEngineConfig, cvss_rating_from_score, data_dir_for_platform, is_bundled_cve, ise_lifecycle_note, severity_info, detect_bundle, data_confidence, coverage_uncertain_ids, published_date_demoted_ids
+from services.cve_engine import CVEEngine, CVEEngineConfig, cvss_rating_from_score, data_dir_for_platform, is_bundled_cve, ise_coverage_note, ise_lifecycle_note, severity_info, detect_bundle, data_confidence, coverage_uncertain_ids, published_date_demoted_ids
 from services.eol_registry import detect_eol
 from services.provenance import cve_provenance
 
@@ -91,6 +91,8 @@ class CVEAnalyzeResponse(BaseModel):
     # single bug. SUBSET of `matched`. The UI marks these so nobody reads a
     # category as one patchable vulnerability.
     bundled_cves: List[str] = []
+    # ISE-04: what this dataset covers and, above all, what it does not.
+    coverage_note: Optional[str] = None
     # EOSM-01 (2026-09-18): software-lifecycle caveat for the queried ISE train
     # (End of Software Maintenance / Software Maintenance / ISE-PIC end-of-sale).
     # One statement per report, and only when it applies to the caller.
@@ -100,6 +102,12 @@ class CVEAnalyzeResponse(BaseModel):
     # can see what was ruled out and on whose authority, instead of the list
     # silently getting shorter. Not a subset of `matched`.
     excluded_not_listed: List[str] = []
+    # ISE-04: CVE ids for which Cisco's two sources disagreed about the queried
+    # release — on the Known Affected list, yet at or past the first fixed
+    # release in the advisory's own table. The table (the part PSIRT validates)
+    # was followed, so these are NOT in `matched`. Counted so the reader knows
+    # a judgement was made and can check the advisory.
+    cisco_source_conflicts: List[str] = []
     # How many matches rest on an exact Known Affected hit.
     matched_on_known_affected: int = 0
     # LISTS-01: oldest and newest "as of" date among the lists behind this
@@ -184,9 +192,8 @@ def _env_true(name: str) -> bool:
 
 
 # Dataset directory -> PSIRT platform whose sync keeps that dataset current.
-# ISE is absent on purpose: cve_data/ise is a curated seed, not an auto-synced
-# import (AUTO_SYNC_PLATFORMS), so there is nothing for a sync to refresh.
-_ANALYZER_SYNC_PLATFORM = {"cve_data/ios_xe": "iosxe"}
+# ISE joined in ISE-04, when cve_data/ise became an auto-synced dataset.
+_ANALYZER_SYNC_PLATFORM = {"cve_data/ios_xe": "iosxe", "cve_data/ise": "ise"}
 
 
 def _apply_kev_catalog(entries: list) -> list:
@@ -332,6 +339,9 @@ def analyze_cve(req: CVEAnalyzeRequest):
         data_quality=data_quality,
         coverage_uncertain=coverage_uncertain_list,
         bundled_cves=[c.cve_id for c in matched if is_bundled_cve(c)],
+        cisco_source_conflicts=sorted(getattr(base_engine, "cisco_source_conflicts", [])),
+        coverage_note=(ise_coverage_note(base_engine.cves)
+                       if _data_dir == "cve_data/ise" else None),
         lifecycle_note=ise_lifecycle_note(req.platform, req.version),
         excluded_not_listed=sorted(base_engine.excluded_by_known_affected),
         matched_on_known_affected=sum(1 for c in matched if any((c.known_affected or {}).values())),

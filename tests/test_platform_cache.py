@@ -201,7 +201,7 @@ class TestLocalFallbackScope:
             assert any(x in ("ios xe", "ios-xe", "iosxe") for x in declared[item.cve_id]), item.cve_id
 
     def test_ise_fallback_is_unaffected(self):
-        assert len(cve_router._local_records_to_feed("ise")) == 8
+        assert len(cve_router._local_records_to_feed("ise")) == 56
 
 
 class TestAutoSyncScope:
@@ -209,7 +209,8 @@ class TestAutoSyncScope:
     def synced(self, monkeypatch):
         calls = []
         import services.cisco_sync as cisco_sync
-        monkeypatch.setattr(cisco_sync, "auto_sync_new_cves", lambda advs: calls.append(len(advs)))
+        monkeypatch.setattr(cisco_sync, "auto_sync_new_cves",
+                            lambda advs, platform="iosxe": calls.append((platform, len(advs))))
         monkeypatch.setattr(cve_sources.CiscoAdvisoryProvider, "_read_cache",
                             lambda self: [{"advisoryId": "x", "cves": []}])
         return calls
@@ -217,12 +218,18 @@ class TestAutoSyncScope:
     @pytest.mark.parametrize("platform", ["iosxe", "ios"])
     def test_ios_xe_family_still_syncs(self, synced, platform):
         cve_sources.CiscoAdvisoryProvider(platform=platform).load()
-        assert synced == [1]
+        assert synced == [(platform, 1)]
 
-    @pytest.mark.parametrize("platform", ["ise", "asa", "nxos", "ftd"])
+    def test_ise_syncs_into_its_own_dataset(self, synced):
+        """ISE-04: the platform is passed through, so the ISE importer — not the
+        IOS XE one — handles it."""
+        cve_sources.CiscoAdvisoryProvider(platform="ise").load()
+        assert synced == [("ise", 1)]
+
+    @pytest.mark.parametrize("platform", ["asa", "nxos", "ftd"])
     def test_other_platforms_never_write_into_the_ios_xe_dataset(self, synced, platform):
         cve_sources.CiscoAdvisoryProvider(platform=platform).load()
         assert synced == []
 
     def test_constant_is_what_the_tests_assume(self):
-        assert cve_sources.AUTO_SYNC_PLATFORMS == ("iosxe", "ios")
+        assert cve_sources.AUTO_SYNC_PLATFORMS == ("iosxe", "ios", "ise")

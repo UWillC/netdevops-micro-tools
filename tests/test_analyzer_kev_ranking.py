@@ -103,3 +103,36 @@ class TestIosXeReport:
         r = analyze_cve(CVEAnalyzeRequest(platform="ISE", version="3.4 Patch 3"))
         assert r.matched[0].cve_id == "CVE-2026-76460"
         assert r.coverage_uncertain == []
+
+
+class TestRankFollowsTheDisplayedSeverity:
+    """KOSMETYKA-02: rank by the CVSS bucket the page shows, not the curated label."""
+
+    def scored(self, cve_id, label, score):
+        e = cve(cve_id, label)
+        e.cvss_score = score
+        return e
+
+    def test_label_critical_with_cvss_high_ranks_as_high(self):
+        got = order([self.scored("CVE-LABEL", "critical", 8.8),
+                     self.scored("CVE-REAL", "high", 9.8)])
+        assert got == ["CVE-REAL", "CVE-LABEL"]
+
+    def test_higher_score_first_within_a_bucket(self):
+        got = order([self.scored("CVE-A", "critical", 9.1), self.scored("CVE-B", "critical", 10.0)])
+        assert got == ["CVE-B", "CVE-A"]
+
+    def test_no_score_falls_back_to_the_label(self):
+        assert order([cve("CVE-A", "medium"), cve("CVE-B", "critical")]) == ["CVE-B", "CVE-A"]
+
+    def test_production_order_matches_what_is_shown(self):
+        from api.routers.cve import CVEAnalyzeRequest, analyze_cve
+        r = analyze_cve(CVEAnalyzeRequest(platform="IOS XE", version="17.9.4"))
+        rank = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "NONE": 4}
+        def exploited(c):   # same definition as CVEEngine._sort_matched
+            tags = {t.lower() for t in (c.tags or [])}
+            return c.kev is not None or bool(tags & {"kev", "actively-exploited", "zero-day"})
+        boosted = [c for c in r.matched if exploited(c) and c.cve_id not in r.coverage_uncertain]
+        rest = [c for c in r.matched if c not in boosted]
+        shown = [rank.get(r.severity_details[c.cve_id]["primary_severity"], 9) for c in rest]
+        assert shown == sorted(shown)

@@ -34,6 +34,11 @@ from typing import Any, Dict, Iterable, List, Optional
 _PATTERNS = (
     ("ios-xe", re.compile(r"^Cisco IOS XE Software\s+(\S+)\s*$")),
     ("ios", re.compile(r"^Cisco IOS\s+(\d\S*)\s*$")),
+    # ISE-04: ISE releases contain spaces ("3.4 Patch 1", "3.1.0 p10",
+    # "1.1.1.268 Patch1"), so the capture runs to end of line. ISE-PIC ships
+    # the same release numbers and is filed under the same family.
+    ("ise", re.compile(r"^Cisco Identity Services Engine Software\s+(\d.*?)\s*$")),
+    ("ise", re.compile(r"^Cisco ISE Passive Identity Connector\s+(\d.*?)\s*$")),
 )
 
 
@@ -57,8 +62,36 @@ def _norm(version: str) -> str:
     return re.sub(r"(?<![\d])0+(?=\d)", "", v)
 
 
-def version_is_listed(version: str, listed: Iterable[str]) -> bool:
-    """Exact membership of `version` in a Known Affected list."""
+def _ise_key(version: str):
+    """(major, minor, maint, patch) for an ISE release, or None.
+
+    The build number is dropped on purpose: Cisco writes the same release as
+    "1.1.1.268 Patch1" in one advisory and "1.1.1 Patch 1" in another, and an
+    operator types neither — they type "3.4 Patch 3".
+    """
+    from services.cisco_version import CiscoIseVersion
+    v = (version or "").strip()
+    for prefix in ("cisco ise-pic", "cisco ise", "ise-pic", "ise"):
+        if v.lower().startswith(prefix + " "):
+            v = v[len(prefix):].strip()
+            break
+    parsed = CiscoIseVersion.parse(v)
+    if parsed is None:
+        return None
+    return (parsed.major, parsed.minor, parsed.maint, parsed.patch)
+
+
+def version_is_listed(version: str, listed: Iterable[str], family: Optional[str] = None) -> bool:
+    """Exact membership of `version` in a Known Affected list.
+
+    For `family="ise"` releases are compared as parsed ISE versions, because the
+    same release is spelled "3.4 Patch 1", "3.4.0 p1" and "3.4.0.608 Patch1".
+    """
+    if family == "ise":
+        target_key = _ise_key(version)
+        if target_key is None:
+            return False
+        return any(_ise_key(v) == target_key for v in listed)
     target = _norm(version)
     if not target:
         return False
@@ -74,6 +107,8 @@ def family_for_version(version: str) -> Optional[str]:
     from services.cisco_version import (
         CiscoIosClassicVersion, CiscoIosXeVersion, parse_cisco_version)
     parsed = parse_cisco_version(version or "")
+    if type(parsed).__name__ == "CiscoIseVersion":
+        return "ise"
     if isinstance(parsed, CiscoIosXeVersion):
         return "ios-xe"
     if isinstance(parsed, CiscoIosClassicVersion):

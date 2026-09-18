@@ -748,6 +748,32 @@ _ISE_PIC_NOTE = ("Cisco ISE-PIC has reached its end-of-sale date; release 3.4 is
                  "the last supported release.")
 
 
+def ise_coverage_note(entries) -> Optional[str]:
+    """What the ISE dataset does and does not cover — said in every ISE report.
+
+    ISE-04. Every ISE record is admitted only when Cisco publishes a Known
+    Affected release list for its advisory, so that each match is checkable.
+    Measured 2026-09-18: all 25 ISE advisories of 2026 carry a list; none of the
+    168 from 2013–2025 do. Those older advisories are therefore NOT evaluated,
+    and a report that stayed silent about it would read as complete. The first
+    ISE report (v0.6.31–v0.6.41) had exactly that flaw: 8 of 42 CVEs from one
+    publication, with nothing on the page to say so.
+    """
+    records = [e for e in entries if "ise" in (getattr(e, "product_families", None) or [])]
+    if not records:
+        return None
+    dates = sorted(d for d in (getattr(e, "published", None) for e in records) if d)
+    advisories = {getattr(e, "advisory_url", None) for e in records} - {None}
+    span = f"published {dates[0]} to {dates[-1]}" if dates else "publication dates unknown"
+    return (
+        f"ISE coverage: {len(records)} CVEs from {len(advisories)} Cisco advisories ({span}). "
+        "Only advisories for which Cisco publishes a release list are included, so every "
+        "match here is checked against that list. Cisco's ISE advisories from before 2026 "
+        "name the product without listing releases; they are NOT evaluated in this report. "
+        "For those, use the Cisco Software Checker."
+    )
+
+
 def ise_lifecycle_note(platform: str, version: str) -> Optional[str]:
     """Lifecycle caveat for the caller's own ISE train, or None if there is none."""
     from services.cisco_version import CiscoIseVersion
@@ -776,6 +802,21 @@ def ise_lifecycle_note(platform: str, version: str) -> Optional[str]:
     return " ".join(parts) + f" Source: {ISE_LIFECYCLE_SOURCE}."
 
 
+def _ise_at_or_past_fix(cve: "CVEEntry", version: str) -> bool:
+    """True when `version` is the first fixed release on its train, or later.
+
+    Compared on (major, minor, maint, patch). The build number is ignored: it
+    is a different axis, and "3.4.0.608" must not count as "past Patch 7"
+    because 608 is a bigger number than 0.
+    """
+    from services.known_affected import _ise_key
+    fix_str = ise_fix_for_version(cve, version)
+    running, fix = _ise_key(version), _ise_key(fix_str or "")
+    if running is None or fix is None:
+        return False
+    return running[:2] == fix[:2] and running >= fix
+
+
 def ise_fix_for_version(cve: "CVEEntry", version: str) -> Optional[str]:
     """First fixed release on the caller's own train, or None if the train has none."""
     from services.cisco_version import CiscoIseVersion
@@ -784,7 +825,17 @@ def ise_fix_for_version(cve: "CVEEntry", version: str) -> Optional[str]:
     ff = getattr(cve, "first_fixed_version", None)
     if running is None or ff is None:
         return None
-    return (getattr(ff, "fixes", None) or {}).get("ise-%d.%d" % (running.major, running.minor))
+    fixes = getattr(ff, "fixes", None) or {}
+    exact = fixes.get("ise-%d.%d" % (running.major, running.minor))
+    if exact:
+        return exact
+    # "3.0 and earlier — Migrate" is stored as "ise-<3.0" (see ise_fixed_table).
+    for key, value in fixes.items():
+        if key.startswith("ise-<"):
+            bound = CiscoIseVersion.parse(key[len("ise-<"):])
+            if bound is not None and (running.major, running.minor) < (bound.major, bound.minor):
+                return value
+    return None
 
 
 
@@ -875,6 +926,9 @@ class CVEEngine:
         # MATCH-01: ids dropped by the last match() because the queried version
         # is not on Cisco's Known Affected list. Reported, not hidden.
         self.excluded_by_known_affected: List[str] = []
+        # ISE-04: ids where Cisco's release list and Fixed Software table
+        # disagreed about the queried release and the table was followed.
+        self.cisco_source_conflicts: List[str] = []
 
     # -------------------------
     # Merge strategy (v0.3.3)
@@ -982,9 +1036,32 @@ class CVEEngine:
         query_family = normalize_user_platform(platform)
 
         # ISE-03: ISE is matched per train, not by min/max range.
+        # ISE-04: when Cisco's Known Affected list exists it decides, exactly as
+        # for IOS XE; the per-train fix logic remains for records without one.
         if query_family == ProductFamily.ISE:
+            self.excluded_by_known_affected = []
+            self.cisco_source_conflicts = []
+            from services.known_affected import _ise_key
+            if _ise_key(version) is None:
+                return []   # unreadable release: say nothing rather than guess
             for cve in self.cves:
                 if "ise" not in (getattr(cve, "product_families", None) or []):
+                    continue
+                listed = (getattr(cve, "known_affected", None) or {}).get("ise")
+                if listed:
+                    if not version_is_listed(version, listed, "ise"):
+                        self.excluded_by_known_affected.append(cve.cve_id)
+                    elif _ise_at_or_past_fix(cve, version):
+                        # Cisco's two sources disagree: the release list includes
+                        # this release, the advisory's Fixed Software table names
+                        # it as fixed. Measured 2026-09-18: 30 of 217 (CVE, train)
+                        # pairs, always at exactly the first-fixed patch. Every
+                        # advisory states that PSIRT validates the affected and
+                        # fixed information "documented in this advisory" — the
+                        # table — so the table wins, and the case is counted.
+                        self.cisco_source_conflicts.append(cve.cve_id)
+                    else:
+                        matched.append(cve)
                     continue
                 if match_ise_record(cve, version):
                     matched.append(cve)
@@ -1080,11 +1157,23 @@ class CVEEngine:
             tags = [t.lower() for t in (getattr(c, "tags", []) or [])]
             return 0 if any(t in tags for t in ("kev", "actively-exploited", "zero-day")) else 1
 
-        severity_rank = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+        severity_rank = {"critical": 0, "high": 1, "medium": 2, "low": 3, "none": 4}
+
+        def _shown_severity(c: CVEEntry) -> str:
+            # Rank by what the page SHOWS. The UI renders the NVD CVSS bucket
+            # (severity_policy), while this used to rank by the curated
+            # `severity` label — so CVE-2025-20352 (CVSS 8.8, label "critical")
+            # sat among the Criticals while being displayed as HIGH.
+            score = getattr(c, "cvss_score", None)
+            if score is not None:
+                return cvss_rating_from_score(score).lower()
+            return (c.severity or "").lower()
+
         matched.sort(
             key=lambda x: (
                 _kev_flag(x),
-                severity_rank.get((x.severity or "").lower(), 99),
+                severity_rank.get(_shown_severity(x), 99),
+                -(getattr(x, "cvss_score", None) or 0.0),
                 x.cve_id,
             )
         )
@@ -1123,23 +1212,37 @@ class CVEEngine:
             return None
         train = "%d.%d" % (running.major, running.minor)
 
+        # Three states per CVE, and the third must never be read as the second:
+        #   fix known        -> a parseable release on this train
+        #   Cisco: migrate   -> the advisory's table says there is no fix here
+        #   unknown          -> we have no table for it (not the same as "no fix")
+        from services.ise_fixed_table import MIGRATE
         best = None
         driver = None
-        unfixable = []
+        no_fix = []
+        unknown = []
         for cve in matched:
             fix_str = ise_fix_for_version(cve, version)
+            if fix_str == MIGRATE:
+                no_fix.append(cve.cve_id)
+                continue
             fix = CiscoIseVersion.parse(fix_str) if fix_str else None
             if fix is None:
-                unfixable.append(cve.cve_id)
+                unknown.append(cve.cve_id)
                 continue
             if best is None or fix > best[1]:
                 best, driver = (fix_str, fix), cve
 
-        if unfixable:
+        if no_fix:
             return (
                 f"No fixed release exists on the ISE {train} train for "
-                f"{len(unfixable)} of {len(matched)} matched CVEs "
-                f"(e.g. {unfixable[0]}). Migrate to a supported train."
+                f"{len(no_fix)} of {len(matched)} matched CVEs "
+                f"(e.g. {no_fix[0]}). Migrate to a supported train."
+            )
+        if best is None:
+            return (
+                f"Fixed release not determined for the {len(unknown)} matched CVE(s) "
+                f"on the ISE {train} train; see each advisory's Fixed Software table."
             )
 
         tags = [t.lower() for t in (getattr(driver, "tags", []) or [])]
@@ -1148,6 +1251,9 @@ class CVEEngine:
         if kev:
             note += " (KEV, actively exploited)"
 
+        if unknown:
+            note += (f". Fixed release not determined for {len(unknown)} further CVE(s) "
+                     f"(e.g. {unknown[0]}); check those advisories before closing the change")
         bundled = [c.cve_id for c in matched if is_bundled_cve(c)]
         if bundled:
             note += (

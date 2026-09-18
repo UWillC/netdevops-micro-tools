@@ -4,6 +4,67 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.43] – 2026-09-18 (ISE-04 — full ISE coverage, and a report that says what it leaves out)
+
+### Fixed
+- **`ISE 3.4 Patch 3` reported "8 matched" and nothing on the page said it was a
+  sample.** Cisco's publication of 2026-09-16 alone held 42 CVEs in 15
+  advisories; the dataset had 8 CVEs from 3 of them, four Critical advisories
+  among the missing. v0.6.31 had left them out on purpose (no CVSS + fixed table
+  in hand) and recorded that in the backlog — but not in the report, which is
+  where a reader would need it. Same query now: **54 CVEs, 17 Critical**, every
+  one checked against Cisco's release list. The recommendation, `3.4 Patch 7`,
+  holds — now verified across the full set rather than assumed.
+- Analyzer ranking followed the curated `severity` label while the page shows
+  the CVSS bucket, so CVE-2025-20352 (CVSS 8.8, label "critical") sat among the
+  Criticals while being displayed as HIGH. Ranking now follows what is shown,
+  with the higher score first inside a bucket.
+
+### Added
+- `services.cisco_sync.auto_sync_ise()` — ISE becomes an auto-synced dataset
+  (`AUTO_SYNC_PLATFORMS`), with its own directory and record shape, and no IOS
+  mitigation templates. **Admission rule:** an advisory is imported only when
+  Cisco publishes a Known Affected release list for it. All 25 ISE advisories of
+  2026 have one; none of the 168 from 2013–2025 do. Importing those with a
+  placeholder range would have re-created for ISE the "100 of 104 matches are
+  guesses" problem v0.6.40 removed from IOS XE.
+- `CVEAnalyzeResponse.coverage_note` — every ISE report states what the dataset
+  covers and that pre-2026 advisories are **not evaluated**, with a pointer to
+  the Cisco Software Checker. Shown even when nothing matched.
+- `services/ise_fixed_table.py` — reads the advisory's Fixed Software table from
+  CVRF ("3.12 3.1 Patch 12" is train 3.1 with a footnote; "3.0 and earlier —
+  Migrate"; "Not vulnerable"; one column per CVE → highest patch). Read, not
+  inferred: "next patch after the last affected one" is wrong exactly where it
+  matters, on trains that get no fix. Also per-CVE title / CVSS / vector and the
+  affirmative exploitation statement.
+- **Per-CVE CVSS from CVRF.** PSIRT's `cvssBaseScore` is the advisory maximum.
+  "ISE Vulnerabilities" is a 10.0 advisory whose six CVEs score 10.0 / 7.6 / 7.2
+  / 4.9 / 4.9 / 4.9. The advisory score is a tagged last resort only.
+- ISE in `known_affected`: releases spelled "3.4 Patch 1", "3.1.0 p10" and
+  "1.1.1.268 Patch1" compare as parsed versions with the build number ignored;
+  ISE-PIC is filed with ISE.
+- Three-state recommendation: fix known / Cisco says migrate / **not
+  determined** — the third is never reported as the second. On 3.1, 21 of 52
+  matches are advisories whose table says "Migrate", so the report says no patch
+  level on 3.1 closes everything, instead of recommending 3.1 Patch 12.
+- `cisco_source_conflicts`: for 30 of 217 (CVE, train) pairs Cisco's release list
+  includes exactly the release its own Fixed Software table names as first
+  fixed. Advisories state PSIRT validates what is "documented in this advisory",
+  so the table wins and the case is counted and shown.
+- The analyzer's background sync now covers ISE too.
+- `.gitleaks.toml` committed. It has configured the pre-commit secret scan since
+  2026-09-04 but was never tracked, so a fresh clone scanned with other rules.
+- `tests/test_ise_coverage.py` (35); dataset tests split into curated / imported.
+
+### Changed
+- `scripts/seed_ise_cve_data.py` no longer owns `known_affected*`: it carries the
+  sync's lists over on rewrite and ignores them in `--check`.
+- The hardening records carry an explicit `migrate` for 3.0 and earlier.
+
+### Not changed, on purpose
+- The "v0.8" badge on the analyzer. It was logged as an inconsistency with
+  `Tool: 0.6.x`; it is not one — every module carries its own version badge.
+
 ## [v0.6.42] – 2026-09-18 (LISTS-01 — Known Affected lists keep themselves current)
 
 ### Fixed

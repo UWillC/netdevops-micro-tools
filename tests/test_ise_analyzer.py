@@ -47,7 +47,7 @@ class TestDatasetSelection:
         assert data_dir_for_platform(platform) == DEFAULT_DATA_DIR
 
     def test_ise_engine_loads_ise_records(self, engine):
-        assert len(engine.cves) == 8
+        assert len(engine.cves) == 56   # 8 curated + 48 imported (ISE-04)
 
 
 class TestIseMatching:
@@ -104,11 +104,16 @@ class TestIseMatching:
 
 class TestEngineMatch:
     def test_counts_per_version(self, engine):
-        assert len(engine.match("ISE", "3.4 Patch 5")) == 8
+        # ISE-04: full 2026 coverage, every match checked against Cisco's list.
+        assert len(engine.match("ISE", "3.4 Patch 3")) == 54
         assert len(engine.match("ISE", "3.4 Patch 7")) == 0
-        assert len(engine.match("ISE", "3.1 Patch 3")) == 7   # no RADIUS DoS
-        assert len(engine.match("ISE", "3.0")) == 7
+        assert len(engine.match("ISE", "3.5 Patch 4")) == 0
         assert len(engine.match("ISE", "3.6")) == 0
+        # 3.0: only the hardening release lists it. The auth-bypass advisory
+        # lists 3.1–3.5, so it is not claimed for 3.0 (Cisco did not assess it).
+        assert len(engine.match("ISE", "3.0")) == 6
+        ids_31 = {c.cve_id for c in engine.match("ISE", "3.1 Patch 3")}
+        assert "CVE-2026-20352" not in ids_31                 # RADIUS DoS: 3.2+
 
     def test_kev_is_first(self, engine):
         assert engine.match("ISE", "3.4 Patch 5")[0].cve_id == KEV_CVE
@@ -123,8 +128,16 @@ class TestRecommendation:
 
     def test_recommends_fix_on_callers_own_train(self, engine):
         assert self.rec(engine, "3.4 Patch 5").startswith("3.4 Patch 7")
-        assert self.rec(engine, "3.1 Patch 3").startswith("3.1 Patch 12")
         assert self.rec(engine, "3.3 Patch 2").startswith("3.3 Patch 12")
+        assert self.rec(engine, "3.5 Patch 1").startswith("3.5 Patch 4")
+
+    def test_software_maintenance_train_is_told_to_migrate(self, engine):
+        """3.1 gets Critical fixes only. With the full dataset, 21 of its 52
+        matches are Medium/High advisories whose table says "Migrate" — so no
+        patch level on 3.1 closes everything, and the report says that instead
+        of recommending 3.1 Patch 12."""
+        r = self.rec(engine, "3.1 Patch 3")
+        assert "No fixed release exists on the ISE 3.1 train" in r and "Migrate" in r
 
     def test_names_the_kev_driver(self, engine):
         r = self.rec(engine, "3.4 Patch 5")
@@ -140,7 +153,7 @@ class TestRecommendation:
 
     def test_mentions_hardening_release_cves(self, engine):
         r = self.rec(engine, "3.4 Patch 5")
-        assert "6 of 8 are hardening-release CVEs" in r
+        assert "6 of 50 are hardening-release CVEs" in r   # 3.4 Patch 5
         assert "unit of remediation" in r
 
     def test_legacy_signature_still_works(self, engine):
@@ -192,7 +205,7 @@ class TestAnalyzeEndpoint:
 
     def test_ise_query_returns_ise_matches(self):
         r = self.call("ISE", "3.4 Patch 5")
-        assert len(r.matched) == 8 and r.matched[0].cve_id == KEV_CVE
+        assert len(r.matched) == 50 and r.matched[0].cve_id == KEV_CVE
 
     def test_bundled_cves_is_a_subset_of_matched(self):
         r = self.call("ISE", "3.4 Patch 5")

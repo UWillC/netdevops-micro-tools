@@ -66,7 +66,7 @@ class TestVersionIsListed:
     def test_family_for_version(self):
         assert family_for_version("17.9.4a") == "ios-xe"
         assert family_for_version("15.2(7)E8") == "ios"
-        assert family_for_version("3.4 Patch 3") is None
+        assert family_for_version("3.4 Patch 3") == "ise"     # ISE-04
         assert family_for_version("") is None
 
 
@@ -148,9 +148,10 @@ class TestProductionReport:
         a, b = self.call("IOS XE", "17.9.4"), self.call("IOS XE", "17.09.04")
         assert [c.cve_id for c in a.matched] == [c.cve_id for c in b.matched]
 
-    def test_ise_is_untouched(self):
+    def test_ise_uses_the_same_mechanism(self):
+        """ISE-04 extended list matching to ISE; see tests/test_ise_coverage.py."""
         r = self.call("ISE", "3.4 Patch 3")
-        assert len(r.matched) == 8 and r.excluded_not_listed == []
+        assert len(r.matched) == 54 and r.matched_on_known_affected == 54
 
 
 class TestDatasetAndText:
