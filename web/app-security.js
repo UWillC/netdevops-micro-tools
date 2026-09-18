@@ -170,6 +170,11 @@ if (cveForm && cveOutput) {
         if (primaryCounts[sev] !== undefined) primaryCounts[sev] += 1;
       });
       const hardeningGroups = confirmedItems.concat(unconfirmedItems).filter((it) => it.group);
+      // One number instead of three rows that said the same thing differently
+      // ("Not confirmed 101", "86 PSIRT max-bound", "Coverage uncertain 101/188").
+      const dqAll = data.data_quality || {};
+      const noListCount = data.matched.filter((c) => uncertainIds.has(c.cve_id) &&
+        (dqAll[c.cve_id] || {}).confidence === "max-bound").length;
 
       // Text report output
       let out = "";
@@ -296,27 +301,11 @@ if (cveForm && cveOutput) {
         if (primaryCounts[sev] > 0) out += `  ${sev}: ${primaryCounts[sev]}\n`;
       });
 
-      // v0.6.23: data-quality breakdown in text report
-      const dqMapTxt = data.data_quality || {};
-      const dqCountsTxt = { verified: 0, "max-bound": 0, uncertain: 0 };
-      Object.values(dqMapTxt).forEach((v) => {
-        const c = v && v.confidence;
-        if (dqCountsTxt[c] !== undefined) dqCountsTxt[c]++;
-      });
-      if ((dqCountsTxt["max-bound"] + dqCountsTxt["uncertain"]) > 0) {
-        out += `\nData quality: ${dqCountsTxt.verified} verified / ${dqCountsTxt["max-bound"]} PSIRT max-bound`;
-        if (dqCountsTxt.uncertain > 0) out += ` / ${dqCountsTxt.uncertain} uncertain`;
-        out += "\n(PSIRT max-bound = matched by affected.max only, less reliable than a curated fix version or a Cisco Known Affected list.)\n";
-      }
-
-      // v0.6.24 CVE-006 Phase 5+6: coverage-uncertain bucket in text report.
-      // Union of non-verified data_quality results + published-date heuristic.
-      const cuIds = Array.isArray(data.coverage_uncertain) ? data.coverage_uncertain : [];
-      if (cuIds.length > 0) {
-        const totalMatched = (data.matched || []).length;
-        out += `\nCoverage uncertain: ${cuIds.length} / ${totalMatched} CVE(s) flagged for lower confidence`;
-        out += `\n(Either PSIRT max-bound match OR published >3 years before target version release.`;
-        out += `\n Treat as informational; manual PSIRT advisory review recommended for critical decisions.)\n`;
+      // Why the unconfirmed ones are unconfirmed, once.
+      if (unconfirmedItems.length > 0) {
+        const older = Math.max(0, unconfirmedItems.length - noListCount);
+        out += `\nNot confirmed: ${unconfirmedItems.length} CVE(s): ${noListCount} where Cisco names the product without a release list, ` +
+               `${older} from advisories published more than 3 years before your release.\n`;
       }
 
       if (data.recommended_upgrade) {
@@ -555,7 +544,7 @@ if (cveForm && cveOutput) {
           </div>
           <div class="summary-row"><span>Confirmed</span><span>${critical} / ${high} / ${medium} / ${low}</span></div>
           ${unconfirmedItems.length > 0
-            ? `<div class="summary-row summary-muted" title="Matches Cisco did not confirm for this exact release. Listed separately and not counted above."><span>Not confirmed</span><span>${unconfirmedItems.length} listed separately</span></div>`
+            ? `<div class="summary-row summary-muted" title="Matches Cisco did not confirm for this exact release. Listed separately and not counted above."><span>Not confirmed</span><span>${unconfirmedItems.length} listed separately (${noListCount} without a Cisco release list, ${unconfirmedItems.length - noListCount > 0 ? unconfirmedItems.length - noListCount : 0} much older than your release)</span></div>`
             : ""}
           ${hardeningGroups.length > 0
             ? `<div class="summary-row summary-muted" title="A hardening release is counted once: Cisco assigns one CVE per CWE category, and the release is the only remediation."><span>Hardening releases</span><span>${hardeningGroups.length} (${hardeningGroups.reduce((n, g) => n + g.cves.length, 0)} CVEs, counted once each)</span></div>`
@@ -564,16 +553,6 @@ if (cveForm && cveOutput) {
           ${
             sirDistinct > 0
               ? `<div class="summary-row summary-muted"><span>Cisco SIR ≠ CVSS</span><span>${sirDistinct} CVE(s)</span></div>`
-              : ""
-          }
-          ${
-            (dqCounts["max-bound"] + dqCounts["uncertain"]) > 0
-              ? `<div class="summary-row summary-muted" title="Data-quality confidence. PSIRT-import records match via affected.max (less reliable than curated fix_version). Full fix in CVE-006 W19+ sprint."><span>Data quality</span><span>${dqCounts.verified} verified / ${dqCounts["max-bound"]} PSIRT max-bound${dqCounts.uncertain ? ` / ${dqCounts.uncertain} uncertain` : ""}</span></div>`
-              : ""
-          }
-          ${
-            (Array.isArray(data.coverage_uncertain) && data.coverage_uncertain.length > 0)
-              ? `<div class="summary-row summary-muted" title="Coverage uncertain = matched via PSIRT max-bound OR published >3 years before target version release. Treat as informational. CVE-006 Phase 5+6 transparency layer."><span>Coverage uncertain</span><span>${data.coverage_uncertain.length} / ${(data.matched || []).length} CVE(s)</span></div>`
               : ""
           }
           ${

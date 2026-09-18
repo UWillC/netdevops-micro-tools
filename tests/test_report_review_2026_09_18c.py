@@ -227,3 +227,17 @@ def test_audit_checks_facts_stated_about_cisco():
     assert len(found) == 2 and "Cisco says 'High'" in found[0] and "CWE-287" in found[1]
     # a multi-CVE advisory has no per-CVE CWE: nothing to compare
     assert audit.classify_facts({"cisco_sir": "High", "cwe": "CWE-1"}, {"sir": "High", "cves": ["CVE-1", "CVE-2"], "cwe": ["CWE-2"]}) == []
+
+
+# ---------- v0.6.52 ----------
+
+def test_posture_says_not_confirmed_once_with_the_reason():
+    js = _web("app-security.js")
+    panel = js[js.index("<h3>Security posture</h3>", js.index("cveSummary.innerHTML = `")):]
+    assert "<span>Data quality</span>" not in panel and "<span>Coverage uncertain</span>" not in panel
+    assert "without a Cisco release list" in js and "noListCount" in js
+
+
+def test_snmp_record_does_not_send_every_train_to_17_15():
+    r = _rec("CVE-2025-20352")
+    assert "for your train" in r["workaround"] and "Upgrade to IOS XE 17.15.4a." not in r["workaround"]

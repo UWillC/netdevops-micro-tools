@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.52] – 2026-09-18 (one line about unconfirmed matches instead of three)
+
+### Changed
+- The posture panel said the same thing three ways with three numbers
+  ("Not confirmed 101", "Data quality 102 verified / 86 PSIRT max-bound",
+  "Coverage uncertain 101 / 188"). It now has one row, with the reason:
+  `Not confirmed: 101 listed separately (86 without a Cisco release list, 15
+  much older than your release)`. The text report carries the same single
+  sentence in place of two blocks.
+- CVE-2025-20352 workaround no longer tells a 17.9 or 17.12 device to "Upgrade to
+  IOS XE 17.15.4a"; it says to take the fixed release for the device's own train.
+
+### Tests
+- 2 cases; verified in a browser. Suite: 1345 → 1347.
+
+---
+
 ## [v0.6.51] – 2026-09-18 (hand-written records checked against Cisco and NVD; a rating Cisco never gave)
 
 Fourth report review of the day (`IOS XE 17.9.4`).
