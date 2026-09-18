@@ -4,6 +4,49 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.46] – 2026-09-18 (Known Affected lists: the repo copy now refreshes itself; classic IOS query fixed)
+
+### Added
+- `scripts/refresh_known_affected.py` + weekly workflow
+  `.github/workflows/refresh-known-affected.yml` (Mondays 06:17 UTC, also
+  manual). Production already refreshed its lists on every PSIRT sync
+  (v0.6.42), but production's disk is rebuilt from this repository on each
+  deploy, and local/offline users only ever get the committed copy — which
+  moved only when someone remembered to run a migration. The job asks PSIRT
+  for today's advisories (never the 24 h cache), runs the same
+  `refresh_known_affected()` production uses on records that already exist,
+  runs the test suite, and commits only if a list changed. It never creates
+  records and never touches curated fields. Without the
+  `CISCO_CLIENT_ID` / `CISCO_CLIENT_SECRET` repository secrets the job fails
+  loudly rather than reporting a clean run it did not perform; the script
+  exits 2 when it could not fetch anything for any platform.
+- `CiscoAdvisoryProvider.fetch_advisories(use_cache=...)` — the fetch loop
+  extracted from `load()`, with no dataset side effects.
+
+### Fixed
+- **The "ios" platform never received a single advisory from PSIRT.** The
+  query used product name "Cisco IOS Software"; classic IOS releases are
+  named "Cisco IOS 15.2(4)E", so the API answered HTTP 404 every time and
+  the feed silently fell back to local records. The query is now
+  "Cisco IOS", filtered to advisories that actually enumerate classic IOS
+  releases (the bare name also matches IOS XE and IOS XR). Measured today:
+  98 advisories / 135 CVEs, back to 2017 within the 5-page window. Found by
+  the first live run of the refresh script. All 98 also list IOS XE releases,
+  so the datasets do not change — the IOS view of Latest Threats does.
+- Imported records were filed as `platforms: ["IOS XE", ...]` unconditionally,
+  so an advisory naming only classic IOS would have been filed as IOS XE.
+  Harmless while the IOS query returned nothing; fixed before it mattered.
+
+### Tests
+- `tests/test_refresh_known_affected_script.py` (10 cases): refresh-only,
+  curated fields survive, exact dry-run, no write when unchanged, a second
+  advisory for the same CVE cannot overwrite, exit codes, every sync platform
+  has a dataset, IOS query name + XE/XR filter, platform filing.
+  Live dry-run after the fix: iosxe 133 / ios 55 / ise 56 records checked,
+  0 changes (lists were refreshed earlier today). Suite: 1242 → 1252.
+
+---
+
 ## [v0.6.45] – 2026-09-18 (Hardening Audit: sourced rules, five tighter checks, no third-party benchmark mark)
 
 ### Changed

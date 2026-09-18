@@ -235,7 +235,12 @@ class CiscoAdvisoryProvider(CVEProvider):
 
     PLATFORM_PRODUCTS = {
         "iosxe": "Cisco IOS XE Software",
-        "ios": "Cisco IOS Software",
+        # The API matches `product` as a substring of productNames. Classic IOS
+        # releases are named "Cisco IOS 15.2(4)E" — there is no "Cisco IOS
+        # Software" string, so that query was a permanent HTTP 404 and the IOS
+        # platform never received a single advisory. "Cisco IOS" matches, but
+        # also matches IOS XE and IOS XR; fetch_advisories() filters those out.
+        "ios": "Cisco IOS",
         "nxos": "Cisco NX-OS Software",
         "asa": "Cisco Adaptive Security Appliance (ASA) Software",
         # ISE-02 (2026-09-18). Without this mapping the provider queried
@@ -639,43 +644,56 @@ class CiscoAdvisoryProvider(CVEProvider):
             ))
         return entries
 
-    def load(self) -> List[CVEEntry]:
+    def fetch_advisories(self, use_cache: bool = True) -> List[Dict[str, Any]]:
+        """Raw PSIRT advisories for this platform. No side effects on datasets.
+
+        `use_cache=False` always goes to the API (the offline refresh script
+        needs what Cisco says today, not what a 24 h cache remembers). Returns
+        [] when there are no credentials or the API gives nothing.
+        """
+        if use_cache:
+            cached = self._read_cache()
+            if cached is not None:
+                print(f"[CISCO] Using {len(cached)} cached advisories")
+                return cached
+
+        creds = self._load_credentials()
+        if not creds:
+            return []
+
+        api_base = creds.get("api_base", "https://apix.cisco.com/security/advisories/v2")
+        product_name = self.PLATFORM_PRODUCTS.get(self.platform, self.platform)
+        product_encoded = urllib.parse.quote(product_name)
+
         all_advisories: List[Dict[str, Any]] = []
+        for page in range(1, self.max_pages + 1):
+            url = f"{api_base}/product?product={product_encoded}&pageIndex={page}&pageSize=100"
+            print(f"[CISCO] Fetching page {page}...")
+            data = self._api_get(url)
+            if not data:
+                break
+            advisories = data.get("advisories", [])
+            if not advisories:
+                break
+            all_advisories.extend(advisories)
+            # Respect rate limit: 30 calls/minute = 1 per 2 seconds
+            if page < self.max_pages and len(advisories) == 100:
+                time.sleep(2)
+            else:
+                break  # Last page (less than 100 results)
 
-        # Try cache first
-        cached = self._read_cache()
-        if cached is not None:
-            all_advisories = cached
-            print(f"[CISCO] Using {len(all_advisories)} cached advisories")
-        else:
-            # Fetch from API
-            creds = self._load_credentials()
-            if not creds:
-                return []
+        if self.platform == "ios":
+            from services.known_affected import extract_known_affected
+            all_advisories = [a for a in all_advisories if extract_known_affected(a).get("ios")]
 
-            api_base = creds.get("api_base", "https://apix.cisco.com/security/advisories/v2")
+        if all_advisories:
+            self._write_cache(all_advisories)
+        return all_advisories
 
-            product_name = self.PLATFORM_PRODUCTS.get(self.platform, self.platform)
-            product_encoded = urllib.parse.quote(product_name)
-
-            for page in range(1, self.max_pages + 1):
-                url = f"{api_base}/product?product={product_encoded}&pageIndex={page}&pageSize=100"
-                print(f"[CISCO] Fetching page {page}...")
-                data = self._api_get(url)
-                if not data:
-                    break
-                advisories = data.get("advisories", [])
-                if not advisories:
-                    break
-                all_advisories.extend(advisories)
-                # Respect rate limit: 30 calls/minute = 1 per 2 seconds
-                if page < self.max_pages and len(advisories) == 100:
-                    time.sleep(2)
-                else:
-                    break  # Last page (less than 100 results)
-
-            if all_advisories:
-                self._write_cache(all_advisories)
+    def load(self) -> List[CVEEntry]:
+        all_advisories = self.fetch_advisories()
+        if not all_advisories:
+            return []
 
         # Auto-sync: import NEW CVEs to local files + generate mitigations.
         #

@@ -195,12 +195,14 @@ def _build_cve_json(cve_id: str, adv: Dict[str, Any], ver_min: str, ver_max: str
     if vtype != "generic":
         tags.append(vtype)
 
-    platforms = ["IOS XE"]
-    for pn in adv.get("productNames", []):
-        if "Cisco IOS " in pn and "IOS XE" not in pn and "IOS XR" not in pn:
-            if "IOS" not in platforms:
-                platforms.append("IOS")
-            break
+    # Platforms come from what the advisory names. An advisory that lists only
+    # classic IOS releases must not be filed as IOS XE (it used to be: the list
+    # started as ["IOS XE"] unconditionally, which was harmless only while the
+    # "ios" platform query returned nothing at all).
+    names = adv.get("productNames", []) or []
+    has_xe = any("IOS XE" in pn for pn in names)
+    has_ios = any("Cisco IOS " in pn and "IOS XE" not in pn and "IOS XR" not in pn for pn in names)
+    platforms = (["IOS XE"] if has_xe or not has_ios else []) + (["IOS"] if has_ios else [])
 
     return {
         "cve_id": cve_id, "title": title, "severity": severity,
