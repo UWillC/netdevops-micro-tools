@@ -164,8 +164,14 @@ def test_warm_up_can_be_switched_off(monkeypatch):
     assert cve_router.warm_up_datasets() is False
 
 
-def test_report_says_when_the_dataset_is_still_syncing():
+def test_report_says_when_the_dataset_is_still_syncing(monkeypatch):
     from api.routers import cve as cve_router
+    # Hermetic: on a machine with no PSIRT cache (CI) the first analysis starts a
+    # real background refresh and the flag is rightly True. This test is about
+    # the flag following the running set, so the refresh itself is switched off.
+    monkeypatch.setattr(cve_router, "_refresh_platform_cache_in_background", lambda platform: False)
+    with cve_router._platform_refresh_lock:
+        cve_router._platform_refresh_running.clear()
     assert _analyze("IOS XE", "17.9.4")["dataset_syncing"] is False
     cve_router._platform_refresh_running.add("iosxe")
     try:

@@ -13,9 +13,11 @@ jobs:
       # Avoid protobuf/ethpm plugin collision observed locally; pure-Python
       # parsing is fine for test-time workloads.
       PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION: python
+      # No background PSIRT sync in tests: the runner has no cache and no credentials.
+      CVE_WARMUP_SYNC: '0'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: pip
