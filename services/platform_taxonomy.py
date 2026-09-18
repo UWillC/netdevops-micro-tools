@@ -218,12 +218,39 @@ def normalize_user_platform(user_input: str) -> Optional[ProductFamily]:
 
     low = user_input.strip().lower()
 
+    # Spelling must not decide whether the product-family filter runs. The UI's
+    # own default, "IOS-XE", matched no alias ("ios xe" / "ios-xe software"
+    # did), so the filter silently switched off and SSM On-Prem, CUCM and
+    # Access Point advisories were reported against IOS XE routers. Compare on
+    # a separator-free form as well, and accept the bare short names people type.
+    spaced = re.sub(r"[\s_\-/]+", " ", low).strip()
+    compact = re.sub(r"[^a-z0-9]", "", low)
+    if compact.startswith("cisco"):
+        compact = compact[len("cisco"):]
+    if compact in _COMPACT_PLATFORM_NAMES:
+        return _COMPACT_PLATFORM_NAMES[compact]
+
     for triggers, family in _USER_INPUT_ALIASES:
         for trigger in triggers:
-            if trigger.lower() in low:
+            t = trigger.lower()
+            if t in low or re.sub(r"[\s_\-/]+", " ", t).strip() in spaced:
                 return family
 
     return None
+
+
+# Bare names as typed into the platform box, compared with separators removed
+# ("IOS-XE", "ios_xe", "IOSXE" are one spelling). Exact match only: "asa" must
+# not fire inside another word.
+_COMPACT_PLATFORM_NAMES = {
+    "iosxe": ProductFamily.IOS_XE, "iosxesoftware": ProductFamily.IOS_XE,
+    "iosxr": ProductFamily.IOS_XR,
+    "ios": ProductFamily.IOS, "iosclassic": ProductFamily.IOS,
+    "nxos": ProductFamily.NX_OS,
+    "asa": ProductFamily.ASA, "ftd": ProductFamily.FTD, "fxos": ProductFamily.FXOS,
+    "fmc": ProductFamily.FTD,
+    "ise": ProductFamily.ISE, "isepic": ProductFamily.ISE,
+}
 
 
 # -----------------------------

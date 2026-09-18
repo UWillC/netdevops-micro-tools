@@ -657,6 +657,37 @@ _FAMILY_DATA_DIRS = {
 }
 DEFAULT_DATA_DIR = "cve_data/ios_xe"
 
+# Families the IOS XE dataset can honestly answer for. A recognised family
+# outside this set and outside _FAMILY_DATA_DIRS has NO dataset: the engine must
+# say so instead of matching it against IOS XE records. Before this, "NX-OS
+# 10.2(6)" was read as classic IOS 10.2(6) from the 1990s (same version shape),
+# hit 24 Known Affected lists "exactly", and returned 84 CVEs about SD-WAN,
+# cBR-8 and ASR 920 with a straight face.
+_IOS_XE_DATASET_FAMILIES = {
+    ProductFamily.IOS_XE, ProductFamily.IOS,
+    ProductFamily.IOS_XE_SDWAN, ProductFamily.IOS_XE_WLC,
+}
+_COVERED_PLATFORMS_TEXT = "Cisco IOS XE, Cisco IOS and Cisco ISE"
+
+
+def uncovered_family(platform: str) -> Optional[ProductFamily]:
+    """The recognised product family of `platform` if we hold no data for it."""
+    family = normalize_user_platform(platform or "")
+    if family is None or family in _FAMILY_DATA_DIRS or family in _IOS_XE_DATASET_FAMILIES:
+        return None
+    return family
+
+
+def platform_coverage_note(platform: str) -> Optional[str]:
+    family = uncovered_family(platform)
+    if family is None:
+        return None
+    return (
+        f"NOT EVALUATED: this tool has no vulnerability dataset for {family.value.upper()}. "
+        f"Covered platforms: {_COVERED_PLATFORMS_TEXT}. An empty result here means "
+        f"\"not checked\", not \"not vulnerable\" \u2014 use Cisco Software Checker for this platform."
+    )
+
 
 def data_dir_for_platform(platform: str) -> str:
     """Return the curated dataset directory for a user-supplied platform."""
@@ -842,6 +873,33 @@ def ise_fix_for_version(cve: "CVEEntry", version: str) -> Optional[str]:
 # -----------------------------
 # Engine configuration
 # -----------------------------
+def _same_train_hint(driver: CVEEntry, version: Optional[str], target: Tuple[int, ...]) -> str:
+    """Say when the recommended release is on another train than the caller's.
+
+    The curated `fixed_in` is one release, usually on the newest train
+    ("17.15.4a"). For a device on 17.12 that reads as "change trains", while
+    Cisco's Known Affected list for the same CVE often simply ends inside the
+    caller's train. We do not know the first fixed 17.12 release — Cisco's API
+    does not give it — so this states only what the list shows and where to
+    look, never a version we did not read.
+    """
+    if not version:
+        return ""
+    user = _tokenize_version(version)
+    if len(user) < 2 or len(target) < 2 or tuple(user[:2]) == tuple(target[:2]):
+        return ""
+    family = family_for_version(version)
+    listed = (getattr(driver, "known_affected", None) or {}).get(family or "") or []
+    train = [v for v in listed if tuple(_tokenize_version(v)[:2]) == tuple(user[:2])]
+    if not train:
+        return ""
+    last = max(train, key=lambda v: (_tokenize_version(v), v))
+    label = f"{user[0]}.{user[1]}"
+    return (f". That is a different train than yours: Cisco's affected list for this CVE "
+            f"on {label} ends at {last}, so a later {label} release may already carry the fix "
+            f"(check Cisco Software Checker before planning a train change)")
+
+
 @dataclass(frozen=True)
 class CVEEngineConfig:
     engine_version: str = "0.3.7"
@@ -1035,6 +1093,13 @@ class CVEEngine:
         # importer). Falls back to legacy fuzzy matching when family is UNKNOWN.
         query_family = normalize_user_platform(platform)
 
+        # A recognised platform we hold no data for: answer nothing, and let the
+        # report say "not evaluated" (platform_coverage_note).
+        if uncovered_family(platform) is not None:
+            self.excluded_by_known_affected = []
+            self.cisco_source_conflicts = []
+            return []
+
         # ISE-03: ISE is matched per train, not by min/max range.
         # ISE-04: when Cisco's Known Affected list exists it decides, exactly as
         # for IOS XE; the per-train fix logic remains for records without one.
@@ -1173,6 +1238,10 @@ class CVEEngine:
             key=lambda x: (
                 _kev_flag(x),
                 severity_rank.get(_shown_severity(x), 99),
+                # Within one severity bucket a confirmed match outranks an
+                # unconfirmed one: an SSM On-Prem CVE matched on a placeholder
+                # range sat above a verified CVSS 10.0 for the same release.
+                1 if x.cve_id in uncertain else 0,
                 -(getattr(x, "cvss_score", None) or 0.0),
                 x.cve_id,
             )
@@ -1310,4 +1379,4 @@ class CVEEngine:
         driver_tags = [t.lower() for t in (getattr(driver, "tags", []) or [])]
         is_kev = any(t in driver_tags for t in ("kev", "actively-exploited", "zero-day"))
         kev_note = " (KEV, actively exploited)" if is_kev else ""
-        return f"{best_str} — driven by {driver.cve_id}{kev_note}"
+        return f"{best_str} — driven by {driver.cve_id}{kev_note}{_same_train_hint(driver, version, best_ver)}"

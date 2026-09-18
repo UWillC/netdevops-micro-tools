@@ -71,7 +71,7 @@ class TestProvenanceNamesTheDatasetThatWasRead:
     def test_ios_xe_analysis_still_names_the_ios_xe_dataset(self):
         local = self.sources("ISR4451-X", "17.5.1")["local-json"]
         assert "cve_data/ios_xe" in local["description"]
-        assert local["file_count"] == 142
+        assert local["file_count"] == 141   # 142 until v0.6.47 removed another vendor's CVE
 
     def test_default_argument_keeps_old_callers_working(self):
         block = cve_provenance("x", "y", [])

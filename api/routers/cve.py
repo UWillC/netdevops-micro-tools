@@ -9,7 +9,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from services.cve_engine import CVEEngine, CVEEngineConfig, cvss_rating_from_score, data_dir_for_platform, is_bundled_cve, ise_coverage_note, ise_lifecycle_note, severity_info, detect_bundle, data_confidence, coverage_uncertain_ids, published_date_demoted_ids
+from services.cve_engine import platform_coverage_note, uncovered_family, CVEEngine, CVEEngineConfig, cvss_rating_from_score, data_dir_for_platform, is_bundled_cve, ise_coverage_note, ise_lifecycle_note, severity_info, detect_bundle, data_confidence, coverage_uncertain_ids, published_date_demoted_ids
 from services.eol_registry import detect_eol
 from services.provenance import cve_provenance
 
@@ -240,7 +240,7 @@ def analyze_cve(req: CVEAnalyzeRequest):
     # browsed would match against lists as old as the last deploy. Non-blocking:
     # this request is answered from disk, the next one benefits.
     _sync_platform = _ANALYZER_SYNC_PLATFORM.get(_data_dir)
-    if _sync_platform:
+    if _sync_platform and uncovered_family(req.platform) is None:
         _age = _platform_cache_age_hours(_sync_platform)
         if _age is None or _age * 3600 > PLATFORM_CACHE_TTL:
             _refresh_platform_cache_in_background(_sync_platform)
@@ -341,7 +341,7 @@ def analyze_cve(req: CVEAnalyzeRequest):
         bundled_cves=[c.cve_id for c in matched if is_bundled_cve(c)],
         cisco_source_conflicts=sorted(getattr(base_engine, "cisco_source_conflicts", [])),
         coverage_note=(ise_coverage_note(base_engine.cves)
-                       if _data_dir == "cve_data/ise" else None),
+                       if _data_dir == "cve_data/ise" else platform_coverage_note(req.platform)),
         lifecycle_note=ise_lifecycle_note(req.platform, req.version),
         excluded_not_listed=sorted(base_engine.excluded_by_known_affected),
         matched_on_known_affected=sum(1 for c in matched if any((c.known_affected or {}).values())),

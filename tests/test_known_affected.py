@@ -130,14 +130,18 @@ class TestProductionReport:
     def test_the_17_9_4_report(self):
         r = self.call("IOS XE", "17.9.4")
         assert len(r.matched) == 71                      # was 104
-        assert r.matched_on_known_affected == 65
+        assert r.matched_on_known_affected == 66     # 65 until CVE-2025-20160 got its list (v0.6.47)
         assert len(r.coverage_uncertain) == 5            # was 100
         quality = [v["confidence"] for v in r.data_quality.values()]
         assert quality.count("verified") == 66           # was 4
 
     def test_previously_verified_findings_are_all_still_there(self):
         ids = {c.cve_id for c in self.call("IOS XE", "17.9.4").matched}
-        assert {"CVE-2023-20198", "CVE-2025-20352", "CVE-2023-20273", "CVE-2025-20188"} <= ids
+        # CVE-2025-20188 was in this set until v0.6.47. It was never a real finding for
+        # 17.9.4: Cisco lists 17.11.1, 17.12.1-3, 17.13.1 and 17.14.1 only. The curated
+        # record had a non-existent advisory id, so the list could not attach.
+        assert {"CVE-2023-20198", "CVE-2025-20352", "CVE-2023-20273"} <= ids
+        assert "CVE-2025-20188" not in ids
 
     def test_excluded_are_reported_not_hidden(self):
         r = self.call("IOS XE", "17.9.4")
@@ -172,7 +176,7 @@ class TestDatasetAndText:
             if d.get("known_affected"):
                 n += 1
                 assert d.get("known_affected_as_of"), path
-        assert n == 124
+        assert n == 126   # 124 + CVE-2025-20160 and CVE-2025-20188 (v0.6.47)
 
     def test_cleaner(self):
         assert clean_advisory_text("Protocol&nbsp;(SNMP) of <b>Cisco</b>&nbsp;IOS &amp; XE") == \

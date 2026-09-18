@@ -4,6 +4,56 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.47] – 2026-09-18 (CVE Analyzer: a false CVSS 10.0, a whole false report, and eight bad curated records)
+
+Found by reading two production reports (`IOS-XE 17.12.04`, `NX-OS 10.2(6)`).
+
+### Fixed
+- **`NX-OS 10.2(6)` returned 84 CVEs, none of them evaluated for NX-OS.** There
+  is no NX-OS dataset; the query fell through to the IOS XE one, and because
+  `10.2(6)` has the shape of a classic IOS release it was checked against
+  classic IOS Known Affected lists — where a 1990s IOS 10.2(6) exists — and
+  reported "24 exact hits" about SD-WAN, cBR-8 and ASR 920. A recognised
+  platform without a dataset (NX-OS, ASA, FTD, FXOS, IOS XR, Meraki, ...) now
+  returns no matches and says `NOT EVALUATED ... means "not checked", not "not
+  vulnerable"`. Unrecognised input (device models) keeps the old behaviour.
+- **The UI's own default platform spelling, `IOS-XE`, switched the
+  product-family filter off.** Only "IOS XE" / "ios-xe software" were aliases,
+  so with the hyphen the query family was unknown and SSM On-Prem, Unified CM
+  IM&P and Access Point advisories were reported against IOS XE. Platform names
+  are now compared with separators removed, and bare names (`nxos`, `asa`,
+  `ftd`, `iosxr`, `ios`) are recognised by exact match.
+- **CVE-2025-20188 (CVSS 10.0) was a false positive for 17.12.4 and everything
+  from 17.3.1 to 17.15.1.** Cisco lists exactly 17.11.1, 17.12.1–17.12.3,
+  17.13.1 and 17.14.1. The curated record had an advisory id that does not
+  exist, so Cisco's list never attached, plus a wrong range and a wrong
+  `fixed_in: 17.15.2`. Record and mitigation rewritten from the advisory.
+- **Seven curated records pointed at advisory ids that never existed**
+  (`cisco-sa-radius-blast`, `cisco-sa-tacacs-shared-secret`,
+  `cisco-sa-fmc-auth-bypass`, ...). All corrected from PSIRT's own CVE lookup;
+  CVE-2025-20160 gained its Known Affected lists (261 IOS XE / 166 IOS releases).
+- **Removed CVE-2026-28775.** It is a real CVE for another vendor's satellite
+  receiver. It was filed here as "Cisco IOS/IOS-XE SNMP Default Community String
+  RCE, CVSS 10.0" with an invented Cisco advisory URL. Default community strings
+  on IOS are a misconfiguration (Hardening Audit rule 5.1.1), not this CVE.
+- Within one severity bucket, a confirmed match now ranks above an unconfirmed
+  one (an SSM On-Prem CVE on a placeholder range sat above a verified 10.0).
+- The upgrade recommendation says when it is on another train than the
+  device's, and what Cisco's list shows for the device's own train
+  (`17.15.4a ... on 17.12 ends at 17.12.5c ... check Cisco Software Checker`).
+  It never names a release that was not read from Cisco.
+- Report text no longer contains internal sprint jargon.
+
+### Added
+- `scripts/audit_advisory_refs.py`: asks PSIRT which advisories carry each
+  CVE and fails on a mismatch or an unknown CVE. Runs weekly in the
+  refresh workflow. Live run after the fixes: 15 records checked, 0 findings.
+
+### Tests
+- `tests/test_report_review_2026_09_18b.py` (39 cases). Suite: 1252 → 1291.
+
+---
+
 ## [v0.6.46] – 2026-09-18 (Known Affected lists: the repo copy now refreshes itself; classic IOS query fixed)
 
 ### Added

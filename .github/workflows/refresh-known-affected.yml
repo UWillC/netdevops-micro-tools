@@ -43,6 +43,11 @@ jobs:
             exit 1
           fi
           python scripts/refresh_known_affected.py
+      - name: Audit advisory references
+        # Fails the run (GitHub mails the owner) when a record points at an
+        # advisory id PSIRT does not have for that CVE, or at a CVE PSIRT
+        # does not know. Found seven such records by hand on 2026-09-18.
+        run: python scripts/audit_advisory_refs.py
       - name: Anything changed?
         id: diff
         run: |

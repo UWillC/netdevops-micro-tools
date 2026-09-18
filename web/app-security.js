@@ -233,7 +233,7 @@ if (cveForm && cveOutput) {
       if ((dqCountsTxt["max-bound"] + dqCountsTxt["uncertain"]) > 0) {
         out += `\nData quality: ${dqCountsTxt.verified} verified / ${dqCountsTxt["max-bound"]} PSIRT max-bound`;
         if (dqCountsTxt.uncertain > 0) out += ` / ${dqCountsTxt.uncertain} uncertain`;
-        out += "\n(PSIRT max-bound = matched by affected.max only, less reliable than curated fix_version. CVE-006 W19+ sprint closes gap.)\n";
+        out += "\n(PSIRT max-bound = matched by affected.max only, less reliable than a curated fix version or a Cisco Known Affected list.)\n";
       }
 
       // v0.6.24 CVE-006 Phase 5+6: coverage-uncertain bucket in text report.
