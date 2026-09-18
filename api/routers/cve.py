@@ -8,7 +8,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from services.cve_engine import CVEEngine, CVEEngineConfig, severity_info, detect_bundle, data_confidence, coverage_uncertain_ids, published_date_demoted_ids
+from services.cve_engine import CVEEngine, CVEEngineConfig, data_dir_for_platform, is_bundled_cve, severity_info, detect_bundle, data_confidence, coverage_uncertain_ids, published_date_demoted_ids
 from services.eol_registry import detect_eol
 from services.provenance import cve_provenance
 
@@ -82,6 +82,11 @@ class CVEAnalyzeResponse(BaseModel):
     # compat with existing clients. Empty list when all matches are
     # verified (local-json path with curated fix_version).
     coverage_uncertain: List[str] = []
+    # CVE-007 (2026-09-18): IDs of matched CVEs that are Cisco hardening-release
+    # CVEs — one CVE per CWE category, i.e. a class of defects rather than a
+    # single bug. SUBSET of `matched`. The UI marks these so nobody reads a
+    # category as one patchable vulnerability.
+    bundled_cves: List[str] = []
     # v0.6.18 CVE-009: end-of-life status for the queried platform.
     # When non-null, the UI renders a top-banner above the CVE list:
     # "no patches available; replace the hardware". The recommendation
@@ -143,8 +148,11 @@ def _env_true(name: str) -> bool:
 
 @router.post("/cve", response_model=CVEAnalyzeResponse)
 def analyze_cve(req: CVEAnalyzeRequest):
-    # 1) Base run (local JSON only) to find which CVE IDs apply
-    base_engine = CVEEngine(config=CVEEngineConfig(engine_version="0.3.7"))
+    # 1) Base run (local JSON only) to find which CVE IDs apply.
+    # ISE-03: the dataset directory follows the queried product family —
+    # an ISE query must read cve_data/ise, not the IOS XE default.
+    base_engine = CVEEngine(config=CVEEngineConfig(
+        engine_version="0.3.7", data_dir=data_dir_for_platform(req.platform)))
     base_engine.load_all()
     matched_base = base_engine.match(req.platform, req.version)
 
@@ -163,11 +171,11 @@ def analyze_cve(req: CVEAnalyzeRequest):
         enriched_engine.load_all()
         matched = enriched_engine.match(req.platform, req.version)
         summary = enriched_engine.summary(matched)
-        recommendation = enriched_engine.recommended_upgrade(matched) if req.include_suggestions else None
+        recommendation = enriched_engine.recommended_upgrade(matched, req.platform, req.version) if req.include_suggestions else None
     else:
         matched = matched_base
         summary = base_engine.summary(matched)
-        recommendation = base_engine.recommended_upgrade(matched) if req.include_suggestions else None
+        recommendation = base_engine.recommended_upgrade(matched, req.platform, req.version) if req.include_suggestions else None
 
     # v0.3.6 P1.3 + v0.6.16 CVE-007: per-CVE severity transparency map.
     severity_details = {cve.cve_id: severity_info(cve) for cve in matched}
@@ -230,6 +238,7 @@ def analyze_cve(req: CVEAnalyzeRequest):
         bundles=bundles,
         data_quality=data_quality,
         coverage_uncertain=coverage_uncertain_list,
+        bundled_cves=[c.cve_id for c in matched if is_bundled_cve(c)],
         eol_status=eol_status,
         provenance=provenance,
         timestamp=datetime.datetime.utcnow().isoformat() + "Z",

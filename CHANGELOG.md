@@ -4,6 +4,58 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.33] – 2026-09-18 (ISE-03 + CVE-007 — ISE in the CVE Analyzer, hardening-release CVEs)
+
+ISE-01 added the data and ISE-02 put it in the threat feed, but the analyzer
+never read it: `CVEEngineConfig.data_dir` was hard-coded to `cve_data/ios_xe`,
+and the feed read the ISE directory directly. ISE looked wired up while
+`/analyze/cve` returned zero matches for it.
+
+### Added
+- `data_dir_for_platform()` — the dataset directory follows the queried product
+  family. An ISE query reads `cve_data/ise`; everything else keeps the default.
+- `match_ise_record()` — train-aware ISE matching. Cisco fixes ISE per train
+  with a cumulative patch level, so the generic min/max range matcher is wrong
+  for it: `3.4 Patch 5` sorts *above* the 3.3 fix (`3.3 Patch 12`) and a range
+  comparison calls it fixed. Four rules, in order: fix on the train → compare;
+  train below `affected.min` → not affected (RADIUS DoS: 3.1 and earlier);
+  train above `affected.max` → not affected; otherwise affected **with no
+  patch on that train** (ISE 3.0, End of Software Maintenance).
+- ISE-aware `recommended_upgrade()`: the minimum safe release **on the caller's
+  own train**, naming the driving CVE. When any matched CVE has no fix on the
+  train it says so and recommends migration, instead of a patch level that
+  would leave something open.
+- **CVE-007 — `is_bundled_cve()` and `CVEAnalyzeResponse.bundled_cves`.** Since
+  July 2026 Cisco discloses on a fixed cadence and, in hardening releases,
+  assigns one CVE per CWE category rather than per defect. The signature is
+  machine-readable and was verified against the six hardening advisories in the
+  PSIRT cache (Crosswork, IOS XR, Secure Email, ISE, Nexus Dashboard,
+  ASA/FTD/FMC): `advisoryId` starts `cisco-sa-hardening-`, the title contains
+  "Hardening Release", and `len(cves) == len(cwe)` in every one.
+- Analyzer report marks these `[CLASS OF DEFECTS]`, lists per-train fixes for
+  ISE, shows `[CISA KEV, due …]`, and adds a one-paragraph explanation when any
+  hardening-release CVE matched.
+- `tests/test_ise_analyzer.py` (43).
+
+### Changed
+- `recommended_upgrade(matched, platform=None, version=None)` — new optional
+  arguments; existing single-argument callers are unaffected.
+- KEV/severity sorting extracted to `CVEEngine._sort_matched()` so the ISE path
+  and the generic path share one ordering.
+- `/analyze/cve` form: field hints explain the ISE input format
+  (`ISE` + `3.4 Patch 5`).
+
+### Notes
+- `bundle` (CVE-010) and a bundled CVE are different things and are kept
+  separate: `bundle` marks a same-day *publication* bundle, `is_bundled_cve()`
+  marks a CVE that stands for a class of defects. A record can be either, both,
+  or neither.
+- Recon finding, for the record: none of the 142 local `ios_xe` records is a
+  hardening-release CVE yet. Cisco's core NOS (IOS XE, IOS XR, NX-OS, ASA/FTD,
+  SD-WAN) ships on a quarterly hardening cadence; IOS XR (2026-09-02) and
+  ASA/FTD/FMC (2026-09-16) have already had theirs. IOS XE has not, so the
+  detection lands before the first record that needs it.
+
 ## [v0.6.32] – 2026-09-18 (ISE-02 — ISE in the threat feed, KEV badges, local fallback)
 
 ISE-01 gave the engine ISE data. This makes it visible: ISE joins the

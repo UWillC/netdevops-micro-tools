@@ -480,6 +480,37 @@ def published_date_demoted_ids(
     return out
 
 
+# CVE-007 (2026-09-18) — Cisco "hardening release" CVEs.
+#
+# Since July 2026 Cisco discloses on a fixed cadence (1st and 3rd Wednesday) and,
+# in hardening releases, no longer assigns one CVE per defect: each CVE covers
+# many fixes within a single CWE category. Russ Smoak, blogs.cisco.com,
+# 2026-06-02: "Assessing security risk CVE-by-CVE and applying point mitigations
+# is no longer fit for purpose."
+#
+# The signature is machine-readable and was verified against 6 hardening
+# advisories in the PSIRT cache (Crosswork, IOS XR, Secure Email, ISE, Nexus
+# Dashboard, ASA/FTD/FMC): advisoryId starts "cisco-sa-hardening-", the title
+# contains "Hardening Release", and len(cves) == len(cwe) — one CVE per CWE.
+#
+# This is NOT the same thing as `bundle` / detect_bundle() below. That field
+# marks a *publication* bundle (several ordinary advisories released the same
+# day). A bundled CVE is a different unit of meaning: a class of defects.
+_HARDENING_URL_MARK = "cisco-sa-hardening-"
+_HARDENING_TITLE_RE = re.compile(r"hardening\s+release", re.IGNORECASE)
+
+
+def is_bundled_cve(cve: "CVEEntry") -> bool:
+    """True when this CVE stands for a CWE class in a Cisco hardening release."""
+    tags = [t.lower() for t in (getattr(cve, "tags", []) or [])]
+    if "bundled-cve" in tags:
+        return True
+    url = (getattr(cve, "advisory_url", "") or "").lower()
+    if _HARDENING_URL_MARK in url:
+        return True
+    return bool(_HARDENING_TITLE_RE.search(getattr(cve, "title", "") or ""))
+
+
 def detect_bundle(cve: "CVEEntry") -> Optional[str]:
     """
     Return a canonical bundle identifier (e.g. "2025-09") if the CVE is part
@@ -610,6 +641,94 @@ def platform_matches(query_platform: str, cve_platforms: List[str]) -> bool:
             return True
 
     return False
+
+
+# -----------------------------
+# ISE-03 (2026-09-18) — per-family dataset + ISE train-aware matching
+# -----------------------------
+# The engine shipped with one hard-coded directory (cve_data/ios_xe). ISE-01
+# added cve_data/ise, but nothing pointed the analyzer at it: the threat feed
+# read the directory directly, so ISE looked wired up while /analyze/cve
+# silently returned zero matches for it.
+_FAMILY_DATA_DIRS = {
+    ProductFamily.ISE: "cve_data/ise",
+}
+DEFAULT_DATA_DIR = "cve_data/ios_xe"
+
+
+def data_dir_for_platform(platform: str) -> str:
+    """Return the curated dataset directory for a user-supplied platform."""
+    family = normalize_user_platform(platform or "")
+    return _FAMILY_DATA_DIRS.get(family, DEFAULT_DATA_DIR)
+
+
+def _strip_ise_label(version: str) -> str:
+    """Accept "ISE 3.4 Patch 5" as well as "3.4 Patch 5" in the version box."""
+    v = (version or "").strip()
+    for prefix in ("cisco ise-pic", "cisco ise", "ise-pic", "ise"):
+        if v.lower().startswith(prefix + " "):
+            return v[len(prefix):].strip()
+    return v
+
+
+def match_ise_record(cve: "CVEEntry", version: str) -> Optional[bool]:
+    """Decide whether an ISE deployment at `version` is affected by `cve`.
+
+    ISE cannot use the generic min/max range matcher. Cisco fixes ISE per
+    *train*, with a cumulative patch level: "3.4 Patch 7" says nothing about
+    3.3, whose fix is "3.3 Patch 12". A range comparison would call
+    "3.4 Patch 5" fixed because it sorts above "3.3 Patch 12".
+
+    Returns True (affected), False (not affected), or None when `version` is
+    not a parseable ISE version — the caller decides how to surface that.
+
+    Rules, in order:
+      1. The train has an explicit fix  -> affected iff running < that fix.
+      2. No fix for the train, train below `affected.min` -> not affected
+         (e.g. RADIUS DoS: "3.1 and earlier not vulnerable").
+      3. No fix for the train, train above `affected.max` -> not affected
+         (a newer train than anything the advisory lists).
+      4. Otherwise -> affected, and there is NO patch on this train
+         (e.g. ISE 3.0, End of Software Maintenance: migrate only).
+    """
+    from services.cisco_version import CiscoIseVersion
+
+    running = CiscoIseVersion.parse(_strip_ise_label(version))
+    if running is None:
+        return None
+    train = "%d.%d" % (running.major, running.minor)
+
+    fixes = {}
+    ff = getattr(cve, "first_fixed_version", None)
+    if ff is not None:
+        fixes = getattr(ff, "fixes", None) or {}
+
+    fix_str = fixes.get("ise-" + train)
+    if fix_str:
+        fix = CiscoIseVersion.parse(fix_str)
+        if fix is None:
+            return True  # unreadable fix: fail towards "review this"
+        return running < fix
+
+    lo = CiscoIseVersion.parse(getattr(cve.affected, "min", "") or "")
+    hi = CiscoIseVersion.parse(getattr(cve.affected, "max", "") or "")
+    key = (running.major, running.minor)
+    if lo is not None and key < (lo.major, lo.minor):
+        return False
+    if hi is not None and key > (hi.major, hi.minor):
+        return False
+    return True
+
+
+def ise_fix_for_version(cve: "CVEEntry", version: str) -> Optional[str]:
+    """First fixed release on the caller's own train, or None if the train has none."""
+    from services.cisco_version import CiscoIseVersion
+
+    running = CiscoIseVersion.parse(_strip_ise_label(version))
+    ff = getattr(cve, "first_fixed_version", None)
+    if running is None or ff is None:
+        return None
+    return (getattr(ff, "fixes", None) or {}).get("ise-%d.%d" % (running.major, running.minor))
 
 
 # -----------------------------
@@ -802,6 +921,15 @@ class CVEEngine:
         # importer). Falls back to legacy fuzzy matching when family is UNKNOWN.
         query_family = normalize_user_platform(platform)
 
+        # ISE-03: ISE is matched per train, not by min/max range.
+        if query_family == ProductFamily.ISE:
+            for cve in self.cves:
+                if "ise" not in (getattr(cve, "product_families", None) or []):
+                    continue
+                if match_ise_record(cve, version):
+                    matched.append(cve)
+            return self._sort_matched(matched)
+
         for cve in self.cves:
             if not platform_matches(platform, cve.platforms):
                 continue
@@ -844,7 +972,11 @@ class CVEEngine:
 
             matched.append(cve)
 
-        # KEV / actively-exploited CVEs first, then critical/high, then CVE ID
+        return self._sort_matched(matched)
+
+    @staticmethod
+    def _sort_matched(matched: List[CVEEntry]) -> List[CVEEntry]:
+        """KEV / actively-exploited first, then severity, then CVE id."""
         def _kev_flag(c: CVEEntry) -> int:
             tags = [t.lower() for t in (getattr(c, "tags", []) or [])]
             return 0 if any(t in tags for t in ("kev", "actively-exploited", "zero-day")) else 1
@@ -873,15 +1005,77 @@ class CVEEngine:
     # -------------------------
     # Recommended upgrade
     # -------------------------
-    def recommended_upgrade(self, matched: List[CVEEntry]) -> Optional[str]:
+    @staticmethod
+    def _recommended_upgrade_ise(matched: List[CVEEntry], version: str) -> Optional[str]:
+        """Minimum safe ISE release on the caller's own train.
+
+        Every matched CVE is asked for its fix on that train; the answer is the
+        highest of them, since anything lower leaves one CVE open. If any
+        matched CVE has no fix on the train, there is no safe patch level at
+        all and the only remediation is migration — said plainly rather than
+        recommending a patch that does not close everything.
+        """
+        from services.cisco_version import CiscoIseVersion
+
+        if not matched:
+            return None
+        running = CiscoIseVersion.parse(_strip_ise_label(version))
+        if running is None:
+            return None
+        train = "%d.%d" % (running.major, running.minor)
+
+        best = None
+        driver = None
+        unfixable = []
+        for cve in matched:
+            fix_str = ise_fix_for_version(cve, version)
+            fix = CiscoIseVersion.parse(fix_str) if fix_str else None
+            if fix is None:
+                unfixable.append(cve.cve_id)
+                continue
+            if best is None or fix > best[1]:
+                best, driver = (fix_str, fix), cve
+
+        if unfixable:
+            return (
+                f"No fixed release exists on the ISE {train} train for "
+                f"{len(unfixable)} of {len(matched)} matched CVEs "
+                f"(e.g. {unfixable[0]}). Migrate to a supported train."
+            )
+
+        tags = [t.lower() for t in (getattr(driver, "tags", []) or [])]
+        kev = any(t in tags for t in ("kev", "actively-exploited", "zero-day"))
+        note = f"{best[0]} \u2014 driven by {driver.cve_id}"
+        if kev:
+            note += " (KEV, actively exploited)"
+
+        bundled = [c.cve_id for c in matched if is_bundled_cve(c)]
+        if bundled:
+            note += (
+                f". {len(bundled)} of {len(matched)} are hardening-release CVEs: "
+                "each one covers a class of defects, so they cannot be mitigated "
+                "one by one \u2014 the hardened release is the unit of remediation."
+            )
+        return note
+
+    def recommended_upgrade(self, matched: List[CVEEntry],
+                            platform: Optional[str] = None,
+                            version: Optional[str] = None) -> Optional[str]:
         """
         Return the MINIMUM SAFE version: the lowest version that fixes EVERY
         applicable critical/high CVE. This is max(fix_versions), not min.
+
+        ISE-03: when `platform` resolves to ISE, the answer is computed on the
+        caller's own train (see _recommended_upgrade_ise). `platform`/`version`
+        are optional so existing callers keep their behaviour.
 
         Fixed 2026-04-19 per defect report CVE-002: previous logic picked the
         LOWEST fix version, producing false "patched" state (e.g. recommending
         17.15.2 while CVE-2025-20352 first-fixed in 17.15.4a).
         """
+        if platform and version and normalize_user_platform(platform) == ProductFamily.ISE:
+            return self._recommended_upgrade_ise(matched, version)
+
         # Collect (fixed_in_string, parsed_version_tuple, driver_cve) for each
         # critical/high CVE that has a fix version. Skip CVEs without fixed_in.
         candidates: List[Tuple[str, Tuple[int, ...], CVEEntry]] = []

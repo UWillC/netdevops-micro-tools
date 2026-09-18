@@ -121,6 +121,8 @@ if (cveForm && cveOutput) {
         out += data.eol_status.banner_text + "\n\n";
       }
 
+      const bundledCveIds = new Set(Array.isArray(data.bundled_cves) ? data.bundled_cves : []);
+
       out += "Matched CVEs:\n";
       data.matched.forEach((cve) => {
         const primary = displaySeverity(cve);
@@ -129,6 +131,10 @@ if (cveForm && cveOutput) {
         let line = `${cve.cve_id} [${primary}]`;
         if (d.cisco_sir) line += ` [Cisco SIR: ${d.cisco_sir}]`;
         if (bundle) line += ` [Bundle: ${bundle}]`;
+        // CVE-007: a hardening-release CVE is a CWE class, not a single bug.
+        const isBundledCve = bundledCveIds.has(cve.cve_id);
+        if (isBundledCve) line += " [CLASS OF DEFECTS]";
+        if (cve.kev) line += ` [CISA KEV, due ${cve.kev.due_date}]`;
         out += line + "\n";
         out += `  Title: ${cve.title}\n`;
         out += `  Source: ${cve.source || "N/A"}\n`;
@@ -139,6 +145,17 @@ if (cveForm && cveOutput) {
         out += `  Tags: ${(cve.tags || []).join(", ")}\n`;
         out += `  Description: ${cve.description}\n`;
         if (cve.fixed_in) out += `  Fixed in: ${cve.fixed_in}\n`;
+        // ISE-03: ISE is fixed per train, so list every train's fix.
+        const trainFixes = (cve.first_fixed_version && cve.first_fixed_version.fixes) || null;
+        if (trainFixes && Object.keys(trainFixes).some((k) => k.startsWith("ise-"))) {
+          const parts = Object.keys(trainFixes).sort().map((k) => trainFixes[k]);
+          out += `  Fixed in (per train): ${parts.join(" | ")}\n`;
+        }
+        if (isBundledCve) {
+          out += "  Note: hardening-release CVE. One CVE covers many fixes in a single CWE\n";
+          out += "        category. It cannot be mitigated on its own; remediation is the\n";
+          out += "        hardened release.\n";
+        }
         if (cve.workaround) out += `  Workaround: ${cve.workaround}\n`;
         out += `  Advisory: ${cve.advisory_url}\n`;
         if (cve.references && cve.references.length > 0) {
@@ -146,6 +163,12 @@ if (cveForm && cveOutput) {
         }
         out += "\n";
       });
+
+      if (bundledCveIds.size > 0) {
+        out += `Hardening-release CVEs: ${bundledCveIds.size} / ${data.matched.length}\n`;
+        out += "(Since July 2026 Cisco assigns one CVE per CWE category in hardening releases,\n";
+        out += " not one per defect. Read these as classes of bugs fixed together.)\n\n";
+      }
 
       out += "Severity breakdown (NVD CVSS v3.x):\n";
       ["CRITICAL", "HIGH", "MEDIUM", "LOW", "NONE", "UNKNOWN"].forEach((sev) => {
