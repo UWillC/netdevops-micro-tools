@@ -9,6 +9,14 @@ const threatFeedAge = document.getElementById("cisco-advisories-age");
 const threatFeedRefresh = document.getElementById("cisco-advisories-refresh");
 const threatFeedPlatform = document.getElementById("cisco-advisories-platform");
 
+// Feed rows are built with innerHTML and advisory titles come from an external
+// API, so every interpolated value goes through this first.
+function esc(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  })[c]);
+}
+
 async function loadThreatFeed() {
   if (!threatFeedList) return;
   threatFeedList.innerHTML = '<p class="summary-muted">Loading threat feed...</p>';
@@ -25,7 +33,7 @@ async function loadThreatFeed() {
     }
 
     if (!data.items || data.items.length === 0) {
-      threatFeedList.innerHTML = '<p class="summary-muted">No threat data available. Feed populates automatically when Cisco PSIRT API credentials are configured.</p>';
+      threatFeedList.innerHTML = '<p class="summary-muted">No threat data for this platform. The live feed needs Cisco PSIRT API credentials; curated local records are shown whenever they exist.</p>';
       return;
     }
 
@@ -34,6 +42,7 @@ async function loadThreatFeed() {
     data.items.forEach(item => {
       const a = document.createElement("a");
       a.className = "cisco-advisories-item";
+      if (item.kev) a.classList.add("is-kev");
       a.href = item.url || "#";
       a.target = "_blank";
       a.rel = "noopener";
@@ -41,12 +50,34 @@ async function loadThreatFeed() {
       const cvssClass = item.severity === "critical" ? "critical" : "high";
       const cvssText = item.cvss != null ? item.cvss.toFixed(1) : "—";
 
+      // CISA KEV gets its own badge and is never folded into severity:
+      // being exploited is evidence, not a higher score (severity_policy).
+      let kevBadge = "";
+      if (item.kev) {
+        const due = item.kev.due_date || "";
+        const label = due ? "KEV \u00b7 due " + esc(due) : "KEV";
+        const tip = [
+          item.kev.date_added ? "Added to CISA KEV " + item.kev.date_added : "",
+          due ? "Federal remediation deadline " + due : "",
+          item.kev.directive || "",
+        ].filter(Boolean).join(" — ");
+        kevBadge = `<span class="cisco-advisories-kev" title="${esc(tip)}">${label}</span>`;
+      }
+
+      // Curated local records are labelled so a snapshot is never mistaken
+      // for the live PSIRT feed.
+      const srcBadge = item.source === "local"
+        ? `<span class="cisco-advisories-src" title="Curated local record, not the live PSIRT feed">local</span>`
+        : "";
+
       a.innerHTML = `
         <span class="cisco-advisories-cvss ${cvssClass}">${cvssText}</span>
-        <span class="cisco-advisories-cve">${item.cve_id}</span>
-        <span class="cisco-advisories-desc">${item.title}</span>
-        <span class="cisco-advisories-date">${item.updated ? item.updated.slice(0, 10) : ""}</span>
-        <span class="cisco-advisories-severity ${cvssClass}">${item.severity}</span>
+        <span class="cisco-advisories-cve">${esc(item.cve_id)}</span>
+        <span class="cisco-advisories-desc">${esc(item.title)}</span>
+        ${kevBadge}
+        ${srcBadge}
+        <span class="cisco-advisories-date">${item.updated ? esc(item.updated.slice(0, 10)) : ""}</span>
+        <span class="cisco-advisories-severity ${cvssClass}">${esc(item.severity)}</span>
       `;
 
       threatFeedList.appendChild(a);

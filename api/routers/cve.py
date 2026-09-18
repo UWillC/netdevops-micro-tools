@@ -119,6 +119,14 @@ class FeedItem(BaseModel):
     updated: Optional[str]
     url: Optional[str]
     platforms: List[str]
+    # ISE-02 (2026-09-18) — where this row came from. "psirt" = live Cisco
+    # PSIRT API (needs credentials), "local" = curated cve_data/ record. The
+    # UI labels local rows so a stale dataset is never mistaken for a live feed.
+    source: str = "psirt"
+    # ISE-02 — CISA KEV status, surfaced SEPARATELY from severity per the
+    # policy in CVEAnalyzeResponse.severity_policy: being in KEV is evidence
+    # of exploitation, not a higher CVSS. None = not in KEV as of last import.
+    kev: Optional[dict] = None
 
 
 class CriticalFeedResponse(BaseModel):
@@ -349,6 +357,26 @@ def _fetch_latest_advisories() -> list:
     return advisories
 
 
+def _sort_feed_items(feed_items: list) -> None:
+    """Order the threat feed in place: KEV first, then newest, severity, CVSS.
+
+    Putting CISA KEV entries on top is triage ordering, not a severity
+    escalation — the row keeps its own CVSS and severity, exactly as required
+    by CVEAnalyzeResponse.severity_policy. What changes is position: a
+    vulnerability under active exploitation with a federal deadline is the one
+    an operator needs to see first, regardless of how it scored.
+    """
+    feed_items.sort(
+        key=lambda x: (
+            1 if getattr(x, "kev", None) else 0,
+            x.updated or "0",
+            0 if x.severity == "critical" else -1,
+            x.cvss or 0,
+        ),
+        reverse=True,
+    )
+
+
 def _advisories_to_feed(advisories: list, platform_filter: str = "all") -> list:
     """Convert raw advisories to FeedItem list with optional platform filter."""
     html_tag_re = re.compile(r"<[^>]+>")
@@ -373,6 +401,10 @@ def _advisories_to_feed(advisories: list, platform_filter: str = "all") -> list:
                 continue
             elif platform_filter == "ftd" and "firepower" not in product_text and "ftd" not in product_text:
                 continue
+            elif platform_filter == "ise" and (
+                "identity services engine" not in product_text and "ise" not in product_text.split()
+            ):
+                continue
 
         cves = adv.get("cves") or []
         cve_id = cves[0] if cves else adv.get("advisoryId", "N/A")
@@ -396,12 +428,120 @@ def _advisories_to_feed(advisories: list, platform_filter: str = "all") -> list:
             platforms=products[:3],
         ))
 
-    # Sort: newest first, then severity, then CVSS
-    feed_items.sort(
-        key=lambda x: (x.updated or "0", 0 if x.severity == "critical" else -1, x.cvss or 0),
-        reverse=True,
-    )
+    _sort_feed_items(feed_items)
     return feed_items
+
+
+# ISE-02 (2026-09-18) — local dataset fallback for the threat feed.
+#
+# The feed was PSIRT-only: without Cisco API credentials it rendered "No threat
+# data available" forever. Curated records in cve_data/<dir>/ are a real source
+# with real provenance (advisory CVRF + NVD + KEV), so they now feed the widget
+# too. PSIRT still wins on conflict — it is live, the local set is a snapshot.
+_LOCAL_DATA_DIRS = {
+    "ise": "ise",
+    "iosxe": "ios_xe",
+}
+
+# Platform label shown on locally-sourced rows.
+_LOCAL_PLATFORM_LABELS = {
+    "ise": ["ISE", "ISE-PIC"],
+    "iosxe": ["IOS XE"],
+}
+
+
+def _local_records_to_feed(platform: str) -> list:
+    """Build FeedItems from curated cve_data/<platform>/ records.
+
+    Returns [] for platforms with no local directory. Records that fail to
+    parse are skipped rather than raising: a malformed file must not take the
+    whole home page down.
+    """
+    subdir = _LOCAL_DATA_DIRS.get(platform)
+    if not subdir:
+        return []
+    data_dir = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "..", "..", "cve_data", subdir
+    )
+    data_dir = os.path.normpath(data_dir)
+    if not os.path.isdir(data_dir):
+        return []
+
+    items = []
+    for name in sorted(os.listdir(data_dir)):
+        if not name.endswith(".json") or name.startswith("_"):
+            continue
+        try:
+            with open(os.path.join(data_dir, name), "r", encoding="utf-8") as f:
+                raw = json.load(f)
+            entry = CVEEntry(**raw)
+        except Exception:
+            continue
+
+        kev_block = None
+        if entry.kev is not None:
+            kev_block = {
+                "date_added": entry.kev.date_added,
+                "due_date": entry.kev.due_date,
+                "catalog_version": entry.kev.catalog_version,
+                "directive": entry.kev.directive,
+            }
+
+        items.append(FeedItem(
+            cve_id=entry.cve_id,
+            title=entry.title,
+            severity=(entry.severity or "").lower(),
+            cvss=entry.cvss_score,
+            published=entry.published,
+            updated=entry.last_modified or entry.published,
+            url=entry.advisory_url,
+            platforms=(entry.platforms or _LOCAL_PLATFORM_LABELS.get(platform, []))[:3],
+            source="local",
+            kev=kev_block,
+        ))
+    return items
+
+
+def _merge_feed_items(psirt_items: list, local_items: list) -> list:
+    """Merge PSIRT and local rows into one advisory-granular list.
+
+    Two different granularities meet here. A PSIRT row represents an *advisory*
+    (`_advisories_to_feed` labels it with `cves[0]`), while a local record is
+    one *CVE*. Merging on CVE id alone let a single advisory occupy six of the
+    ten slots: the Cisco ISE hardening release carries six CVEs, and each one
+    is its own file in cve_data/. So dedup happens on both keys — CVE id, and
+    advisory URL.
+
+    Precedence: PSIRT wins (live data beats a snapshot). But a local row that
+    carries KEV status donates it to whichever row represents that advisory —
+    the PSIRT API does not expose KEV, and dropping an active-exploitation flag
+    during a merge would silently remove the most important signal on the page.
+    """
+    by_id = {}
+    by_url = {}
+    order = []
+
+    for item in psirt_items:
+        if item.cve_id in by_id:
+            continue
+        by_id[item.cve_id] = item
+        if item.url:
+            by_url.setdefault(item.url, item)
+        order.append(item.cve_id)
+
+    for item in local_items:
+        existing = by_id.get(item.cve_id) or (by_url.get(item.url) if item.url else None)
+        if existing is not None:
+            # Same CVE, or a different CVE from an advisory already on the list.
+            if existing.kev is None and item.kev is not None:
+                existing.kev = item.kev
+            continue
+        by_id[item.cve_id] = item
+        if item.url:
+            by_url.setdefault(item.url, item)
+        order.append(item.cve_id)
+
+    return [by_id[i] for i in order]
 
 
 def _load_platform_cache(platform: str) -> list:
@@ -463,9 +603,20 @@ def _get_advisories_feed(platform: str = "all"):
 
     feed_items = _advisories_to_feed(advisories, platform)
 
+    # ISE-02: fold in curated local records. For "all" we pull every local
+    # directory, so a platform with no PSIRT coverage (ISE before credentials
+    # are configured) is still visible on the default view.
+    local_platforms = [platform] if platform != "all" else list(_LOCAL_DATA_DIRS)
+    local_items = []
+    for lp in local_platforms:
+        local_items.extend(_local_records_to_feed(lp))
+    if local_items:
+        feed_items = _merge_feed_items(feed_items, local_items)
+        _sort_feed_items(feed_items)
+
     return CriticalFeedResponse(
         items=feed_items[:10],
-        total_advisories=len(advisories),
+        total_advisories=len(advisories) + len(local_items),
         cache_age_hours=cache_age_hours,
         timestamp=datetime.datetime.utcnow().isoformat() + "Z",
     )

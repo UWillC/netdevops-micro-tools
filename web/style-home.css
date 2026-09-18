@@ -416,6 +416,49 @@
   color: #fb923c;
 }
 
+/* ISE-02 (2026-09-18) — CISA KEV badge.
+   Deliberately a different hue from the severity chips (red/orange): KEV is
+   not a severity level, it is evidence of active exploitation. A row can be
+   medium-severity and still be in KEV, and that combination must stay
+   readable rather than looking like a contradiction. */
+.cisco-advisories-kev {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 7px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  background: rgba(168, 85, 247, 0.16);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.35);
+}
+
+/* Left rail on rows under active exploitation — visible before any text is
+   read, which is the point of the feed. */
+.cisco-advisories-item.is-kev {
+  border-left: 3px solid rgba(168, 85, 247, 0.75);
+  background: rgba(168, 85, 247, 0.06);
+}
+
+.cisco-advisories-item.is-kev:hover {
+  background: rgba(168, 85, 247, 0.12);
+}
+
+/* Provenance chip: this row came from the curated dataset, not the live API. */
+.cisco-advisories-src {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  background: rgba(148, 163, 184, 0.12);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
 @media (max-width: 768px) {
   .cisco-advisories-header {
     flex-direction: column;
@@ -426,6 +469,11 @@
     min-width: auto;
   }
   .cisco-advisories-desc {
+    display: none;
+  }
+  /* The KEV badge survives on mobile; the provenance chip is the one that
+     goes, because a deadline matters more than where the row came from. */
+  .cisco-advisories-src {
     display: none;
   }
 }

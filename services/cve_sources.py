@@ -229,6 +229,10 @@ class CiscoAdvisoryProvider(CVEProvider):
         "ios": "Cisco IOS Software",
         "nxos": "Cisco NX-OS Software",
         "asa": "Cisco Adaptive Security Appliance (ASA) Software",
+        # ISE-02 (2026-09-18). Without this mapping the provider queried
+        # product="ise" verbatim, which the PSIRT API answers with a fuzzy
+        # match — precise product name keeps the platform cache clean.
+        "ise": "Cisco Identity Services Engine",
     }
 
     def __init__(self, platform: str = "iosxe", max_pages: int = 5):

@@ -4,6 +4,64 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.32] – 2026-09-18 (ISE-02 — ISE in the threat feed, KEV badges, local fallback)
+
+ISE-01 gave the engine ISE data. This makes it visible: ISE joins the
+"Cisco — Latest Threats" platform filter, and the widget stops being
+PSIRT-only.
+
+### Added
+- **ISE / ISE-PIC** in the Latest Threats platform selector, with a matching
+  filter server-side. Word-boundary match on `ise`, so "Precise" and "Wiseguy"
+  do not qualify.
+- **Local dataset fallback for the feed.** Curated `cve_data/<platform>/`
+  records now feed the widget alongside PSIRT. Previously, with no Cisco API
+  credentials the widget rendered "No threat data available" permanently —
+  including for platforms where we hold real, sourced records.
+- **CISA KEV badge** on feed rows, with the federal deadline in the label and
+  the catalog date plus directive in the tooltip. Rows under active
+  exploitation also get a left rail.
+- `FeedItem.source` (`psirt` / `local`) rendered as a `local` chip, so a
+  curated snapshot is never mistaken for the live feed.
+- `services.cve_sources.CiscoAdvisoryProvider.PLATFORM_PRODUCTS["ise"]` →
+  `"Cisco Identity Services Engine"`. Without it the provider queried
+  `product=ise` verbatim and the API answered with a fuzzy match.
+- `tests/test_ise_threat_feed.py` (27) — local loading, merge and dedup,
+  ordering, platform filter, and endpoint behaviour with PSIRT stubbed out.
+
+### Changed
+- **Feed ordering: KEV first**, then newest, severity, CVSS. This is triage
+  ordering, not a severity escalation — a KEV row keeps its own CVSS and
+  severity, per `CVEAnalyzeResponse.severity_policy`. A CVSS 6.5 under active
+  exploitation outranks a quiet 10.0.
+- **Merge dedups on two keys, CVE id *and* advisory URL.** PSIRT rows are
+  advisory-granular (`cves[0]` labels the row); local records are one CVE each.
+  On CVE id alone the September ISE hardening release took six of the ten slots
+  because it carries six CVEs. The widget is a per-advisory triage list, so it
+  is now one row per advisory — the link target was the advisory either way.
+- **Merge rule:** on a CVE present in both sources, the PSIRT row wins (live
+  beats snapshot) but inherits the KEV block from the local record. The KEV
+  block is donated even when the two sources label the same advisory with
+  different CVE ids. The PSIRT
+  API does not expose KEV status, so without this the most important signal on
+  the page would vanish exactly when both sources have the CVE.
+- `api/main.py` version `0.6.29` → `0.6.32`. It had not been bumped for v0.6.30
+  or v0.6.31, so `/meta/version` and the provenance footer were reporting a
+  build two releases old.
+- Feed rows are HTML-escaped. Titles arrive from an external API and were being
+  interpolated into `innerHTML` unescaped.
+- Empty-state copy now says local records are shown when they exist, instead of
+  implying credentials are the only path to data.
+
+### Fixed
+- `TestEndpointWithoutNetwork` initially stubbed the cache loaders but not
+  `CiscoAdvisoryProvider`. An empty platform cache sends `_get_advisories_feed`
+  down the "then fetch it" branch, which on a machine with credentials hit the
+  live API and auto-imported ~1000 advisories into `cve_data/` — a test writing
+  into the dataset under test. The provider is now stubbed with one that raises
+  if `load()` is ever reached. Full suite verified to leave the working tree
+  clean.
+
 ## [v0.6.31] – 2026-09-18 (ISE-01 — Cisco Identity Services Engine coverage)
 
 Cisco published a bundle of 16 ISE advisories on 2026-09-16 (~40 CVEs, three at
