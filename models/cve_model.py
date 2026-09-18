@@ -21,6 +21,25 @@ class CVEFirstFixed(BaseModel):
     fixes: Dict[str, str] = Field(default_factory=dict)
 
 
+class CVEKevStatus(BaseModel):
+    """CISA Known Exploited Vulnerabilities catalog status.
+
+    ISE-01 (2026-09-18). Presence of this block means the CVE was in the KEV
+    catalog when the record was written. `catalog_version` pins which snapshot
+    that was, so a stale record is recognisable instead of being trusted: KEV
+    is append-mostly but due dates and notes do change.
+
+    `due_date` is the US federal remediation deadline (BOD 22-01 and successors).
+    It is not a vendor deadline and carries no obligation outside FCEB agencies,
+    but it is the sharpest public signal that a CVE is being exploited now.
+    """
+
+    date_added: str            # ISO date, KEV `dateAdded`
+    due_date: str              # ISO date, KEV `dueDate`
+    catalog_version: Optional[str] = None   # e.g. "2026.09.16"
+    directive: Optional[str] = None         # e.g. "BOD 26-04"
+
+
 class CVEEntry(BaseModel):
     cve_id: str
     title: str
@@ -77,3 +96,8 @@ class CVEEntry(BaseModel):
     # family-specific fix over the scalar `fixed_in` field. None on legacy
     # local-json records — matcher falls back to `fixed_in` + `affected.max`.
     first_fixed_version: Optional[CVEFirstFixed] = None
+
+    # ISE-01 (2026-09-18) — CISA KEV status. Populated only for records whose
+    # CVE is in the KEV catalog. None means "not in KEV as of the last import",
+    # NOT "not exploited" — absence of evidence only.
+    kev: Optional[CVEKevStatus] = None

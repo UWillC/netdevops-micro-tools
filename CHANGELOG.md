@@ -4,6 +4,50 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.31] – 2026-09-18 (ISE-01 — Cisco Identity Services Engine coverage)
+
+Cisco published a bundle of 16 ISE advisories on 2026-09-16 (~40 CVEs, three at
+CVSS 10.0). One of them, CVE-2026-76460, was in CISA KEV the same day with a
+three-day federal deadline and a PSIRT statement of active exploitation. The
+engine could already *name* ISE — `ProductFamily.ISE` has existed since CVE-003 —
+but `cve_data/` held only `ios_xe`, so there was nothing to match against.
+
+### Added
+- `cve_data/ise/` — 8 records from the 2026-09-16 bundle, every field read from
+  primary (CISA KEV JSON `catalogVersion 2026.09.16`, Cisco CVRF XML per
+  advisory, NVD API 2.0). CVEs without both a CVSS score and a fixed-release
+  table were left out rather than guessed. See `cve_data/ise/README.md`.
+- `scripts/seed_ise_cve_data.py` — regenerates the dataset and records its
+  provenance; `--check` is a drift guard wired into the test suite.
+- `services.cisco_version.CiscoIseVersion` — third comparator family. Parses
+  `"3.4 Patch 7"`, `"3.5P4"`, `"Cisco ISE 3.3 Patch 12"` and the installed-image
+  form `"3.4.0.608"`. Patch level is the trailing ordering component, because it
+  is the field that moves when Cisco ships a fix.
+- `models.cve_model.CVEKevStatus` + `CVEEntry.kev` — CISA KEV status
+  (`date_added`, `due_date`, `catalog_version`, `directive`). Previously a `kev`
+  key in a record JSON was silently dropped by pydantic.
+- `tests/test_cisco_ise_version.py` (36) and `tests/test_ise_dataset.py` (77),
+  including the real fixed-release table from `cisco-sa-ISE-ABP-VNSW7Tn5`.
+
+### Changed
+- `parse_cisco_version()` tries ISE first, but **only when the string is
+  unambiguously ISE**: an explicit product prefix, or a trailing `Patch N` token.
+  A bare `"3.4.0"` still parses as IOS XE. Guessing there would cross-match two
+  unrelated families, which is worse than a family the caller can override.
+
+### Notes / known deviations
+- `first_fixed_version.fixes` is keyed `ise-<train>` (`"ise-3.4": "3.4 Patch 7"`),
+  not by `ProductFamily` value. ISE ships a different patch level per train, so
+  one fix per family cannot express it. Documented in `cve_data/ise/README.md`;
+  proper resolution belongs to the pending **CVE-007** work on Cisco's bundled-CVE
+  model.
+- Six of the eight records come from a *hardening release*, where Cisco assigns
+  one CVE per CWE category rather than per defect. They carry the `bundled-cve`
+  tag; they are classes of bugs with a shared fixed release, not exploit paths.
+- ISE 3.0 is End of Software Maintenance (no fix, migrate only); 3.1 and 3.2 get
+  Critical SIR fixes only; ISE-PIC is end-of-sale at 3.4. "No patch for your
+  train" is a real answer here, not missing data.
+
 ## [v0.6.30] – 2026-09-02 (Link previews — OG/Twitter cards + HEAD /)
 
 ### Added
