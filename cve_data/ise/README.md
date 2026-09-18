@@ -81,13 +81,26 @@ ISE versions parse through `services.cisco_version.CiscoIseVersion`
 `"3.4.0"` deliberately parses as **IOS XE**, not ISE — the comparator refuses to
 guess between families. Prefix it (`"ISE 3.4.0"`) when the family is known.
 
-## End-of-life caveat
+## Software lifecycle
 
-ISE 3.0 has reached End of Software Maintenance: there is no fixed release on
-that train, only migration. Releases 3.1 and 3.2 are in Software Maintenance and
-receive Critical SIR fixes only. ISE-PIC is end-of-sale with 3.4 as its last
-supported release. A "no patch exists for your train" answer is a real outcome
-here, not a data gap.
+ISE 3.0 has reached End of Software Maintenance: no fixed release on that train,
+only migration. Releases 3.1 and 3.2 are in Software Maintenance and receive
+Critical SIR fixes only. ISE-PIC is end-of-sale with 3.4 as its last supported
+release. "No patch exists for your train" is a real outcome here, not a data gap.
+
+These statements are **not** stored in the records. v0.6.31 pasted them into
+seven of the eight descriptions, so a report for a 3.4 deployment repeated them
+seven times. Since v0.6.41 they come from
+`services.cve_engine.ise_lifecycle_note()`: one statement per report, only when
+it applies to the caller's train, with its source and without dates — the
+advisory gives none.
+
+**Lower bound.** The hardening advisory's table reads "3.0 and earlier — Migrate
+to fixed release", so those six records are unbounded below (`affected.min`
+`0.0`). v0.6.31 used `3.0`, which reported ISE 2.x as not affected. The
+authentication-bypass advisory lists 3.1–3.5 and footnotes 3.0 only, so its
+bound stays at `3.0`; nothing there speaks about 2.x and the record does not
+claim it.
 
 ## Provenance
 

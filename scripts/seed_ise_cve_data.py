@@ -54,6 +54,13 @@ HARDENING_BUNDLE = {
     "one_cve_per_cwe": True,
 }
 
+# Lower bound of the affected range. The hardening advisory's Fixed Software
+# table reads "3.0 and earlier — Migrate to fixed release", i.e. unbounded below.
+# v0.6.31 used "3.0", which made ISE 2.x come out as "not affected". The
+# authentication-bypass advisory (CVE-2026-76460) lists 3.1–3.5 plus a footnote
+# on 3.0 only, so its bound stays at 3.0: nothing there speaks about 2.x.
+HARDENING_MIN = "0.0"
+
 # CVSS 3.1 vectors, NVD API 2.0, source psirt@cisco.com, read 2026-09-18.
 V_10 = "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H"
 V_99 = "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H"
@@ -65,12 +72,10 @@ V_86 = "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:N/I:N/A:H"
 # cisco-sa-notice-jfxK98ZP): 16 ISE advisories published together.
 SCHEDULED_DROP = "cisco-drop-2026-09-16"
 
-EOSM_NOTE = (
-    "Cisco ISE Software Release 3.0 has reached End of Software Maintenance; "
-    "there is no fixed release on that train, customers must migrate. "
-    "Releases 3.1 and 3.2 are in Software Maintenance and receive Critical SIR "
-    "fixes only. ISE-PIC has reached end-of-sale; 3.4 is its last supported release."
-)
+# The ISE software-lifecycle caveat (3.0 End of Software Maintenance, 3.1/3.2
+# Critical-only, ISE-PIC end-of-sale) used to be pasted into every description
+# here. It now lives in services.cve_engine.ise_lifecycle_note() and is shown
+# once per report, only when it applies to the caller's train (EOSM-01).
 
 HARDENING_DESC = (
     "Bundled hardening CVE from the Cisco ISE Hardening Release: September 2026. "
@@ -137,8 +142,7 @@ RECORDS = [
         "insufficient authentication control on an API endpoint. An attacker could exploit this "
         "vulnerability by sending a crafted request to an affected API endpoint. A successful "
         "exploit could allow the attacker to gain unauthorized access to the affected device by "
-        "bypassing the web-based management interface. Cisco PSIRT is aware of ACTIVE EXPLOITATION. "
-        + EOSM_NOTE,
+        "bypassing the web-based management interface. Cisco PSIRT is aware of ACTIVE EXPLOITATION.",
         FIXES_FULL, "3.0", "3.5", "cisco-sa-ISE-ABP-VNSW7Tn5",
         ["cisco-psirt", "ise", "identity", "auth-bypass", "kev", "actively-exploited",
          SCHEDULED_DROP],
@@ -153,40 +157,40 @@ RECORDS = [
     rec("CVE-2026-20192",
         "Cisco ISE Hardening Release - Access Control Vulnerabilities",
         "critical", "Critical", 10.0, "CWE-284",
-        HARDENING_DESC + " Category: Access Control. " + EOSM_NOTE,
-        FIXES_FULL, "3.0", "3.5", "cisco-sa-hardening-ise-XU5EwX5T",
+        HARDENING_DESC + " Category: Access Control.",
+        FIXES_FULL, HARDENING_MIN, "3.5", "cisco-sa-hardening-ise-XU5EwX5T",
         ["cisco-psirt", "ise", "identity", "hardening-release", "bundled-cve", SCHEDULED_DROP],
         "No workarounds. Upgrade to the hardened release for your train.",
         vector=V_10, bundled=True),
     rec("CVE-2026-20130",
         "Cisco ISE Hardening Release - Improper Neutralization Vulnerabilities",
         "critical", "Critical", 10.0, "CWE-74",
-        HARDENING_DESC + " Category: Improper Neutralization. " + EOSM_NOTE,
-        FIXES_FULL, "3.0", "3.5", "cisco-sa-hardening-ise-XU5EwX5T",
+        HARDENING_DESC + " Category: Improper Neutralization.",
+        FIXES_FULL, HARDENING_MIN, "3.5", "cisco-sa-hardening-ise-XU5EwX5T",
         ["cisco-psirt", "ise", "identity", "hardening-release", "bundled-cve", SCHEDULED_DROP],
         "No workarounds. Upgrade to the hardened release for your train.",
         vector=V_10, bundled=True),
     rec("CVE-2026-20234",
         "Cisco ISE Hardening Release - Insufficiently Protected Credential Vulnerabilities",
         "critical", "Critical", 9.9, "CWE-522",
-        HARDENING_DESC + " Category: Insufficiently Protected Credentials. " + EOSM_NOTE,
-        FIXES_FULL, "3.0", "3.5", "cisco-sa-hardening-ise-XU5EwX5T",
+        HARDENING_DESC + " Category: Insufficiently Protected Credentials.",
+        FIXES_FULL, HARDENING_MIN, "3.5", "cisco-sa-hardening-ise-XU5EwX5T",
         ["cisco-psirt", "ise", "identity", "hardening-release", "bundled-cve", SCHEDULED_DROP],
         "No workarounds. Upgrade to the hardened release for your train.",
         vector=V_99, bundled=True),
     rec("CVE-2026-20237",
         "Cisco ISE Hardening Release - Input Validation Vulnerabilities",
         "critical", "Critical", 9.1, "CWE-20",
-        HARDENING_DESC + " Category: Input Validation. " + EOSM_NOTE,
-        FIXES_FULL, "3.0", "3.5", "cisco-sa-hardening-ise-XU5EwX5T",
+        HARDENING_DESC + " Category: Input Validation.",
+        FIXES_FULL, HARDENING_MIN, "3.5", "cisco-sa-hardening-ise-XU5EwX5T",
         ["cisco-psirt", "ise", "identity", "hardening-release", "bundled-cve", SCHEDULED_DROP],
         "No workarounds. Upgrade to the hardened release for your train.",
         vector=V_91, bundled=True),
     rec("CVE-2026-20194",
         "Cisco ISE Hardening Release - Incorrect Resource Transfer Vulnerabilities",
         "critical", "Critical", 9.1, "CWE-669",
-        HARDENING_DESC + " Category: Incorrect Resource Transfer. " + EOSM_NOTE,
-        FIXES_FULL, "3.0", "3.5", "cisco-sa-hardening-ise-XU5EwX5T",
+        HARDENING_DESC + " Category: Incorrect Resource Transfer.",
+        FIXES_FULL, HARDENING_MIN, "3.5", "cisco-sa-hardening-ise-XU5EwX5T",
         ["cisco-psirt", "ise", "identity", "hardening-release", "bundled-cve", SCHEDULED_DROP],
         "No workarounds. Upgrade to the hardened release for your train.",
         vector=V_91, bundled=True),
@@ -195,8 +199,8 @@ RECORDS = [
         "medium", "Critical", 6.5, "CWE-269",
         HARDENING_DESC + " Category: Improper Privilege Management. "
         "NOTE: CVSS base score (6.5) and the advisory-level Cisco SIR (Critical) disagree here "
-        "because the SIR applies to the hardening release as a whole. " + EOSM_NOTE,
-        FIXES_FULL, "3.0", "3.5", "cisco-sa-hardening-ise-XU5EwX5T",
+        "because the SIR applies to the hardening release as a whole.",
+        FIXES_FULL, HARDENING_MIN, "3.5", "cisco-sa-hardening-ise-XU5EwX5T",
         ["cisco-psirt", "ise", "identity", "hardening-release", "bundled-cve", SCHEDULED_DROP,
          "sir-cvss-divergence"],
         "No workarounds. Upgrade to the hardened release for your train.",

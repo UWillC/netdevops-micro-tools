@@ -722,6 +722,60 @@ def match_ise_record(cve: "CVEEntry", version: str) -> Optional[bool]:
     return True
 
 
+# EOSM-01 (2026-09-18) — ISE software lifecycle, stated once and only when it
+# applies. v0.6.31 pasted the same paragraph into the description of seven of
+# the eight ISE records, so a report for a 3.4 deployment repeated — seven
+# times — a caveat about trains the reader is not on.
+#
+# Every statement below is taken from the Fixed Software footnotes of
+# cisco-sa-hardening-ise-XU5EwX5T / cisco-sa-ISE-ABP-VNSW7Tn5 (rev 1.0,
+# 2026-09-16). Cisco gives no dates there, so none are given here. This is
+# deliberately NOT routed through eol_registry.detect_eol(): that banner says
+# "replace the hardware", which is false for a software-maintenance phase.
+ISE_LIFECYCLE_SOURCE = "cisco-sa-hardening-ise-XU5EwX5T (rev 1.0, 2026-09-16)"
+_ISE_TRAIN_LIFECYCLE = {
+    (3, 0): ("Cisco ISE 3.0 has reached End of Software Maintenance. No fixed "
+             "release exists on this train for the advisories below; the only "
+             "remediation is migrating to a supported release."),
+    (3, 1): ("Cisco ISE 3.1 is in its Software Maintenance phase: it receives "
+             "Critical SIR fixes only. Hardening fixes of lower rating are not "
+             "back-ported; Cisco advises migrating to a release that has them all."),
+    (3, 2): ("Cisco ISE 3.2 is in its Software Maintenance phase: it receives "
+             "Critical SIR fixes only. Hardening fixes of lower rating are not "
+             "back-ported; Cisco advises migrating to a release that has them all."),
+}
+_ISE_PIC_NOTE = ("Cisco ISE-PIC has reached its end-of-sale date; release 3.4 is "
+                 "the last supported release.")
+
+
+def ise_lifecycle_note(platform: str, version: str) -> Optional[str]:
+    """Lifecycle caveat for the caller's own ISE train, or None if there is none."""
+    from services.cisco_version import CiscoIseVersion
+
+    if normalize_user_platform(platform or "") != ProductFamily.ISE:
+        return None
+    parts = []
+    running = CiscoIseVersion.parse(_strip_ise_label(version))
+    if running is not None:
+        key = (running.major, running.minor)
+        if key < (3, 0):
+            # Cisco's table row is "3.0 and earlier — Migrate to fixed release".
+            parts.append(
+                f"Your release ({running.major}.{running.minor}) predates Cisco ISE 3.0, "
+                "which has itself reached End of Software Maintenance. No fixed release "
+                "exists on this train for the advisories below; the only remediation is "
+                "migrating to a supported release.")
+        else:
+            note = _ISE_TRAIN_LIFECYCLE.get(key)
+            if note:
+                parts.append(note)
+    if "pic" in (platform or "").lower():
+        parts.append(_ISE_PIC_NOTE)
+    if not parts:
+        return None
+    return " ".join(parts) + f" Source: {ISE_LIFECYCLE_SOURCE}."
+
+
 def ise_fix_for_version(cve: "CVEEntry", version: str) -> Optional[str]:
     """First fixed release on the caller's own train, or None if the train has none."""
     from services.cisco_version import CiscoIseVersion

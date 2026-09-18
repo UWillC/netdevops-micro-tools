@@ -89,6 +89,24 @@ if (cveForm && cveOutput) {
         `;
       }
 
+      // EOSM-01: software-lifecycle caveat for the queried train. Same slot as
+      // the EoL banner but its own wording — "replace the hardware" would be
+      // false for a software-maintenance phase. textContent, not innerHTML.
+      if (cveEolBanner && data.lifecycle_note && !(data.eol_status && data.eol_status.is_eol)) {
+        const box = document.createElement("div");
+        box.className = "eol-banner";
+        const title = document.createElement("div");
+        title.className = "eol-banner-title";
+        title.textContent = "\u26a0 Software lifecycle notice for your release";
+        const body = document.createElement("div");
+        body.className = "eol-banner-body";
+        body.textContent = data.lifecycle_note;
+        box.appendChild(title);
+        box.appendChild(body);
+        cveEolBanner.innerHTML = "";
+        cveEolBanner.appendChild(box);
+      }
+
       // v0.6.16 CVE-007/010: severity transparency + bundle lookup.
       const sevDetails = data.severity_details || {};
       const bundles = data.bundles || {};
@@ -119,6 +137,11 @@ if (cveForm && cveOutput) {
       if (data.eol_status && data.eol_status.is_eol) {
         out += "*** END-OF-LIFE PLATFORM ***\n";
         out += data.eol_status.banner_text + "\n\n";
+      }
+
+      if (data.lifecycle_note) {
+        out += "*** SOFTWARE LIFECYCLE NOTICE ***\n";
+        out += data.lifecycle_note + "\n\n";
       }
 
       const bundledCveIds = new Set(Array.isArray(data.bundled_cves) ? data.bundled_cves : []);

@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.41] – 2026-09-18 (EOSM-01 — ISE lifecycle notice once, and a false negative below 3.0)
+
+### Fixed
+- **ISE 2.x reported as "not affected" by the hardening release.** The advisory's
+  Fixed Software table reads "3.0 and earlier — Migrate to fixed release". The
+  six hardening records shipped in v0.6.31 had `affected.min = "3.0"`, so a
+  2.7 deployment matched nothing. They are now unbounded below and 2.7 returns
+  the six hardening CVEs with "no fixed release on this train, migrate". Found
+  while writing the test for the notice below. The authentication-bypass record
+  keeps `3.0`: its table lists 3.1–3.5 and footnotes 3.0, and says nothing
+  about 2.x.
+- **The same lifecycle paragraph seven times per report.** v0.6.31 pasted the
+  End-of-Software-Maintenance text into seven of eight ISE descriptions, so a
+  report for a 3.4 deployment repeated a caveat about trains the reader was not
+  on. Removed from the records.
+
+### Added
+- `ise_lifecycle_note()` + `CVEAnalyzeResponse.lifecycle_note`: one statement per
+  report, only when it applies — 3.0 and earlier (no fix, migrate), 3.1 / 3.2
+  (Critical SIR fixes only), ISE-PIC (end-of-sale, 3.4 last). It cites its
+  source and gives no dates, because the advisory gives none.
+- Shown in the banner slot and at the head of the text report. Deliberately not
+  routed through `detect_eol()`: that banner says "replace the hardware", which
+  is false for a software-maintenance phase.
+- `tests/test_ise_lifecycle.py` (24).
+
 ## [v0.6.40] – 2026-09-18 (MATCH-01 + HTML-01 — exact matching on Cisco's Known Affected lists)
 
 ### Fixed

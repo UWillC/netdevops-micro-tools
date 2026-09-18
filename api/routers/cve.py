@@ -9,7 +9,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from services.cve_engine import CVEEngine, CVEEngineConfig, cvss_rating_from_score, data_dir_for_platform, is_bundled_cve, severity_info, detect_bundle, data_confidence, coverage_uncertain_ids, published_date_demoted_ids
+from services.cve_engine import CVEEngine, CVEEngineConfig, cvss_rating_from_score, data_dir_for_platform, is_bundled_cve, ise_lifecycle_note, severity_info, detect_bundle, data_confidence, coverage_uncertain_ids, published_date_demoted_ids
 from services.eol_registry import detect_eol
 from services.provenance import cve_provenance
 
@@ -91,6 +91,10 @@ class CVEAnalyzeResponse(BaseModel):
     # single bug. SUBSET of `matched`. The UI marks these so nobody reads a
     # category as one patchable vulnerability.
     bundled_cves: List[str] = []
+    # EOSM-01 (2026-09-18): software-lifecycle caveat for the queried ISE train
+    # (End of Software Maintenance / Software Maintenance / ISE-PIC end-of-sale).
+    # One statement per report, and only when it applies to the caller.
+    lifecycle_note: Optional[str] = None
     # MATCH-01 (2026-09-18): CVE ids dropped because the queried release is not
     # on Cisco's Known Affected list for that advisory. Reported so the reader
     # can see what was ruled out and on whose authority, instead of the list
@@ -305,6 +309,7 @@ def analyze_cve(req: CVEAnalyzeRequest):
         data_quality=data_quality,
         coverage_uncertain=coverage_uncertain_list,
         bundled_cves=[c.cve_id for c in matched if is_bundled_cve(c)],
+        lifecycle_note=ise_lifecycle_note(req.platform, req.version),
         excluded_not_listed=sorted(base_engine.excluded_by_known_affected),
         matched_on_known_affected=sum(1 for c in matched if any((c.known_affected or {}).values())),
         eol_status=eol_status,
