@@ -273,6 +273,7 @@ def auto_sync_new_cves(cached_advisories: List[Dict[str, Any]]) -> int:
     )
 
     imported = 0
+    refreshed = 0
 
     for adv in cached_advisories:
         cves = adv.get("cves", [])
@@ -289,13 +290,17 @@ def auto_sync_new_cves(cached_advisories: List[Dict[str, Any]]) -> int:
             cve_lower = cve_id.lower()
 
             # CVE data file
+            cve_path = os.path.join(CVE_DATA_DIR, f"{cve_lower}.json")
             if cve_upper not in existing_cve:
                 cve_data = _build_cve_json(cve_id, adv, ver_min, ver_max)
-                cve_path = os.path.join(CVE_DATA_DIR, f"{cve_lower}.json")
                 with open(cve_path, "w", encoding="utf-8") as f:
                     json.dump(cve_data, f, indent=2, ensure_ascii=False)
                 existing_cve.add(cve_upper)
                 imported += 1
+            else:
+                # LISTS-01: an existing record is otherwise left alone, but its
+                # Known Affected list must follow Cisco's revisions.
+                refreshed += refresh_known_affected(cve_path, adv)
 
             # Mitigation file
             if cve_upper not in existing_mit:
@@ -311,8 +316,65 @@ def auto_sync_new_cves(cached_advisories: List[Dict[str, Any]]) -> int:
 
     if imported > 0:
         print(f"[SYNC] Auto-imported {imported} new CVEs from Cisco PSIRT to local database")
+    if refreshed > 0:
+        print(f"[SYNC] Refreshed Known Affected lists on {refreshed} existing CVE record(s)")
 
     return imported
+
+
+def refresh_known_affected(cve_path: str, adv: Dict[str, Any]) -> int:
+    """Bring one existing record's Known Affected list up to date. Returns 0/1.
+
+    LISTS-01 (2026-09-18). auto_sync_new_cves() skips CVEs that already exist
+    locally, to protect curated data. Since MATCH-01 the Known Affected list
+    decides whether a release matches at all, so a list frozen at import time
+    goes quietly wrong the day Cisco revises the advisory — and nothing would
+    have noticed. The previous answer was "remember to run the migration
+    script", which is how the IOS XE platform cache reached 189 days.
+
+    Rules, each one a way this could otherwise corrupt a record:
+      - Only `known_affected` and `known_affected_as_of` are ever written.
+        Curated fields (affected, fixed_in, severity, tags, text) are untouched.
+      - Only when this advisory is the record's own advisory. A CVE can appear
+        in several advisories with different release lists; without this check
+        the list would flip between them on every sync.
+      - Per family, a list is never replaced by an empty one. "Cisco named the
+        product without releases" means we were not told, not "nothing is
+        affected".
+      - Nothing is written when the content is unchanged, so the as-of date
+        means "last time the list actually changed or was confirmed at import",
+        and an idle sync does not dirty the dataset.
+    """
+    new_lists = extract_known_affected(adv)
+    if not new_lists:
+        return 0
+    try:
+        with open(cve_path, "r", encoding="utf-8") as f:
+            rec = json.load(f)
+    except Exception:
+        return 0
+
+    m = _ADVISORY_ID_FROM_URL_RE.search(rec.get("advisory_url") or "")
+    if not m or m.group(1) != (adv.get("advisoryId") or ""):
+        return 0
+
+    current = rec.get("known_affected") or {}
+    merged = dict(current)
+    for family, versions in new_lists.items():
+        if versions:
+            merged[family] = versions
+    if merged == current:
+        return 0
+
+    rec["known_affected"] = merged
+    rec["known_affected_as_of"] = datetime.date.today().isoformat()
+    try:
+        with open(cve_path, "w", encoding="utf-8") as f:
+            json.dump(rec, f, indent=2, ensure_ascii=False)
+            f.write("\n")
+    except Exception:
+        return 0
+    return 1
 
 
 # =============================================================================

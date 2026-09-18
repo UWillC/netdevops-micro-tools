@@ -192,6 +192,12 @@ if (cveForm && cveOutput) {
       if ((data.matched_on_known_affected || 0) > 0 || notListed.length > 0) {
         out += `Cisco Known Affected lists: ${data.matched_on_known_affected || 0} match(es) are an exact hit on your release; `;
         out += `${notListed.length} advisory CVE(s) were ruled out because your release is not listed.\n`;
+        const kaDates = data.known_affected_as_of;
+        if (kaDates && kaDates.oldest) {
+          out += kaDates.oldest === kaDates.newest
+            ? `Lists read from Cisco on ${kaDates.oldest}; refreshed automatically when Cisco revises an advisory.\n`
+            : `Lists read from Cisco between ${kaDates.oldest} and ${kaDates.newest}; refreshed automatically when Cisco revises an advisory.\n`;
+        }
         out += "(The list is Cisco's statement as of each advisory's last revision. A release that\n";
         out += " shipped after that revision may be absent without having been assessed.)\n\n";
       }

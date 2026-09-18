@@ -102,6 +102,10 @@ class CVEAnalyzeResponse(BaseModel):
     excluded_not_listed: List[str] = []
     # How many matches rest on an exact Known Affected hit.
     matched_on_known_affected: int = 0
+    # LISTS-01: oldest and newest "as of" date among the lists behind this
+    # report. The reader sees how current Cisco's statement is, instead of
+    # having to trust that something refreshed it.
+    known_affected_as_of: Optional[dict] = None
     # v0.6.18 CVE-009: end-of-life status for the queried platform.
     # When non-null, the UI renders a top-banner above the CVE list:
     # "no patches available; replace the hardware". The recommendation
@@ -179,6 +183,12 @@ def _env_true(name: str) -> bool:
     return v in ("1", "true", "yes", "on")
 
 
+# Dataset directory -> PSIRT platform whose sync keeps that dataset current.
+# ISE is absent on purpose: cve_data/ise is a curated seed, not an auto-synced
+# import (AUTO_SYNC_PLATFORMS), so there is nothing for a sync to refresh.
+_ANALYZER_SYNC_PLATFORM = {"cve_data/ios_xe": "iosxe"}
+
+
 def _apply_kev_catalog(entries: list) -> list:
     """Set `kev` on matched CVEs from the live catalog. Does NOT rank.
 
@@ -211,9 +221,22 @@ def analyze_cve(req: CVEAnalyzeRequest):
     # 1) Base run (local JSON only) to find which CVE IDs apply.
     # ISE-03: the dataset directory follows the queried product family —
     # an ISE query must read cve_data/ise, not the IOS XE default.
+    _data_dir = data_dir_for_platform(req.platform)
     base_engine = CVEEngine(config=CVEEngineConfig(
-        engine_version="0.3.7", data_dir=data_dir_for_platform(req.platform)))
+        engine_version="0.3.7", data_dir=_data_dir))
     base_engine.load_all()
+
+    # LISTS-01: keep the Known Affected lists current without anyone having to
+    # remember. The bulk PSIRT sync (which now also refreshes lists on existing
+    # records) used to run only when somebody opened the threat feed with a
+    # platform filter; the analyzer never triggered it, so a deployment nobody
+    # browsed would match against lists as old as the last deploy. Non-blocking:
+    # this request is answered from disk, the next one benefits.
+    _sync_platform = _ANALYZER_SYNC_PLATFORM.get(_data_dir)
+    if _sync_platform:
+        _age = _platform_cache_age_hours(_sync_platform)
+        if _age is None or _age * 3600 > PLATFORM_CACHE_TTL:
+            _refresh_platform_cache_in_background(_sync_platform)
     matched_base = base_engine.match(req.platform, req.version)
 
     # KEV-X: stamp live CISA KEV status on the matches. Done on the base run so
@@ -312,6 +335,7 @@ def analyze_cve(req: CVEAnalyzeRequest):
         lifecycle_note=ise_lifecycle_note(req.platform, req.version),
         excluded_not_listed=sorted(base_engine.excluded_by_known_affected),
         matched_on_known_affected=sum(1 for c in matched if any((c.known_affected or {}).values())),
+        known_affected_as_of=_known_affected_dates(base_engine.cves),
         eol_status=eol_status,
         provenance=provenance,
         timestamp=datetime.datetime.utcnow().isoformat() + "Z",
@@ -456,6 +480,16 @@ def _feed_severity(cvss: Optional[float], sir: Optional[str]) -> tuple:
     if sir_norm and sir_norm != bucket:
         return bucket, sir_norm
     return bucket, None
+
+
+def _known_affected_dates(entries: list) -> Optional[dict]:
+    """{"oldest": iso, "newest": iso} over records that carry a list, else None."""
+    dates = sorted(e.known_affected_as_of for e in entries
+                   if getattr(e, "known_affected_as_of", None)
+                   and any((getattr(e, "known_affected", None) or {}).values()))
+    if not dates:
+        return None
+    return {"oldest": dates[0], "newest": dates[-1]}
 
 
 def _kev_block(hit: Optional[dict], local: Optional[dict] = None) -> Optional[dict]:

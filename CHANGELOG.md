@@ -4,6 +4,44 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.42] – 2026-09-18 (LISTS-01 — Known Affected lists keep themselves current)
+
+### Fixed
+- **Lists were frozen at import time.** v0.6.40 made Cisco's Known Affected list
+  decide whether a release matches at all, but `auto_sync_new_cves()` skips CVEs
+  that already exist locally, to protect curated data. So the day Cisco revised
+  an advisory — adding a release, or withdrawing one — our list stayed as it
+  was, and nothing would have noticed. v0.6.40 shipped with the instruction
+  "re-run the migration script after revisions", which is a person remembering:
+  the same mechanism that let the IOS XE platform cache reach 189 days.
+- **The analyzer never started a sync.** The bulk PSIRT sync ran only when
+  somebody opened the threat feed with a platform filter. A deployment nobody
+  browsed would match against lists as old as its last deploy.
+
+### Added
+- `refresh_known_affected()`, called by `auto_sync_new_cves()` for every
+  existing record. Four rules, each one a way this could otherwise corrupt data:
+  only `known_affected` / `known_affected_as_of` are ever written; only when the
+  advisory is the record's *own* advisory (a CVE can sit in several, with
+  different lists, and would otherwise flip between them); per family a list is
+  never replaced by an empty one ("named without releases" is not "none
+  affected"); nothing is written when the content is unchanged, so an idle sync
+  does not dirty the dataset and the as-of date keeps its meaning.
+- The analyzer starts a background platform sync when the IOS XE cache is
+  missing or older than 6 h. Non-blocking: the request is answered from disk.
+  ISE is excluded on purpose — `cve_data/ise` is a curated seed with no sync
+  behind it.
+- `CVEAnalyzeResponse.known_affected_as_of` (`oldest` / `newest`), printed in
+  the report, so the reader sees how current Cisco's statement is instead of
+  trusting that something refreshed it.
+- `tests/test_known_affected_refresh.py` (18), including the case that matters:
+  a revision changes who is told they are affected.
+
+### Verified
+- End to end on a copy of the real dataset: a list truncated from 391 releases
+  to 3 was restored by one real sync, curated `title` and `fixed_in` untouched,
+  and exactly 1 of 124 records was rewritten.
+
 ## [v0.6.41] – 2026-09-18 (EOSM-01 — ISE lifecycle notice once, and a false negative below 3.0)
 
 ### Fixed
