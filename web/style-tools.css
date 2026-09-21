@@ -335,6 +335,46 @@
   display: block;
 }
 
+/* v0.6.57 — "not confirmed" section, collapsed by default with its count in
+ * the header (decision 2026-09-20). Native <details>, so it is reachable and
+ * toggleable from the keyboard without any JS. Nothing is removed from the
+ * data: the text report, the JSON and the PDF/MD exports carry every item. */
+.cve-unconfirmed-block {
+  margin: 1rem 0 0.5rem;
+  border: 1px dashed rgba(148, 163, 184, 0.35);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  background: rgba(2, 6, 23, 0.35);
+}
+
+.cve-unconfirmed-summary {
+  cursor: pointer;
+  user-select: none;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.cve-unconfirmed-summary:hover {
+  color: rgba(226, 232, 240, 0.9);
+}
+
+.cve-unconfirmed-summary:focus-visible {
+  outline: 2px solid rgba(96, 165, 250, 0.8);
+  outline-offset: 2px;
+}
+
+.cve-unconfirmed-count {
+  font-variant-numeric: tabular-nums;
+  color: rgba(226, 232, 240, 0.92);
+}
+
+.cve-unconfirmed-body {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px dashed rgba(148, 163, 184, 0.2);
+}
+
 /* ----------------------------- */
 /* Profiles UI v2 + UX polish */
 /* ----------------------------- */

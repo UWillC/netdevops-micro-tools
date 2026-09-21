@@ -4,6 +4,33 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.57] – 2026-09-21 (the unconfirmed section opens collapsed)
+
+### Changed
+- CVE report: the "not confirmed" section now ships **collapsed, with its count
+  in the header** ("N not confirmed for your release — click to show"). It used
+  to render expanded under the confirmed matches, so a report with a long tail
+  of unconfirmed entries pushed the findings that matter off the first screen.
+  Built on a native `<details>` / `<summary>`, so it is reachable and toggleable
+  from the keyboard without any extra JS, and it matches the provenance block
+  already at the bottom of the report.
+- **Nothing is hidden and nothing is dropped.** One click expands the list; the
+  text report still writes every unconfirmed entry under "Lower confidence, NOT
+  confirmed for your release"; the API still returns them in `matched` and
+  `coverage_uncertain`; the PDF / JSON / Markdown exports are produced
+  server-side and never read the DOM, so their content is unchanged.
+
+### Tests
+- `tests/test_unconfirmed_section_collapsed.py` +6 (details without `open`,
+  count in the summary, cards rendered into the collapsed body, focus ring and
+  pointer on the summary, text report intact, API still returns the entries).
+- Verified in headless Chrome against a local server, IOS XE 17.9.4: section
+  closed on render (73 px tall vs 628 px open, cards report
+  `checkVisibility() === false`), count shown, Enter on the focused summary
+  expands it, no JS errors.
+
+---
+
 ## [v0.6.56] – 2026-09-18 (boilerplate of 2011-2016 advisories)
 
 ### Fixed

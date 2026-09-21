@@ -366,12 +366,15 @@ if (cveForm && cveOutput) {
         };
 
         cveCards.innerHTML = "";
+        // v0.6.57: cards are appended here, not to cveCards directly, so the
+        // unconfirmed section can render inside its own collapsed <details>.
+        let cardTarget = cveCards;
         const sectionHeader = (text, sub) => {
           const h = document.createElement("div");
           h.className = "cve-section-header";
           h.style.cssText = "margin:1rem 0 0.5rem; font-weight:700;";
           h.innerHTML = `${esc(text)}${sub ? `<div class="cve-item-meta" style="font-weight:400;">${esc(sub)}</div>` : ""}`;
-          cveCards.appendChild(h);
+          cardTarget.appendChild(h);
         };
         const renderGroup = (g) => {
           const card = document.createElement("div");
@@ -397,7 +400,7 @@ if (cveForm && cveOutput) {
           card.querySelector(".cve-item-header").addEventListener("click", () => {
             card.querySelector(".cve-item-body").classList.toggle("open");
           });
-          cveCards.appendChild(card);
+          cardTarget.appendChild(card);
         };
         const renderCve = (cve) => {
           const card = document.createElement("div");
@@ -486,18 +489,37 @@ if (cveForm && cveOutput) {
             body.classList.toggle("open");
           });
 
-          cveCards.appendChild(card);
+          cardTarget.appendChild(card);
         };
         const renderItems = (items) => items.forEach((it) => (it.group ? renderGroup(it) : renderCve(it.cve)));
 
         sectionHeader(`Confirmed for your release (${confirmedItems.length})`);
         renderItems(confirmedItems);
+        // v0.6.57: the unconfirmed section arrives collapsed, with its count in
+        // the header. Expanded, its long tail (101 entries in an IOS XE report
+        // read on 2026-09-20) pushed the confirmed matches off the screen.
+        // Nothing is hidden: one click opens it, and the text report, the JSON
+        // and the server-side PDF/MD exports are untouched.
         if (unconfirmedItems.length > 0) {
-          sectionHeader(
-            `Lower confidence, not confirmed (${unconfirmedItems.length})`,
-            "Cisco names the product without listing releases, or the advisory is years older than your release. Not counted in the severity breakdown."
-          );
+          const block = document.createElement("details");
+          block.className = "cve-unconfirmed-block";
+          const summary = document.createElement("summary");
+          summary.className = "cve-unconfirmed-summary";
+          summary.innerHTML =
+            `<span class="cve-unconfirmed-count">${unconfirmedItems.length}</span> ` +
+            `not confirmed for your release &mdash; click to show` +
+            `<div class="cve-item-meta" style="font-weight:400;">${esc(
+              "Cisco names the product without listing releases, or the advisory is years older than your release. " +
+              "Not counted in the severity breakdown."
+            )}</div>`;
+          block.appendChild(summary);
+          const body = document.createElement("div");
+          body.className = "cve-unconfirmed-body";
+          block.appendChild(body);
+          cveCards.appendChild(block);
+          cardTarget = body;
           renderItems(unconfirmedItems);
+          cardTarget = cveCards;
         }
       }
 
