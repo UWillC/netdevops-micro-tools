@@ -17,7 +17,7 @@ from version import APP_VERSION  # noqa: E402
 
 app = FastAPI(
     title="NetDevOps Micro-Tools API",
-    description="Small tools. Real automation. AI-assisted. Backend for generating secure Cisco configurations.",
+    description="Small tools. Real automation. Backend for generating secure Cisco configurations.",
     version=APP_VERSION,
 )
 

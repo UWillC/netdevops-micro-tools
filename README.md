@@ -5,7 +5,7 @@
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 ![Status](https://img.shields.io/badge/status-LIVE-brightgreen)
 
-**Small tools. Real automation. AI-assisted.**
+**Small tools. Real automation.**
 
 🚀 **Live:** https://netdevops-tools.thebackroom.ai
 
