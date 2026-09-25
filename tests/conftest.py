@@ -74,3 +74,14 @@ def kev_index(monkeypatch):
         monkeypatch.setattr(kev_catalog, "load_kev_index", lambda force_refresh=False: index)
         return index
     return _install
+
+
+@pytest.fixture(autouse=True)
+def _cisco_workaround_offline(monkeypatch):
+    """C1 (2026-09-25): imports fetch Cisco's Workarounds text from the CSAF document.
+
+    No test may reach sec.cloudapps.cisco.com; tests that exercise the fetch keep a
+    reference to the real function (imported at collection time) and mock urlopen.
+    """
+    from services import cisco_workaround
+    monkeypatch.setattr(cisco_workaround, "fetch", lambda *a, **k: None)

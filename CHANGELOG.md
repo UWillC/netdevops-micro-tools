@@ -4,6 +4,49 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.58] – 2026-09-25 (Cisco's own workaround text, ours labelled)
+
+### Fixed
+- **CVE Mitigation Advisor: 7 of 10 hand-written mitigations for KEV-listed CVEs
+  disagreed with Cisco** (security audit C1, sample = every hand-written file that
+  links to CISA KEV, compared with the Workarounds section of each advisory):
+  - three offered "workarounds" where Cisco says there are none (CVE-2018-0296,
+    CVE-2024-20353, CVE-2024-20359); the steps stay as our hardening and every one
+    now says it is not a Cisco workaround. CVE-2024-20353 also used ASA syntax that
+    does not exist (`no http outside`); replaced with `no http <net> <mask> outside`.
+  - CVE-2025-20352 (SNMP) lacked Cisco's only mitigation, the SNMP view that
+    excludes `cafSessionMethodsInfoEntry`; added verbatim. "Vulnerable before
+    17.15.4a" was wrong for every train but 17.15; now per train.
+  - CVE-2023-20025 (RV016/042/082): Cisco disables Remote Management under
+    Firewall > General and blocks TCP 443 **and 60443** on the WAN; we pointed at
+    another menu, restricted the LAN and missed 60443.
+  - CVE-2023-20269 (ASA/FTD RA VPN): rebuilt from Cisco's recommendations
+    (lockout, DfltGrpPolicy `vpn-simultaneous-logins 0`, DAP, `group-lock`). The
+    old file named the wrong tunnel groups and bound DefaultRAGroup *to*
+    DfltGrpPolicy, the opposite of the advice.
+  - CVE-2026-20127 (SD-WAN): "patch is the ONLY mitigation" contradicted the
+    advisory; added Cisco's ACL on TCP 22 and 830 to known controller IPs.
+- Two records linked to advisory ids that do not exist (CVE-2021-1435,
+  CVE-2022-20857); corrected against NVD and Cisco's CSAF.
+
+### Added
+- Every mitigation (150/150) carries **Cisco's Workarounds section verbatim**
+  (`cisco_workaround`: status none / mitigation / workaround, text, CSAF source,
+  fetch date), shown first in the UI as "What Cisco says", rendered as text.
+- `steps_reviewed`: the date our steps were checked against Cisco's text. Until
+  then the UI says so above the steps; where Cisco has no workaround the steps
+  are headed "Additional hardening (ours, not a Cisco workaround)".
+- New imports (`services/cisco_sync.py`, `scripts/import_cisco_to_local.py`)
+  attach Cisco's text at creation; `scripts/fetch_cisco_workarounds.py` backfills.
+
+### Tests
+- `tests/test_cisco_workaround.py` +25; suite-wide fixture keeps tests off the
+  network. Suite: 1397 passed, 1 skipped (baseline 1372).
+- Not checked in a browser: API, served assets and page markup verified on a
+  local server only.
+
+---
+
 ## [v0.6.57] – 2026-09-21 (the unconfirmed section opens collapsed)
 
 ### Changed

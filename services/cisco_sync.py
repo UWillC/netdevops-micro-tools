@@ -21,6 +21,7 @@ from models.cve_model import CVEEntry
 from services.advisory_text import clean_advisory_text, summarize_advisory_text
 from services.hardening_release import bundled_info_from_advisory
 from services.known_affected import extract_known_affected
+from services import cisco_workaround
 
 PROJECT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 CVE_DATA_DIR = os.path.join(PROJECT_DIR, "cve_data", "ios_xe")
@@ -349,6 +350,9 @@ def auto_sync_new_cves(cached_advisories: List[Dict[str, Any]], platform: str = 
                 if vtype != "generic":
                     tags.append(vtype)
                 mit_data = _build_mitigation(cve_id, adv, tags)
+                wa = cisco_workaround.fetch(mit_data.get("cisco_psirt"))
+                if wa:
+                    mit_data["cisco_workaround"] = wa
                 mit_path = os.path.join(MITIGATION_DIR, f"{cve_upper}.json")
                 with open(mit_path, "w", encoding="utf-8") as f:
                     json.dump(mit_data, f, indent=2, ensure_ascii=False)

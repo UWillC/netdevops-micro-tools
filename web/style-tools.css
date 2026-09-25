@@ -1874,3 +1874,36 @@
 .dtg-manual-form input {
   flex: 1;
 }
+
+
+/* v0.6.58: Cisco's own Workarounds text, verbatim, above our steps (C1 MITIG-AUDIT) */
+.mitigation-cisco-card {
+  border-left: 3px solid var(--accent);
+}
+
+.mitigation-cisco-status {
+  font-weight: 600;
+}
+
+.mitigation-cisco-text {
+  white-space: pre-wrap;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  max-height: 22rem;
+  overflow-y: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.mitigation-cisco-source,
+.mitigation-steps-review {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.mitigation-steps-review:not(.is-reviewed) {
+  color: var(--text);
+  border-left: 3px solid var(--border);
+  padding-left: 8px;
+}

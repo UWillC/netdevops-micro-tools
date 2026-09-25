@@ -24,9 +24,9 @@
   <meta name="twitter:description" content="21 live modules: CVE exposure, hardening audit, config drift, hardened Cisco configs. Browser-based, free, no install." />
   <meta name="twitter:image" content="https://netdevops-tools.thebackroom.ai/static/og-card.jpg" />
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
-  <link rel="stylesheet" href="style-base.css?v=0.6.57" />
-  <link rel="stylesheet" href="style-home.css?v=0.6.57" />
-  <link rel="stylesheet" href="style-tools.css?v=0.6.57" />
+  <link rel="stylesheet" href="style-base.css?v=0.6.58" />
+  <link rel="stylesheet" href="style-home.css?v=0.6.58" />
+  <link rel="stylesheet" href="style-tools.css?v=0.6.58" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-SP6VHRYCNC"></script>
@@ -1729,9 +1729,20 @@ Requires: archive config">show archive config differences</code>
             <p><strong>Attack Vector:</strong> <span id="mitigation-attack-vector"></span></p>
           </div>
 
+          <!-- Cisco's own Workarounds section, verbatim (C1 2026-09-25) -->
+          <div class="card mitigation-cisco-card" id="mitigation-cisco-section" style="display: none;">
+            <h3>What Cisco says</h3>
+            <p class="mitigation-cisco-status" id="mitigation-cisco-status"></p>
+            <div class="mitigation-cisco-text" id="mitigation-cisco-text"></div>
+            <p class="mitigation-cisco-source">Verbatim from the advisory
+              (<a id="mitigation-cisco-source" href="#" target="_blank" rel="noopener">CSAF</a>),
+              fetched <span id="mitigation-cisco-fetched"></span>. Where anything below differs, the advisory wins.</p>
+          </div>
+
           <!-- Workaround Steps -->
           <div class="card">
-            <h3>Workaround Steps</h3>
+            <h3 id="mitigation-steps-heading">Workaround Steps</h3>
+            <p class="mitigation-steps-review" id="mitigation-steps-review"></p>
             <div id="mitigation-workarounds"></div>
           </div>
 
@@ -3218,22 +3229,22 @@ line vty 0 15
   </footer>
 
   <!-- Gate: email gate for pro tools (must load BEFORE core) -->
-  <script src="app-gate.js?v=0.6.57"></script>
+  <script src="app-gate.js?v=0.6.58"></script>
   <!-- Core: theme, tabs, navigation, utilities -->
-  <script src="app-core.js?v=0.6.57"></script>
+  <script src="app-core.js?v=0.6.58"></script>
   <!-- Config Generators: SNMPv3, NTP, AAA, iPerf3 -->
-  <script src="app-config.js?v=0.6.57"></script>
+  <script src="app-config.js?v=0.6.58"></script>
   <!-- Golden Config form -->
-  <script src="app-golden.js?v=0.6.57"></script>
+  <script src="app-golden.js?v=0.6.58"></script>
   <!-- CVE Analyzer -->
-  <script src="app-security.js?v=0.6.57"></script>
+  <script src="app-security.js?v=0.6.58"></script>
   <!-- Profiles, Vuln Widget, Security Score, Export -->
-  <script src="app-profiles.js?v=0.6.57"></script>
+  <script src="app-profiles.js?v=0.6.58"></script>
   <!-- Hints, Tooltips, Golden Config UI, SNMP Multi-Host -->
-  <script src="app-ui.js?v=0.6.57"></script>
+  <script src="app-ui.js?v=0.6.58"></script>
   <!-- Subnet, MTU, Config Parser, CVE Mitigation, Timezone, Military DTG, IP Path Tracer -->
-  <script src="app-network.js?v=0.6.57"></script>
+  <script src="app-network.js?v=0.6.58"></script>
   <!-- Threat Feed, Port Auditor -->
-  <script src="app-feeds.js?v=0.6.57"></script>
+  <script src="app-feeds.js?v=0.6.58"></script>
 </body>
 </html>

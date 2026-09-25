@@ -26,6 +26,7 @@ if PROJECT_DIR not in sys.path:
 from services.advisory_text import clean_advisory_text  # noqa: E402
 from services.hardening_release import bundled_info_from_advisory  # noqa: E402
 from services.known_affected import extract_known_affected  # noqa: E402
+from services import cisco_workaround  # noqa: E402
 CACHE_FILE = os.path.join(PROJECT_DIR, "cache", "cisco", "iosxe.json")
 CVE_DATA_DIR = os.path.join(PROJECT_DIR, "cve_data", "ios_xe")
 MITIGATION_DIR = os.path.join(PROJECT_DIR, "cve_mitigations")
@@ -459,6 +460,10 @@ def main():
             else:
                 cve_data_for_mit = build_cve_data(cve_id, adv, ver_min, ver_max)
                 mit_data = build_mitigation(cve_id, adv, cve_data_for_mit)
+                if not dry_run:
+                    wa = cisco_workaround.fetch(mit_data.get("cisco_psirt"))
+                    if wa:
+                        mit_data["cisco_workaround"] = wa
                 if dry_run:
                     print(f"  [DRY] Would create: {mit_path}")
                 else:

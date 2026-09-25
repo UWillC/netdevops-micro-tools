@@ -420,6 +420,47 @@ function renderWorkarounds(steps) {
   });
 }
 
+const CISCO_STATUS_TEXT = {
+  none: "Cisco: there are no workarounds. Upgrading to a fixed release is the fix.",
+  mitigation: "Cisco: no workaround, but Cisco publishes a mitigation (below).",
+  workaround: "Cisco: a workaround is available (below).",
+  unknown: "Cisco's Workarounds section could not be classified; read it below.",
+};
+
+// Cisco's Workarounds section verbatim + labels for our own steps.
+// Advisory text is external data: textContent only, never innerHTML.
+function renderCiscoWorkaround(m) {
+  const section = document.getElementById("mitigation-cisco-section");
+  const heading = document.getElementById("mitigation-steps-heading");
+  const review = document.getElementById("mitigation-steps-review");
+  const wa = m.cisco_workaround;
+
+  if (section) {
+    if (wa && wa.text) {
+      section.style.display = "block";
+      setText("mitigation-cisco-status", CISCO_STATUS_TEXT[wa.status] || CISCO_STATUS_TEXT.unknown);
+      setText("mitigation-cisco-text", wa.text);
+      setText("mitigation-cisco-fetched", wa.fetched || "");
+      const src = document.getElementById("mitigation-cisco-source");
+      if (src) src.href = wa.source || m.cisco_psirt || "#";
+    } else {
+      section.style.display = "none";
+    }
+  }
+
+  if (heading) {
+    heading.textContent = wa && wa.status === "none"
+      ? "Additional hardening (ours, not a Cisco workaround)"
+      : "Workaround Steps";
+  }
+  if (review) {
+    review.textContent = m.steps_reviewed
+      ? `These steps were checked against Cisco's advisory on ${m.steps_reviewed}.`
+      : "Not yet checked against Cisco's advisory. Treat these steps as our suggestions; Cisco's text above is authoritative.";
+    review.className = m.steps_reviewed ? "mitigation-steps-review is-reviewed" : "mitigation-steps-review";
+  }
+}
+
 // Render references
 function renderReferences(mitigation) {
   const container = document.getElementById("mitigation-references");
@@ -454,6 +495,9 @@ function displayMitigation(data) {
   // Risk summary
   setText("mitigation-risk-summary", m.risk_summary);
   setText("mitigation-attack-vector", m.attack_vector);
+
+  // Cisco's text first, then our steps with an honest label (C1 MITIG-AUDIT 2026-09-25)
+  renderCiscoWorkaround(m);
 
   // Workarounds
   renderWorkarounds(m.workaround_steps || []);

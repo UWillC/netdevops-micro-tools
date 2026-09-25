@@ -45,6 +45,14 @@ class ACLMitigation(BaseModel):
     apply_to: str  # e.g., "ip http access-class"
 
 
+class CiscoWorkaround(BaseModel):
+    """Cisco's Workarounds section, verbatim from the advisory CSAF (C1, 2026-09-25)."""
+    status: str = Field(..., description="none | mitigation | workaround | unknown")
+    text: str
+    source: str
+    fetched: str
+
+
 class CVEMitigation(BaseModel):
     """Complete mitigation package for a CVE."""
 
@@ -68,6 +76,13 @@ class CVEMitigation(BaseModel):
 
     detection: DetectionMethod = Field(..., description="How to detect vulnerability")
     verification: VerificationMethod = Field(..., description="How to verify mitigation")
+
+    cisco_workaround: Optional[CiscoWorkaround] = Field(
+        None, description="Cisco's own Workarounds section; None = not fetched yet"
+    )
+    steps_reviewed: Optional[str] = Field(
+        None, description="ISO date our steps were checked against Cisco's text; None = not checked"
+    )
 
     cisco_psirt: Optional[str] = Field(None, description="Cisco PSIRT advisory URL")
     field_notice: Optional[str] = Field(None, description="Field Notice ID if exists")
