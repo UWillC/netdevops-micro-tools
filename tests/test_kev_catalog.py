@@ -272,7 +272,11 @@ WATCH_RAW = {
         {"cveID": "CVE-2026-90002", "vendorProject": "cisco", "product": "ASA",
          "dateAdded": "2026-09-20", "dueDate": "2026-10-11",
          "shortDescription": "ASA VPN auth bypass.",
-         "knownRansomwareCampaignUse": "Known", "notes": ""},
+         "knownRansomwareCampaignUse": "Known",
+         # Real CISA shape: CISA page first, vendor advisory second, NVD last.
+         "notes": "CISA Mitigation Instructions: https://www.cisa.gov/ed-26-03 ; "
+                  "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-asa-x ; "
+                  "https://nvd.nist.gov/vuln/detail/CVE-2026-90002"},
         {"cveID": "CVE-2026-90003", "vendorProject": "Cisco", "product": "ISE",
          "dateAdded": "2026-09-19", "dueDate": "2026-10-10", "notes": ""},
         {"cveID": "CVE-2026-90004", "vendorProject": "Fortinet", "product": "FortiOS",
@@ -406,3 +410,57 @@ class TestCatalogMeta:
         online["raise"] = RuntimeError("down")
         kev_catalog.load_kev_index()
         assert kev_catalog.catalog_meta()["fetched_at"] == "2026-09-18T12:00:00+00:00"
+
+
+# ---------------------------------------------------------------------------
+# KEV Watch (KW-01.3): links from `notes` and the vendor advisory among them.
+# ---------------------------------------------------------------------------
+
+class TestNotesUrls:
+    CISCO_SA = ("https://sec.cloudapps.cisco.com/security/center/content/"
+                "CiscoSecurityAdvisory/cisco-sa-asa-x")
+
+    def test_all_urls_in_order(self, watch_catalog):
+        rec = kev_catalog.kev_status("CVE-2026-90002")
+        assert rec["notes_urls"] == [
+            "https://www.cisa.gov/ed-26-03",
+            self.CISCO_SA,
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-90002",
+        ]
+
+    def test_advisory_skips_cisa_and_nvd(self, watch_catalog):
+        assert kev_catalog.kev_status("CVE-2026-90002")["advisory_url"] == self.CISCO_SA
+
+    def test_empty_notes(self, watch_catalog):
+        rec = kev_catalog.kev_status("CVE-2026-90001")
+        assert rec["notes_urls"] == [] and rec["advisory_url"] is None
+
+    def test_missing_notes_key(self, watch_catalog):
+        rec = kev_catalog.kev_status("CVE-2026-90006")
+        assert rec["notes_urls"] == [] and rec["advisory_url"] is None
+
+    @pytest.mark.parametrize("notes,expected", [
+        # Parenthesised URL, as in the Ivanti ED 21-03 rows.
+        ("Reference CISA's ED 21-03 (https://www.cisa.gov/ed-21-03) for guidance.",
+         ["https://www.cisa.gov/ed-21-03"]),
+        # Trailing full stop; "BOD 26-04:" prefix; no spaces around ';'.
+        ("https://a.example/x.;BOD 26-04: https://b.example/y",
+         ["https://a.example/x", "https://b.example/y"]),
+        # Duplicates collapse, order kept.
+        ("https://a.example ; https://a.example ; http://c.example/z",
+         ["https://a.example", "http://c.example/z"]),
+        ("no links here", []),
+    ])
+    def test_parsing(self, notes, expected):
+        assert kev_catalog._notes_urls(notes) == expected
+
+    @pytest.mark.parametrize("urls,expected", [
+        (["https://www.cisa.gov/a", "https://nvd.nist.gov/b"], None),
+        (["https://cisa.gov/a", "https://www.fortiguard.com/psirt/FG-IR-1"],
+         "https://www.fortiguard.com/psirt/FG-IR-1"),
+        # A vendor host that merely contains "cisa.gov" is not CISA.
+        (["https://notcisa.gov.example/a"], "https://notcisa.gov.example/a"),
+        ([], None),
+    ])
+    def test_advisory_choice(self, urls, expected):
+        assert kev_catalog._advisory_url(urls) == expected

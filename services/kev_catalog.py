@@ -45,6 +45,10 @@ KEV_FETCH_TIMEOUT_SECONDS = 5       # page loads wait on this at most once per T
 KEV_FAILURE_BACKOFF_SECONDS = 600   # after a failed fetch, do not retry for 10 min
 
 _DIRECTIVE_RE = re.compile(r"\bBOD\s+\d{2}-\d{2}\b")
+_URL_RE = re.compile(r"https?://[^\s;,<>\"']+")
+# Hosts in `notes` that are not the vendor's advisory: CISA's own directives and
+# mitigation pages, and NVD (KEV Watch links NVD separately for every CVE).
+_NON_ADVISORY_HOSTS = ("cisa.gov", "nvd.nist.gov")
 
 # KEV Watch (KW-01): vendors whose new KEV listings we report. Matched
 # case-insensitively against the catalog's `vendorProject`. KEV_WATCH_VENDORS
@@ -60,6 +64,33 @@ def _offline() -> bool:
     return os.getenv("KEV_CATALOG_OFFLINE", "").strip().lower() in ("1", "true", "yes", "on")
 
 
+def _notes_urls(notes: Any) -> List[str]:
+    """Every http(s) URL in a KEV `notes` field, in order, without duplicates.
+
+    CISA separates entries with " ; " and sometimes wraps a URL in parentheses
+    or ends it with a full stop, so trailing punctuation is trimmed.
+    """
+    urls: List[str] = []
+    for m in _URL_RE.finditer(str(notes or "")):
+        url = m.group(0).rstrip(").,]")
+        if url not in urls:
+            urls.append(url)
+    return urls
+
+
+def _advisory_url(urls: Iterable[str]) -> Optional[str]:
+    """First URL that is not a CISA or NVD page, i.e. the vendor advisory.
+
+    The first URL in `notes` is often CISA's mitigation page or the NVD entry,
+    so "first URL" alone would label those as the vendor's advisory.
+    """
+    for url in urls:
+        host = re.sub(r"^https?://", "", url).split("/", 1)[0].split(":", 1)[0].lower()
+        if not any(host == h or host.endswith("." + h) for h in _NON_ADVISORY_HOSTS):
+            return url
+    return None
+
+
 def _build_index(raw: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
     """cve_id -> compact KEV record."""
     index: Dict[str, Dict[str, Any]] = {}
@@ -69,6 +100,7 @@ def _build_index(raw: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
         if not cve_id.startswith("CVE-"):
             continue
         m = _DIRECTIVE_RE.search(v.get("notes") or "")
+        urls = _notes_urls(v.get("notes"))
         index[cve_id] = {
             "cve_id": cve_id,
             "date_added": v.get("dateAdded"),
@@ -79,6 +111,9 @@ def _build_index(raw: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
             "vendor_project": (v.get("vendorProject") or "").strip() or None,
             "product": (v.get("product") or "").strip() or None,
             "short_description": (v.get("shortDescription") or "").strip() or None,
+            # KW-01.3: links from `notes`; advisory_url = first non-CISA/NVD one.
+            "notes_urls": urls,
+            "advisory_url": _advisory_url(urls),
         }
     return index
 

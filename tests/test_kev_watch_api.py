@@ -123,6 +123,17 @@ class TestLive:
         assert "CVE-2026-90003" in ids
 
 
+class TestNotesLinks:
+    def test_items_carry_notes_urls_and_advisory(self, live):
+        items = {i["cve_id"]: i for i in client.get("/api/kev/watch?days=7").json()["items"]}
+        asa = items["CVE-2026-90002"]
+        assert asa["notes_urls"][0] == "https://www.cisa.gov/ed-26-03"
+        assert len(asa["notes_urls"]) == 3
+        assert asa["advisory_url"].endswith("/cisco-sa-asa-x")
+        assert items["CVE-2026-90001"]["notes_urls"] == []
+        assert items["CVE-2026-90001"]["advisory_url"] is None
+
+
 class TestValidation:
     @pytest.mark.parametrize("days", ["0", "91", "-1", "abc"])
     def test_days_out_of_range(self, live, days):
@@ -190,3 +201,49 @@ class TestCatalogStatus:
         fetched = kev_catalog._memo["fetched_at"]
         assert kev_catalog.catalog_status(now=fetched + kev_catalog.KEV_TTL_SECONDS)["stale"] is False
         assert kev_catalog.catalog_status(now=fetched + kev_catalog.KEV_TTL_SECONDS + 1)["stale"] is True
+
+
+# ---------------------------------------------------------------------------
+# KW-01.3: the KEV Watch tab. Static assets are whitelisted and wired in.
+# ---------------------------------------------------------------------------
+
+from api import main as api_main  # noqa: E402
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _web(name):
+    with open(os.path.join(ROOT, "web", name), encoding="utf-8") as f:
+        return f.read()
+
+
+class TestKevWatchTab:
+    def test_assets_are_whitelisted_and_served(self):
+        assert "app-kev" in api_main.JS_FILES
+        assert "style-kev" in api_main.CSS_FILES
+        js = client.get("/app-kev.js")
+        assert js.status_code == 200 and "loadKevWatch" in js.text
+        css = client.get("/style-kev.css")
+        assert css.status_code == 200 and ".kev-table" in css.text
+
+    def test_index_wires_tab_and_assets(self):
+        html = _web("index.html")
+        assert 'data-tab="kev-watch"' in html
+        assert 'id="tab-kev-watch"' in html
+        assert 'src="app-kev.js' in html and 'href="style-kev.css' in html
+        assert "https://netdevops.thebackroom.ai/patch-sheet/" in html
+
+    def test_tab_is_free(self):
+        assert '"kev-watch"' in _web("app-gate.js").split("FREE_TOOLS", 1)[1].split("]", 1)[0]
+
+    def test_vendor_list_uses_exact_kev_names(self):
+        js = _web("app-kev.js")
+        for name in ("Cisco", "Fortinet", "Palo Alto Networks", "Juniper", "Arista", "F5",
+                     "Check Point", "Citrix", "SonicWall", "Ivanti", "Zyxel", "MikroTik"):
+            assert f'"{name}"' in js
+
+    def test_no_em_dash_in_tab_text(self):
+        html = _web("index.html")
+        tab = html.split('id="tab-kev-watch"', 1)[1].split("</section>", 1)[0]
+        for text in (tab, _web("app-kev.js")):
+            assert "\u2014" not in text

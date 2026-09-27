@@ -1,0 +1,63 @@
+/* KEV Watch (KW-01.3). Colours come from the theme tokens in style-base.css. */
+
+.kev-controls, .kev-results { margin-top: 12px; }
+
+.kev-window { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.kev-window-btn {
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-alt);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+}
+.kev-window-btn.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+
+.kev-vendors { display: flex; flex-wrap: wrap; gap: 0.4rem 0.9rem; }
+.kev-vendor { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.9rem; color: var(--text); cursor: pointer; }
+.kev-vendor-actions { font-weight: 400; font-size: 0.8rem; color: var(--muted); margin-left: 0.5rem; }
+.kev-link-btn { background: none; border: none; padding: 0; color: var(--accent); cursor: pointer; font: inherit; text-decoration: underline; }
+
+.kev-meta { font-size: 0.8rem; color: var(--muted); margin-bottom: 0.5rem; }
+.kev-stale {
+  margin-bottom: 0.75rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 8px;
+  border: 1px solid rgba(245, 158, 11, 0.55);
+  background: rgba(245, 158, 11, 0.12);
+  color: #f59e0b;
+  font-size: 0.85rem;
+}
+[data-theme="light"] .kev-stale { color: #92400e; }
+.kev-error { color: var(--danger); }
+
+.kev-table-wrap { overflow-x: auto; }
+.kev-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.kev-table th, .kev-table td { padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; color: var(--text); }
+.kev-table th { color: var(--muted); font-weight: 600; white-space: nowrap; }
+.kev-table a { color: var(--accent); }
+.kev-cve, .kev-date { white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.kev-product { color: var(--muted); font-size: 0.8rem; }
+.kev-desc { min-width: 160px; max-width: 300px; }
+
+.kev-row-short { background: rgba(249, 115, 115, 0.08); }
+.kev-short {
+  display: table;
+  margin-top: 0.2rem;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  background: var(--danger);
+  color: #fff;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.kev-ransom { color: var(--muted); }
+.kev-ransom.known { color: var(--danger); font-weight: 700; }
+
+.kev-note { font-size: 0.8rem; color: var(--muted); margin-top: 0.75rem; }
+.kev-patch-link { font-size: 0.85rem; margin-top: 0.4rem; }
+.kev-patch-link a { color: var(--accent); }

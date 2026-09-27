@@ -8,8 +8,8 @@ const GATE_EMAIL_KEY = "netdevops_email";
 const GATE_UNLOCKED_KEY = "netdevops_unlocked";
 
 // Tools that are FREE (no email required)
-// Threat Feed is on home page, always visible
-const FREE_TOOLS = ["home", "iperf", "subnet", "mtu", "timezone"];
+// Threat Feed is on home page, always visible. KEV Watch (KW-01) is free like it.
+const FREE_TOOLS = ["home", "iperf", "subnet", "mtu", "timezone", "kev-watch"];
 
 
 // -----------------------------

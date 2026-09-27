@@ -66,6 +66,7 @@ const toolIcons = {
   "port-auditor": "🔌",
   "config-drift": "🔃",
   "cis-audit": "📋",
+  "kev-watch": "🎯",
   "profiles": "💾"
 };
 
@@ -87,6 +88,7 @@ const toolNames = {
   "port-auditor": "Port Auditor",
   "config-drift": "Config Drift",
   "cis-audit": "Hardening Audit",
+  "kev-watch": "KEV Watch",
   "profiles": "Profiles"
 };
 

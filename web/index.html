@@ -27,6 +27,7 @@
   <link rel="stylesheet" href="style-base.css?v=0.6.58" />
   <link rel="stylesheet" href="style-home.css?v=0.6.58" />
   <link rel="stylesheet" href="style-tools.css?v=0.6.58" />
+  <link rel="stylesheet" href="style-kev.css?v=0.6.58" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-SP6VHRYCNC"></script>
@@ -102,13 +103,14 @@
           <button class="nav-group-header" data-group="security">
             <span class="nav-group-icon">🛡️</span>
             <span class="nav-group-label">Security Tools</span>
-            <span class="nav-group-badge">3</span>
+            <span class="nav-group-badge">4</span>
             <span class="nav-group-arrow">▶</span>
           </button>
           <div class="nav-group-items collapsed" id="group-security">
             <button class="tab-button" data-tab="cve"><span class="tool-icon">🔍</span> CVE Analyzer</button>
             <button class="tab-button" data-tab="mitigation"><span class="tool-icon">🚨</span> CVE Mitigation</button>
             <button class="tab-button" data-tab="cis-audit"><span class="tool-icon">📋</span> Hardening Audit</button>
+            <button class="tab-button" data-tab="kev-watch"><span class="tool-icon">🎯</span> KEV Watch</button>
           </div>
         </div>
 
@@ -271,6 +273,11 @@
                 <span class="tool-icon">📋</span>
                 <span class="tool-name">Hardening Audit</span>
                 <span class="tool-desc">NSA / Cisco hardening checks</span>
+              </button>
+              <button class="home-tool-card" data-tab="kev-watch">
+                <span class="tool-icon">🎯</span>
+                <span class="tool-name">KEV Watch</span>
+                <span class="tool-desc">New exploited CVEs by vendor</span>
               </button>
             </div>
           </div>
@@ -1809,6 +1816,37 @@ Requires: archive config">show archive config differences</code>
 
       </section>
 
+      <!-- KEV WATCH TAB (KW-01.3) -->
+      <section id="tab-kev-watch" class="tab-content">
+        <h2>KEV Watch <span class="version-badge">v0 · New CISA KEV listings</span></h2>
+        <p class="tool-description">Which CVEs from your vendors were added to the CISA Known Exploited Vulnerabilities catalog recently, and when the US federal remediation deadline falls. Source: the CISA KEV catalog only; nothing else is mixed in.</p>
+
+        <div class="card kev-controls">
+          <div class="form-row">
+            <label>Window</label>
+            <div class="kev-window" role="radiogroup" aria-label="Window in days">
+              <button type="button" class="kev-window-btn" data-days="7">7 days</button>
+              <button type="button" class="kev-window-btn active" data-days="14">14 days</button>
+              <button type="button" class="kev-window-btn" data-days="30">30 days</button>
+            </div>
+          </div>
+          <div class="form-row">
+            <label>Vendors <span class="kev-vendor-actions"><button type="button" class="kev-link-btn" id="kev-vendors-all">all</button> · <button type="button" class="kev-link-btn" id="kev-vendors-none">none</button></span></label>
+            <div class="kev-vendors" id="kev-vendors"></div>
+          </div>
+        </div>
+
+        <div class="card kev-results">
+          <div class="kev-meta" id="kev-meta"></div>
+          <div class="kev-stale" id="kev-stale" hidden></div>
+          <div class="kev-table-wrap" id="kev-table-wrap">
+            <p class="summary-muted">Loading KEV Watch...</p>
+          </div>
+          <p class="kev-note">Short deadline = federal due date 3 days or less after the listing. The deadline binds US federal civilian agencies; for everyone else it is a signal of active exploitation.</p>
+          <p class="kev-patch-link">Patch Decision Sheet: which version to pick. <a href="https://netdevops.thebackroom.ai/patch-sheet/" target="_blank" rel="noopener">netdevops.thebackroom.ai/patch-sheet</a></p>
+        </div>
+      </section>
+
       <!-- IPERF3 TAB -->
       <section id="tab-iperf" class="tab-content">
         <h2>iPerf3 Command Generator</h2>
@@ -3246,5 +3284,7 @@ line vty 0 15
   <script src="app-network.js?v=0.6.58"></script>
   <!-- Threat Feed, Port Auditor -->
   <script src="app-feeds.js?v=0.6.58"></script>
+  <!-- KEV Watch (KW-01) -->
+  <script src="app-kev.js?v=0.6.58"></script>
 </body>
 </html>
