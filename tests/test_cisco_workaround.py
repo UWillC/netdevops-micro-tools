@@ -105,9 +105,60 @@ def test_every_mitigation_file_carries_ciscos_text():
 def test_audited_sample_is_marked_reviewed():
     reviewed = {os.path.basename(p)[:-5] for p in glob.glob(os.path.join(MIT, "CVE-*.json"))
                 if _mit(os.path.basename(p)[:-5]).get("steps_reviewed")}
-    assert reviewed == {"CVE-2018-0171", "CVE-2018-0296", "CVE-2023-20025", "CVE-2023-20198",
-                        "CVE-2023-20269", "CVE-2023-20273", "CVE-2024-20353", "CVE-2024-20359",
-                        "CVE-2025-20352", "CVE-2026-20127"}
+    assert reviewed == C1_SAMPLE | MITIG_REVIEW_1
+
+
+C1_SAMPLE = {"CVE-2018-0171", "CVE-2018-0296", "CVE-2023-20025", "CVE-2023-20198",
+             "CVE-2023-20269", "CVE-2023-20273", "CVE-2024-20353", "CVE-2024-20359",
+             "CVE-2025-20352", "CVE-2026-20127"}
+
+# MITIG-REVIEW 1/7 (2026-09-27): the 20 most recently KEV-added unreviewed files.
+MITIG_REVIEW_1 = {"CVE-2026-20079", "CVE-2026-20131", "CVE-2023-20109", "CVE-2017-6742",
+                  "CVE-2022-20699", "CVE-2019-1652", "CVE-2018-0175", "CVE-2018-0174",
+                  "CVE-2018-0173", "CVE-2018-0172", "CVE-2018-0167", "CVE-2018-0158",
+                  "CVE-2018-0156", "CVE-2018-0155", "CVE-2017-12319", "CVE-2017-12240",
+                  "CVE-2017-12237", "CVE-2017-6744", "CVE-2017-6743", "CVE-2017-6740"}
+
+
+@pytest.mark.parametrize("cve", sorted(c for c in MITIG_REVIEW_1 if _mit(c)["cisco_workaround"]["status"] == "none"))
+def test_review1_none_means_patch_only(cve):
+    """Cisco says no workarounds: no ACL block, every step says so, no generic CoPP 'mitigation'."""
+    d = _mit(cve)
+    assert d["acl_mitigation"] is None
+    for step in d["workaround_steps"]:
+        assert "Not a Cisco workaround" in (step.get("platform_notes") or ""), step["description"]
+        assert "CoPP" not in step["description"]
+
+
+@pytest.mark.parametrize("cve", ["CVE-2017-6740", "CVE-2017-6742", "CVE-2017-6743", "CVE-2017-6744"])
+def test_review1_snmp_2017_carries_ciscos_view_and_no_v3_myth(cve):
+    d = _mit(cve)
+    cmds = [c for s in d["workaround_steps"] for c in s["commands"]]
+    for line in ("snmp-server view NO_BAD_SNMP ciscoMgmt.252 excluded",
+                 "snmp-server view NO_BAD_SNMP ciscoMabMIB excluded",
+                 "snmp-server view NO_BAD_SNMP ciscoExperiment.997 excluded"):
+        assert line in cmds
+    text = _all_text({k: d[k] for k in ("workaround_steps", "detection", "verification", "risk_summary")})
+    assert "not vulnerable" not in text and "SNMPv3 only" not in text
+    assert "EXTRABACON" not in text.upper()
+
+
+def test_review1_fmc_fixed_releases_follow_cisco():
+    for cve in ("CVE-2026-20079", "CVE-2026-20131"):
+        d = _mit(cve)
+        assert "7.6.0.1 or later" not in _all_text(d)
+    assert "7.6 -> 7.6.6" in _mit("CVE-2026-20079")["recommended_fix"]
+
+
+def test_review1_cisco_mitigations_present():
+    def cmds(cve):
+        return [c for s in _mit(cve)["workaround_steps"] for c in s["commands"]]
+    assert "no vstack" in cmds("CVE-2018-0156")
+    assert "feature bfd disable" in cmds("CVE-2018-0155")
+    assert any(c.startswith("crypto ikev2 limit queue sa-init") for c in cmds("CVE-2017-12237"))
+    rv = _mit("CVE-2019-1652")
+    assert "1.4.2.22" in rv["recommended_fix"] and "NO PATCH" not in _all_text(rv)
+    assert "# Web UI: Firewall > General" in cmds("CVE-2019-1652")
 
 
 @pytest.mark.parametrize("cve", ["CVE-2018-0296", "CVE-2024-20353", "CVE-2024-20359"])
