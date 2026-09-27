@@ -29,7 +29,8 @@ import json
 import os
 import re
 import time
-from typing import Any, Dict, Optional
+from datetime import date, datetime, timedelta, timezone
+from typing import Any, Dict, Iterable, List, Optional
 
 from services.http_client import http_get_json
 
@@ -44,6 +45,11 @@ KEV_FETCH_TIMEOUT_SECONDS = 5       # page loads wait on this at most once per T
 KEV_FAILURE_BACKOFF_SECONDS = 600   # after a failed fetch, do not retry for 10 min
 
 _DIRECTIVE_RE = re.compile(r"\bBOD\s+\d{2}-\d{2}\b")
+
+# KEV Watch (KW-01): vendors whose new KEV listings we report. Matched
+# case-insensitively against the catalog's `vendorProject`. KEV_WATCH_VENDORS
+# (comma-separated) replaces the default, e.g. "Cisco,Fortinet,Palo Alto Networks".
+DEFAULT_WATCH_VENDORS = ("Cisco",)
 
 # Module-level memo: {"loaded_at": float, "index": {...}, "version": str}
 _memo: Optional[Dict[str, Any]] = None
@@ -70,6 +76,9 @@ def _build_index(raw: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
             "catalog_version": version,
             "directive": m.group(0) if m else None,
             "ransomware": (v.get("knownRansomwareCampaignUse") or "").strip() or None,
+            "vendor_project": (v.get("vendorProject") or "").strip() or None,
+            "product": (v.get("product") or "").strip() or None,
+            "short_description": (v.get("shortDescription") or "").strip() or None,
         }
     return index
 
@@ -91,12 +100,17 @@ def _write_disk(raw: Dict[str, Any]) -> None:
         pass  # a read-only filesystem must not break the feed
 
 
-def _memoize(raw: Dict[str, Any], loaded_at: float) -> Dict[str, Any]:
+def _memoize(raw: Dict[str, Any], loaded_at: float,
+             fetched_at: Optional[float] = None) -> Dict[str, Any]:
     global _memo
     _memo = {
         "loaded_at": loaded_at,
         "index": _build_index(raw),
         "version": raw.get("catalogVersion"),
+        "date_released": raw.get("dateReleased"),
+        # When the copy was fetched from CISA. Differs from loaded_at on the
+        # stale-disk path, where loaded_at is shifted to drive the retry backoff.
+        "fetched_at": loaded_at if fetched_at is None else fetched_at,
     }
     return _memo
 
@@ -127,7 +141,8 @@ def load_kev_index(force_refresh: bool = False) -> Dict[str, Dict[str, Any]]:
 
     # Stale beats empty: an old KEV entry is still a true statement.
     if disk:
-        return _memoize(disk.get("catalog") or {}, now - KEV_TTL_SECONDS + KEV_FAILURE_BACKOFF_SECONDS)["index"]
+        return _memoize(disk.get("catalog") or {}, now - KEV_TTL_SECONDS + KEV_FAILURE_BACKOFF_SECONDS,
+                        fetched_at=disk.get("cached_at"))["index"]
     if _memo is not None:
         return _memo["index"]
     return {}
@@ -136,6 +151,70 @@ def load_kev_index(force_refresh: bool = False) -> Dict[str, Dict[str, Any]]:
 def catalog_version() -> Optional[str]:
     """catalogVersion of whatever load_kev_index() last served, or None."""
     return _memo["version"] if _memo else None
+
+
+def catalog_meta() -> Dict[str, Any]:
+    """Provenance of the catalog last served: version, CISA release, fetch time.
+
+    `fetched_at` is ISO-8601 UTC, or None when no catalog has been loaded or the
+    disk copy carries no timestamp.
+    """
+    if not _memo:
+        return {"catalog_version": None, "date_released": None, "fetched_at": None}
+    ts = _memo.get("fetched_at")
+    return {
+        "catalog_version": _memo.get("version"),
+        "date_released": _memo.get("date_released"),
+        "fetched_at": (datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
+                       if isinstance(ts, (int, float)) else None),
+    }
+
+
+def watch_vendors() -> List[str]:
+    """Vendors KEV Watch reports on: KEV_WATCH_VENDORS if set, else the default."""
+    env = os.getenv("KEV_WATCH_VENDORS", "")
+    configured = [v.strip() for v in env.split(",") if v.strip()]
+    return configured or list(DEFAULT_WATCH_VENDORS)
+
+
+def _parse_date(value: Any) -> Optional[date]:
+    try:
+        return datetime.strptime(str(value).strip()[:10], "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return None
+
+
+def recent_additions(days: int, vendors: Optional[Iterable[str]] = None,
+                     today: Optional[date] = None) -> List[Dict[str, Any]]:
+    """KEV records added in the last `days` days for the given vendors.
+
+    The window is inclusive at both ends: with today=2026-09-27 and days=7 a
+    listing dated 2026-09-20 is included. Listings dated after `today` are kept
+    (CISA dates are US-based; a server clock behind them must not hide one).
+    `vendors=None` means watch_vendors(); an empty iterable matches nothing.
+    Vendor match is case-insensitive and exact on `vendorProject`. Records with
+    no parseable dateAdded or no vendor are skipped, never raised on.
+
+    Sorted by date_added descending, then cve_id ascending, so the order is
+    stable for the same catalog. Each record carries its catalog_version; use
+    catalog_meta() for the fetch time.
+    """
+    if days < 0:
+        raise ValueError("days must be >= 0")
+    wanted = {v.strip().lower() for v in (watch_vendors() if vendors is None else vendors)
+              if isinstance(v, str) and v.strip()}
+    if not wanted:
+        return []
+    cutoff = (today or date.today()) - timedelta(days=days)
+    hits = []
+    for rec in load_kev_index().values():
+        vendor = (rec.get("vendor_project") or "").strip().lower()
+        added = _parse_date(rec.get("date_added"))
+        if vendor in wanted and added is not None and added >= cutoff:
+            hits.append(dict(rec))
+    hits.sort(key=lambda r: r.get("cve_id") or "")
+    hits.sort(key=lambda r: str(r.get("date_added"))[:10], reverse=True)
+    return hits
 
 
 def kev_status(cve_id: Optional[str]) -> Optional[Dict[str, Any]]:

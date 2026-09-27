@@ -255,3 +255,154 @@ class TestAnalyzer:
         monkeypatch.setattr(cve_router, "_load_latest_cache", lambda: ([], None))
         monkeypatch.setattr(cve_router, "_fetch_latest_advisories", lambda: [])
         assert cve_router._get_advisories_feed("all").kev_catalog_version == "2026.09.16"
+
+
+# ---------------------------------------------------------------------------
+# KEV Watch (KW-01.1): vendor fields in the index + "added in the last N days".
+# ---------------------------------------------------------------------------
+
+WATCH_RAW = {
+    "catalogVersion": "2026.09.27",
+    "dateReleased": "2026-09-27T17:00:00.000Z",
+    "vulnerabilities": [
+        {"cveID": "CVE-2026-90001", "vendorProject": "Cisco", "product": "IOS XE Software",
+         "dateAdded": "2026-09-27", "dueDate": "2026-10-18",
+         "shortDescription": "Cisco IOS XE web UI privilege escalation.",
+         "knownRansomwareCampaignUse": "Unknown", "notes": ""},
+        {"cveID": "CVE-2026-90002", "vendorProject": "cisco", "product": "ASA",
+         "dateAdded": "2026-09-20", "dueDate": "2026-10-11",
+         "shortDescription": "ASA VPN auth bypass.",
+         "knownRansomwareCampaignUse": "Known", "notes": ""},
+        {"cveID": "CVE-2026-90003", "vendorProject": "Cisco", "product": "ISE",
+         "dateAdded": "2026-09-19", "dueDate": "2026-10-10", "notes": ""},
+        {"cveID": "CVE-2026-90004", "vendorProject": "Fortinet", "product": "FortiOS",
+         "dateAdded": "2026-09-25", "dueDate": "2026-10-16", "notes": ""},
+        {"cveID": "CVE-2026-90005", "vendorProject": "Microsoft", "product": "Windows",
+         "dateAdded": "2026-09-26", "dueDate": "2026-10-17", "notes": ""},
+        # Same day as 90001: tie broken by cve_id.
+        {"cveID": "CVE-2026-89999", "vendorProject": "Cisco", "product": "NX-OS",
+         "dateAdded": "2026-09-27", "dueDate": "2026-10-18", "notes": ""},
+        # Degenerate rows the catalog has shipped or could ship.
+        {"cveID": "CVE-2026-90006", "vendorProject": "Cisco", "product": "IOS"},
+        {"cveID": "CVE-2026-90007", "product": "Something", "dateAdded": "2026-09-27"},
+        {"cveID": "CVE-2026-90008", "vendorProject": "Cisco", "dateAdded": "27/09/2026"},
+    ],
+}
+
+WATCH_TODAY = datetime.date(2026, 9, 27)
+
+
+@pytest.fixture
+def watch_catalog(online):
+    online["payload"] = WATCH_RAW
+    return online
+
+
+class TestIndexVendorFields:
+    def test_vendor_product_description_are_kept(self, watch_catalog):
+        rec = kev_catalog.kev_status("CVE-2026-90001")
+        assert rec["vendor_project"] == "Cisco"
+        assert rec["product"] == "IOS XE Software"
+        assert rec["short_description"] == "Cisco IOS XE web UI privilege escalation."
+        assert rec["date_added"] == "2026-09-27"
+        assert rec["due_date"] == "2026-10-18"
+        assert rec["ransomware"] == "Unknown"
+
+    def test_existing_keys_are_unchanged(self, watch_catalog):
+        rec = kev_catalog.kev_status("CVE-2026-90001")
+        for key in ("cve_id", "date_added", "due_date", "catalog_version", "directive", "ransomware"):
+            assert key in rec
+        assert rec["catalog_version"] == "2026.09.27"
+
+    def test_missing_fields_become_none(self, watch_catalog):
+        rec = kev_catalog.kev_status("CVE-2026-90007")
+        assert rec["vendor_project"] is None
+        assert rec["short_description"] is None
+
+
+class TestRecentAdditions:
+    def ids(self, rows):
+        return [r["cve_id"] for r in rows]
+
+    def test_default_vendor_is_cisco(self, watch_catalog, monkeypatch):
+        monkeypatch.delenv("KEV_WATCH_VENDORS", raising=False)
+        rows = kev_catalog.recent_additions(7, today=WATCH_TODAY)
+        assert self.ids(rows) == ["CVE-2026-89999", "CVE-2026-90001", "CVE-2026-90002"]
+
+    def test_window_boundary_is_inclusive(self, watch_catalog):
+        # today - 7 = 2026-09-20 -> 90002 in; 90003 (09-19) out.
+        assert "CVE-2026-90002" in self.ids(kev_catalog.recent_additions(7, ["Cisco"], today=WATCH_TODAY))
+        assert "CVE-2026-90003" not in self.ids(kev_catalog.recent_additions(7, ["Cisco"], today=WATCH_TODAY))
+        assert "CVE-2026-90003" in self.ids(kev_catalog.recent_additions(8, ["Cisco"], today=WATCH_TODAY))
+
+    def test_zero_days_means_today_only(self, watch_catalog):
+        rows = kev_catalog.recent_additions(0, ["cisco"], today=WATCH_TODAY)
+        assert self.ids(rows) == ["CVE-2026-89999", "CVE-2026-90001"]
+
+    def test_multiple_vendors_case_insensitive(self, watch_catalog):
+        rows = kev_catalog.recent_additions(7, ["CISCO", " fortinet "], today=WATCH_TODAY)
+        assert self.ids(rows) == ["CVE-2026-89999", "CVE-2026-90001",
+                                  "CVE-2026-90004", "CVE-2026-90002"]
+        assert "CVE-2026-90005" not in self.ids(rows)   # Microsoft not asked for
+
+    def test_env_overrides_default_vendors(self, watch_catalog, monkeypatch):
+        monkeypatch.setenv("KEV_WATCH_VENDORS", "Microsoft, Fortinet")
+        assert kev_catalog.watch_vendors() == ["Microsoft", "Fortinet"]
+        rows = kev_catalog.recent_additions(7, today=WATCH_TODAY)
+        assert self.ids(rows) == ["CVE-2026-90005", "CVE-2026-90004"]
+
+    def test_no_matches_is_an_empty_list(self, watch_catalog):
+        assert kev_catalog.recent_additions(7, ["Juniper"], today=WATCH_TODAY) == []
+        assert kev_catalog.recent_additions(7, [], today=WATCH_TODAY) == []
+
+    def test_no_catalog_is_an_empty_list(self):
+        """Suite default: offline, no disk copy."""
+        assert kev_catalog.recent_additions(30, today=WATCH_TODAY) == []
+
+    def test_rows_missing_fields_do_not_raise(self, watch_catalog):
+        ids = self.ids(kev_catalog.recent_additions(10_000, ["Cisco"], today=WATCH_TODAY))
+        assert "CVE-2026-90006" not in ids   # no dateAdded
+        assert "CVE-2026-90007" not in ids   # no vendorProject
+        assert "CVE-2026-90008" not in ids   # unparseable date
+
+    def test_tolerates_minimal_records_from_other_callers(self, kev_index):
+        """The conftest kev_index fixture builds records without vendor keys."""
+        kev_index({"CVE-2026-76461": {"date_added": "2026-09-14"}})
+        assert kev_catalog.recent_additions(30, ["Cisco"], today=WATCH_TODAY) == []
+
+    def test_negative_days_rejected(self, watch_catalog):
+        with pytest.raises(ValueError):
+            kev_catalog.recent_additions(-1, today=WATCH_TODAY)
+
+    def test_deterministic_and_returns_copies(self, watch_catalog):
+        a = kev_catalog.recent_additions(7, ["Cisco", "Fortinet"], today=WATCH_TODAY)
+        a[0]["product"] = "mutated"
+        b = kev_catalog.recent_additions(7, ["Cisco", "Fortinet"], today=WATCH_TODAY)
+        assert self.ids(a) == self.ids(b)
+        assert b[0]["product"] != "mutated"
+
+    def test_rows_carry_catalog_version(self, watch_catalog):
+        rows = kev_catalog.recent_additions(7, ["Cisco"], today=WATCH_TODAY)
+        assert {r["catalog_version"] for r in rows} == {"2026.09.27"}
+
+
+class TestCatalogMeta:
+    def test_before_any_load(self):
+        assert kev_catalog.catalog_meta() == {"catalog_version": None, "date_released": None,
+                                              "fetched_at": None}
+
+    def test_after_fetch(self, watch_catalog):
+        kev_catalog.load_kev_index()
+        meta = kev_catalog.catalog_meta()
+        assert meta["catalog_version"] == "2026.09.27"
+        assert meta["date_released"] == "2026-09-27T17:00:00.000Z"
+        assert meta["fetched_at"].endswith("+00:00")
+
+    def test_stale_disk_reports_its_real_fetch_time(self, online):
+        cached_at = datetime.datetime(2026, 9, 18, 12, 0, tzinfo=datetime.timezone.utc).timestamp()
+        os.makedirs(kev_catalog.KEV_CACHE_DIR, exist_ok=True)
+        with open(kev_catalog.KEV_CACHE_PATH, "w") as f:
+            json.dump({"cached_at": cached_at, "catalog": WATCH_RAW}, f)
+        online["raise"] = RuntimeError("down")
+        kev_catalog.load_kev_index()
+        assert kev_catalog.catalog_meta()["fetched_at"] == "2026-09-18T12:00:00+00:00"
