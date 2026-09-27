@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from api.routers import snmpv3, ntp, golden_config, aaa, cve, profiles, iperf, subnet, mtu, config_parser, export, mitigation, timezone, ip_path_tracer, port_auditor, config_explainer, config_drift, cis_audit, subscribe, whoami
+from api.routers import snmpv3, ntp, golden_config, aaa, cve, profiles, iperf, subnet, mtu, config_parser, export, mitigation, timezone, ip_path_tracer, port_auditor, config_explainer, config_drift, cis_audit, subscribe, whoami, kev_watch
 from models.meta import MetaInfo
 import datetime
 import os
@@ -58,6 +58,7 @@ app.include_router(config_drift.router, prefix="/tools", tags=["Config Drift"])
 app.include_router(cis_audit.router, prefix="/tools", tags=["Hardening Audit"])
 app.include_router(whoami.router, prefix="/tools", tags=["Whoami"])
 app.include_router(subscribe.router, prefix="/api", tags=["Subscribe"])
+app.include_router(kev_watch.router, prefix="/api", tags=["KEV Watch"])
 
 
 # Determine base path for static files

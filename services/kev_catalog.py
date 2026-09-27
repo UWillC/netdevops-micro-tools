@@ -101,7 +101,7 @@ def _write_disk(raw: Dict[str, Any]) -> None:
 
 
 def _memoize(raw: Dict[str, Any], loaded_at: float,
-             fetched_at: Optional[float] = None) -> Dict[str, Any]:
+             fetched_at: Optional[float] = None, source: str = "cache") -> Dict[str, Any]:
     global _memo
     _memo = {
         "loaded_at": loaded_at,
@@ -111,6 +111,8 @@ def _memoize(raw: Dict[str, Any], loaded_at: float,
         # When the copy was fetched from CISA. Differs from loaded_at on the
         # stale-disk path, where loaded_at is shifted to drive the retry backoff.
         "fetched_at": loaded_at if fetched_at is None else fetched_at,
+        # "live" = fetched from CISA by this process; "cache" = read from disk.
+        "source": source,
     }
     return _memo
 
@@ -133,7 +135,7 @@ def load_kev_index(force_refresh: bool = False) -> Dict[str, Dict[str, Any]]:
             raw = http_get_json(KEV_FEED_URL, timeout_seconds=KEV_FETCH_TIMEOUT_SECONDS)
             if isinstance(raw, dict) and raw.get("vulnerabilities"):
                 _write_disk(raw)
-                return _memoize(raw, now)["index"]
+                return _memoize(raw, now, source="live")["index"]
             _last_failure_at = now
         except Exception as e:
             _last_failure_at = now
@@ -168,6 +170,26 @@ def catalog_meta() -> Dict[str, Any]:
         "fetched_at": (datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
                        if isinstance(ts, (int, float)) else None),
     }
+
+
+def catalog_status(now: Optional[float] = None) -> Dict[str, Any]:
+    """catalog_meta() plus where the copy came from and whether it is stale.
+
+    `source` is "live" (fetched from CISA by this process) or "cache" (read from
+    disk), None when nothing is loaded. `stale` is True when the copy is older
+    than KEV_TTL_SECONDS, i.e. a refresh was due and did not happen (CISA down,
+    offline mode, backoff), or when its fetch time is unknown. KEV Watch (KW-01)
+    shows it so an old copy is never read as "no new listings".
+    """
+    meta = catalog_meta()
+    if not _memo:
+        meta.update({"source": None, "stale": True})
+        return meta
+    ts = _memo.get("fetched_at")
+    now = time.time() if now is None else now
+    meta["source"] = _memo.get("source") or "cache"
+    meta["stale"] = not isinstance(ts, (int, float)) or now - ts > KEV_TTL_SECONDS
+    return meta
 
 
 def watch_vendors() -> List[str]:
