@@ -4,6 +4,35 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.59] – 2026-09-27 (KEV Watch: the 22nd module)
+
+### Added
+- **KEV Watch** (Security Tools, free, no email): CVEs added to CISA's Known
+  Exploited Vulnerabilities catalog in the last 7/14/30 days for the vendors you
+  pick (12 vendors, exact KEV `vendorProject` names). Table sorted by federal due
+  date: CVE with NVD link, vendor and product, date added, due date, short-deadline
+  flag (due minus added <= 3 days), ransomware use, short description and the
+  vendor advisory link. The header shows catalog version, release date and fetch
+  date; a banner says when the copy is stale.
+- `GET /api/kev/watch?days=1-90&vendors=...` (default 14 days, the 12 watch
+  vendors): items plus catalog provenance (`catalog_version`, `date_released`,
+  `fetched_at`, `source` live|cache, `stale`). CISA down -> last good disk copy
+  with its real fetch date and `stale=true`; no catalog at all -> 503, never an
+  empty table.
+- KEV index keeps `vendor_project`, `product`, `short_description`, every URL in
+  `notes` and `advisory_url` (first one that is not a CISA or NVD page);
+  `recent_additions()` and `catalog_meta()` in `services/kev_catalog.py`.
+
+### Changed
+- Module count 21 -> 22 (page meta, Open Graph, Twitter card).
+- Email gate copy matches the real split: 6 free tools (iPerf3, IP Subnet, MTU,
+  Timezone, Cisco Threat Feed, KEV Watch), 15 behind the email gate.
+
+### Tests
+- 60 new tests (KEV index, endpoint, UI wiring); suite 1457 passed, 1 skipped.
+
+---
+
 ## [v0.6.58] – 2026-09-25 (Cisco's own workaround text, ours labelled)
 
 ### Fixed

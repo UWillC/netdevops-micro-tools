@@ -194,7 +194,7 @@ function addGateBanner() {
     <div class="gate-notice-content">
       <span class="gate-notice-icon">🔓</span>
       <div class="gate-notice-text">
-        <strong>5 tools free. 15 pro tools — just enter your email.</strong>
+        <strong>6 tools free. 15 pro tools: just enter your email.</strong>
         <span>One-time. No spam. No account needed.</span>
       </div>
       <button class="btn-primary gate-notice-btn" id="gate-notice-btn">Unlock Pro Tools</button>
@@ -220,7 +220,7 @@ function updateHomeFooter() {
     const email = localStorage.getItem(GATE_EMAIL_KEY) || "";
     footer.textContent = "All tools unlocked. Happy automating.";
   } else {
-    footer.textContent = "5 free tools. Enter email to unlock all 20.";
+    footer.textContent = "6 free tools. Enter email to unlock the other 15.";
   }
 }
 
