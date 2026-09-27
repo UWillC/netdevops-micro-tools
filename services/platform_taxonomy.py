@@ -177,7 +177,13 @@ def detect_all_families(title: str, description: str = "") -> List[ProductFamily
 # to the ProductFamily they represent.
 _USER_INPUT_ALIASES: List[Tuple[List[str], ProductFamily]] = [
     (["cisco asa", "adaptive security appliance", "cisco secure firewall asa", "asa software"], ProductFamily.ASA),
-    (["cisco ftd", "firepower threat defense"], ProductFamily.FTD),
+    # CVE-DATA-FMC (2026-09-27): Cisco's own product name, "Cisco Secure
+    # Firewall Management Center", matched nothing, so it fell through to the
+    # IOS XE dataset and got 104 unrelated CVEs (and not its two KEV criticals)
+    # with no "not evaluated" note. "FMC" already mapped here.
+    (["cisco ftd", "firepower threat defense", "firewall threat defense",
+      "firewall management center", "firepower management center", "secure fmc",
+      "cisco fmc"], ProductFamily.FTD),
     (["cisco fxos", "firepower extensible"], ProductFamily.FXOS),
     (["cisco ios xe sd-wan", "catalyst sd-wan", "cedge"], ProductFamily.IOS_XE_SDWAN),
     (["catalyst 9800", "ios xe wireless"], ProductFamily.IOS_XE_WLC),

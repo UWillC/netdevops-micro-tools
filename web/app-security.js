@@ -18,6 +18,21 @@ function formatCvss(score) {
   return n.toFixed(1);
 }
 
+// CVE-DATA-FMC: "7.4 -> 7.4.8 | 7.6 -> 7.6.6" from first_fixed_version train
+// keys ("fmc-7.6", "asa-9.8"). ISE keeps its own line. "" when there are none.
+function perTrainFixText(cve) {
+  const fixes = (cve && cve.first_fixed_version && cve.first_fixed_version.fixes) || {};
+  const rows = Object.keys(fixes)
+    .filter((k) => !k.startsWith("ise-") && /-\d+\.\d+$/.test(k))
+    .map((k) => [k.replace(/^.*-(\d+\.\d+)$/, "$1"), fixes[k]])
+    .sort((a, b) => {
+      const [am, an] = a[0].split(".").map(Number);
+      const [bm, bn] = b[0].split(".").map(Number);
+      return am - bm || an - bn;
+    });
+  return rows.map(([train, fix]) => `${train} -> ${fix}`).join(" | ");
+}
+
 if (cveForm && cveOutput) {
   loadFormState("cve-form", cveForm);
 
@@ -240,6 +255,9 @@ if (cveForm && cveOutput) {
         if (trainFixes && Object.keys(trainFixes).some((k) => k.startsWith("ise-"))) {
           const parts = Object.keys(trainFixes).sort().map((k) => trainFixes[k]);
           out += `  Fixed in (per train): ${parts.join(" | ")}\n`;
+        } else if (perTrainFixText(cve)) {
+          // CVE-DATA-FMC: FMC / ASA are fixed per train too ("7.6 -> 7.6.6").
+          out += `  Fixed in (per train): ${perTrainFixText(cve)}\n`;
         }
         if (isBundledCve) {
           out += "  Note: hardening-release CVE. One CVE covers many fixes in a single CWE\n";
@@ -444,6 +462,7 @@ if (cveForm && cveOutput) {
           metaBits.push(`CVSS: ${formatCvss(cve.cvss_score)}`);
           if (cve.cwe) metaBits.push(`CWE: ${cve.cwe}`);
           if (cve.fixed_in) metaBits.push(`Fixed in: ${cve.fixed_in}`);
+          else if (perTrainFixText(cve)) metaBits.push(`Fixed in (per train): ${perTrainFixText(cve)}`);
 
           card.innerHTML = `
             <div class="cve-item-header">

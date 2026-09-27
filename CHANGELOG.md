@@ -4,6 +4,30 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.60] – 2026-09-27 (CVE-DATA-FMC: FMC fixed releases per train)
+
+### Fixed
+- **CVE-2026-20079 / CVE-2026-20131 (FMC, CVSS 10, CISA KEV):** the records said
+  `fixed_in: "7.6.0.1"` (a release Cisco's Software Checker does not know) and
+  `affected.max: "7.6.0"`, so FMC 7.6.1-7.6.5 read as fixed. Now the first fixed
+  release per train from Cisco (CSAF + openVuln OSType/fmc, read 2026-09-27):
+  20079: 7.0.10 / 7.2.12 / 7.3->7.4.8 / 7.4.8 / 7.6.6 / 7.7.13 / 10.0.2 / 10.1.0;
+  20131: 7.0.9 / 7.2.11 / 7.3->7.4.6 / 7.4.6 / 7.6.5 / 7.7.12 / 10.0.1
+  (plus 6.4.0.13-6.4.0.18 affected). Workaround field: Cisco publishes none.
+- **Cisco's product name was not recognised:** "Cisco Secure Firewall Management
+  Center", "Firewall Management Center", "Firepower Management Center", "Secure FMC"
+  and "Secure Firewall Threat Defense" fell through to the IOS XE dataset (104
+  unrelated CVEs on 7.6.4, neither FMC KEV bug, no note). They now get the same
+  "NOT EVALUATED" answer as "FMC" / "FTD".
+- **CVE-2018-0101 (ASA):** per-train fixes were the first-revision numbers
+  (9.8.2.14 etc.); now Cisco rev 2.4 (9.8.2.20, 9.9.2.1 ...), workaround = Cisco text.
+
+### Changed
+- Generic matcher: a record's `first_fixed_version` train row ("fmc-7.6",
+  "asa-9.8") decides for that train; trains without a row keep the min/max range,
+  so a missing row never reads as fixed (ISE keeps its own matcher).
+- Analyzer card and text report show "Fixed in (per train)" for these records.
+
 ## [v0.6.59] – 2026-09-27 (KEV Watch: the 22nd module)
 
 ### Added

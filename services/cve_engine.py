@@ -929,6 +929,35 @@ def ise_fix_for_version(cve: "CVEEntry", version: str) -> Optional[str]:
 
 
 
+def train_fix_for_version(cve: "CVEEntry", version: str) -> Optional[str]:
+    """First fixed release for the caller's train on a dotted-release product.
+
+    CVE-DATA-FMC (2026-09-27). Cisco fixes FMC, like ASA, per train: for
+    CVE-2026-20079 the table reads 7.4 -> 7.4.8, 7.6 -> 7.6.6, 7.7 -> 7.7.13.
+    One scalar `fixed_in` cannot say that; the record used to carry
+    fixed_in "7.6.0.1" (a release Cisco does not know) with max "7.6.0", so an
+    FMC on 7.6.4 read as fixed. The fixes live in `first_fixed_version.fixes`
+    under "<family>-<major>.<minor>" keys, the form ISE already uses; ISE has
+    its own matcher and is skipped here. A train with no key returns None and
+    the caller keeps the plain min/max range, so a missing row never reads as
+    "fixed". The fix may sit on another train ("fmc-7.3": "7.4.8" = migrate).
+    """
+    ff = getattr(cve, "first_fixed_version", None)
+    fixes = (getattr(ff, "fixes", None) or {}) if ff is not None else {}
+    if not fixes:
+        return None
+    parts = _tokenize_version(version)
+    if len(parts) < 2:
+        return None
+    suffix = "-%d.%d" % (parts[0], parts[1])
+    for key in sorted(fixes):
+        if key.startswith("ise-") or not key.endswith(suffix):
+            continue
+        if _extract_version(fixes[key]):
+            return fixes[key]
+    return None
+
+
 # -----------------------------
 # Engine configuration
 # -----------------------------
@@ -1261,6 +1290,14 @@ class CVEEngine:
 
             # target < min → not yet affected
             if _cmp_tuples(target_ver, min_ver) < 0:
+                continue
+
+            # CVE-DATA-FMC: a per-train fix row decides for its own train;
+            # the range below stays the answer for trains without a row.
+            train_fix = train_fix_for_version(cve, version)
+            if train_fix is not None:
+                if _cmp_tuples(target_ver, _extract_version(train_fix)) < 0:
+                    matched.append(cve)
                 continue
 
             # target > max (or >= when exclusive) → already fixed, skip
