@@ -105,7 +105,10 @@ def test_every_mitigation_file_carries_ciscos_text():
 def test_audited_sample_is_marked_reviewed():
     reviewed = {os.path.basename(p)[:-5] for p in glob.glob(os.path.join(MIT, "CVE-*.json"))
                 if _mit(os.path.basename(p)[:-5]).get("steps_reviewed")}
-    assert reviewed == C1_SAMPLE | MITIG_REVIEW_1
+    auto = {c for c in reviewed if _mit(c).get("review_method") == "auto-patch-only"}
+    assert len(auto) == 54
+    assert reviewed == C1_SAMPLE | MITIG_REVIEW_1 | auto
+    assert not auto & (C1_SAMPLE | MITIG_REVIEW_1)
 
 
 C1_SAMPLE = {"CVE-2018-0171", "CVE-2018-0296", "CVE-2023-20025", "CVE-2023-20198",
