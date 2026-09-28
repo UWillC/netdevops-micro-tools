@@ -28,6 +28,21 @@ All notable changes to this project will be documented in this file.
   so a missing row never reads as fixed (ISE keeps its own matcher).
 - Analyzer card and text report show "Fixed in (per train)" for these records.
 
+### Added (same release, FMC-FREE-TEXT): FMC family + coverage note
+- **FMC is its own platform family** (was mapped to FTD). "FMC", "FMCv", appliance
+  models ("FMC 4600", "FMC1700", "FMCv300", "FMC1600-K9"), "Secure FMC", "Cisco
+  Secure Firewall Management Center" and "Firepower Management Center" match only
+  the FMC records, never IOS / IOS XE / NTP / OpenSSL. Before: "FMC 4600" 7.6.4 got
+  the two FMC CVEs plus 16 unrelated ones and no note; Cisco's product name got
+  NOT EVALUATED (entry above, now superseded) and missed both KEV criticals.
+- **Every FMC report carries a coverage note**, counted from the loaded records:
+  "FMC coverage: only 2 advisories in the dataset (CVE-2026-20079, CVE-2026-20131).
+  Everything else for this platform is not evaluated, never assumed clean. For the
+  rest, use Cisco Software Checker." Shown in the text report (view and Download),
+  as the ISE and NX-OS notes are. FTD, ASA and FXOS stay NOT EVALUATED.
+- FMC records no longer surface under IOS XE for FMC-shaped releases (7.x / 9.x).
+- No version bump and no UI asset change (note travels in `coverage_note`).
+
 ## [v0.6.59] – 2026-09-27 (KEV Watch: the 22nd module)
 
 ### Added

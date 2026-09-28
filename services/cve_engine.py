@@ -15,6 +15,7 @@ from services.known_affected import family_for_version, version_is_listed
 from services.platform_taxonomy import (
     ProductFamily,
     detect_all_families,
+    detect_primary_family,
     normalize_user_platform,
     is_cve_in_scope_for_query,
 )
@@ -686,12 +687,50 @@ _IOS_XE_DATASET_FAMILIES = {
 _COVERED_PLATFORMS_TEXT = "Cisco IOS XE, Cisco IOS, Cisco NX-OS and Cisco ISE"
 
 
+# FMC-FREE-TEXT (2026-09-27): families with a handful of curated records in the
+# IOS XE directory. They are answered from those records only, and the report
+# always states how few there are (fmc_coverage_note), so they are not
+# "uncovered" but never read as complete either.
+_PARTIAL_DATASET_FAMILIES = {ProductFamily.FMC}
+
+
 def uncovered_family(platform: str) -> Optional[ProductFamily]:
     """The recognised product family of `platform` if we hold no data for it."""
     family = normalize_user_platform(platform or "")
-    if family is None or family in _FAMILY_DATA_DIRS or family in _IOS_XE_DATASET_FAMILIES:
+    if (family is None or family in _FAMILY_DATA_DIRS or family in _IOS_XE_DATASET_FAMILIES
+            or family in _PARTIAL_DATASET_FAMILIES):
         return None
     return family
+
+
+def is_fmc_record(cve) -> bool:
+    """A record about FMC: tagged so, declared so in `platforms`, or so titled."""
+    if "fmc" in (getattr(cve, "product_families", None) or []):
+        return True
+    for p in getattr(cve, "platforms", None) or []:
+        if normalize_user_platform(p or "") == ProductFamily.FMC:
+            return True
+    return detect_primary_family(getattr(cve, "title", "") or "") == ProductFamily.FMC
+
+
+def fmc_coverage_note(entries) -> str:
+    """What the FMC answer rests on, said in every FMC report (FMC-FREE-TEXT).
+
+    The count and the list come from the loaded records, never a constant: the
+    note must stay true when a record is added. Doctrine: reported as not
+    evaluated, never as clean.
+    """
+    records = sorted((e for e in entries if is_fmc_record(e)), key=lambda e: e.cve_id)
+    if not records:
+        return ("FMC dataset is empty on this instance: nothing was evaluated. "
+                "Use Cisco Software Checker.")
+    advisories = {getattr(e, "advisory_url", None) or e.cve_id for e in records}
+    n = len(advisories)
+    return (
+        f"FMC coverage: only {n} {'advisory' if n == 1 else 'advisories'} in the dataset "
+        f"({', '.join(e.cve_id for e in records)}). Everything else for this platform is "
+        f"not evaluated, never assumed clean. For the rest, use Cisco Software Checker."
+    )
 
 
 def ambiguous_release(platform: str, version: str) -> bool:
@@ -729,6 +768,37 @@ def platform_coverage_note(platform: str, version: Optional[str] = None) -> Opti
         f"Covered platforms: {_COVERED_PLATFORMS_TEXT}. An empty result here means "
         f"\"not checked\", not \"not vulnerable\" \u2014 use Cisco Software Checker for this platform."
     )
+
+
+def _range_matches(cve: "CVEEntry", version: str, target_ver: Tuple[int, ...]) -> bool:
+    """Generic release test: min/max range, or the record's per-train fix row."""
+    # v0.3.4 (2026-04-19): P2.1 placeholder filter — CVEs whose fixed_in
+    # is advisory prose ("Migrate to X", "Remove default Y") rather than
+    # a version token are hardening rules, not applicable CVEs.
+    fix = getattr(cve, "fixed_in", None)
+    if fix and _is_prose_not_version(fix):
+        return False
+
+    min_ver, max_ver, inclusive_max = parse_affected_range(
+        cve.affected.min,
+        cve.affected.max,
+        fix,
+    )
+
+    # target < min → not yet affected
+    if _cmp_tuples(target_ver, min_ver) < 0:
+        return False
+
+    # CVE-DATA-FMC: a per-train fix row decides for its own train;
+    # the range below stays the answer for trains without a row.
+    train_fix = train_fix_for_version(cve, version)
+    if train_fix is not None:
+        return _cmp_tuples(target_ver, _extract_version(train_fix)) < 0
+
+    # target > max (or >= when exclusive) → already fixed
+    if inclusive_max:
+        return _cmp_tuples(target_ver, max_ver) <= 0
+    return _cmp_tuples(target_ver, max_ver) < 0
 
 
 def data_dir_for_platform(platform: str) -> str:
@@ -1240,6 +1310,17 @@ class CVEEngine:
                     self.excluded_by_known_affected.append(cve.cve_id)
             return self._sort_matched(matched)
 
+        # FMC-FREE-TEXT: FMC records only, matched by release range / per-train
+        # fix. The family filter below lets UNKNOWN-titled records through, which
+        # is how "FMC 4600" collected 16 IOS/NTP/OpenSSL CVEs; FMC never does.
+        if query_family == ProductFamily.FMC:
+            self.excluded_by_known_affected = []
+            self.cisco_source_conflicts = []
+            for cve in self.cves:
+                if is_fmc_record(cve) and _range_matches(cve, version, target_ver):
+                    matched.append(cve)
+            return self._sort_matched(matched)
+
         # The version's own shape picks the list: a device model in the
         # platform box ("ISR4451-X") names no software family.
         ka_family = family_for_version(version)
@@ -1274,41 +1355,8 @@ class CVEEngine:
                         self.excluded_by_known_affected.append(cve.cve_id)
                     continue
 
-            # v0.3.4 (2026-04-19): P2.1 placeholder filter — CVEs whose fixed_in
-            # is advisory prose ("Migrate to X", "Remove default Y") rather than
-            # a version token are hardening rules, not applicable CVEs.
-            fix = getattr(cve, "fixed_in", None)
-            if fix and _is_prose_not_version(fix):
-                # Skip from matched list (but keep in DB for reference)
-                continue
-
-            min_ver, max_ver, inclusive_max = parse_affected_range(
-                cve.affected.min,
-                cve.affected.max,
-                fix,
-            )
-
-            # target < min → not yet affected
-            if _cmp_tuples(target_ver, min_ver) < 0:
-                continue
-
-            # CVE-DATA-FMC: a per-train fix row decides for its own train;
-            # the range below stays the answer for trains without a row.
-            train_fix = train_fix_for_version(cve, version)
-            if train_fix is not None:
-                if _cmp_tuples(target_ver, _extract_version(train_fix)) < 0:
-                    matched.append(cve)
-                continue
-
-            # target > max (or >= when exclusive) → already fixed, skip
-            if inclusive_max:
-                if _cmp_tuples(target_ver, max_ver) > 0:
-                    continue
-            else:
-                if _cmp_tuples(target_ver, max_ver) >= 0:
-                    continue
-
-            matched.append(cve)
+            if _range_matches(cve, version, target_ver):
+                matched.append(cve)
 
         return self._sort_matched(matched)
 

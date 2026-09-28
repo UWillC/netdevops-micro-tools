@@ -32,6 +32,7 @@ class ProductFamily(str, Enum):
     NX_OS = "nx-os"               # Nexus switches
     ASA = "asa"                   # Adaptive Security Appliance
     FTD = "ftd"                   # Firepower Threat Defense
+    FMC = "fmc"                   # Secure Firewall / Firepower Management Center (FMC-FREE-TEXT)
     FXOS = "fxos"                 # Firepower OS (underlying)
     RV_SERIES = "rv-series"       # Small Business RV320, RV325, RV340 etc.
     MERAKI = "meraki"             # Meraki dashboard / MS / MR / MX
@@ -64,6 +65,9 @@ _TITLE_PATTERNS: List[Tuple[List[str], ProductFamily]] = [
     (["identity services engine", "cisco ise"], ProductFamily.ISE),
 
     # --- Firewall / security platforms ---
+    # FMC before FTD: an FMC advisory describes the FTD devices it manages
+    # ("a compromised FMC cascades to every FTD"), and is still about FMC.
+    (["firewall management center", "firepower management center"], ProductFamily.FMC),
     (["firepower threat defense", "cisco ftd"], ProductFamily.FTD),
     (["firepower extensible operating system", "cisco fxos"], ProductFamily.FXOS),
     (["adaptive security appliance", "cisco asa software", "cisco secure firewall asa", "cisco asa "], ProductFamily.ASA),
@@ -180,10 +184,14 @@ _USER_INPUT_ALIASES: List[Tuple[List[str], ProductFamily]] = [
     # CVE-DATA-FMC (2026-09-27): Cisco's own product name, "Cisco Secure
     # Firewall Management Center", matched nothing, so it fell through to the
     # IOS XE dataset and got 104 unrelated CVEs (and not its two KEV criticals)
-    # with no "not evaluated" note. "FMC" already mapped here.
-    (["cisco ftd", "firepower threat defense", "firewall threat defense",
-      "firewall management center", "firepower management center", "secure fmc",
-      "cisco fmc"], ProductFamily.FTD),
+    # with no "not evaluated" note.
+    # FMC-FREE-TEXT (2026-09-27): FMC is its own family, not FTD. It matches
+    # only FMC records and every FMC report says how few there are
+    # (cve_engine.fmc_coverage_note). Appliance models ("FMC 4600", "FMCv")
+    # are caught by _FMC_MODEL before this list.
+    (["firewall management center", "firepower management center", "secure fmc",
+      "cisco fmc"], ProductFamily.FMC),
+    (["cisco ftd", "firepower threat defense", "firewall threat defense"], ProductFamily.FTD),
     (["cisco fxos", "firepower extensible"], ProductFamily.FXOS),
     (["cisco ios xe sd-wan", "catalyst sd-wan", "cedge"], ProductFamily.IOS_XE_SDWAN),
     (["catalyst 9800", "ios xe wireless"], ProductFamily.IOS_XE_WLC),
@@ -235,6 +243,8 @@ def normalize_user_platform(user_input: str) -> Optional[ProductFamily]:
         compact = compact[len("cisco"):]
     if compact in _COMPACT_PLATFORM_NAMES:
         return _COMPACT_PLATFORM_NAMES[compact]
+    if _FMC_MODEL.search(spaced) or _FMC_MODEL.fullmatch(compact):
+        return ProductFamily.FMC
 
     for triggers, family in _USER_INPUT_ALIASES:
         for trigger in triggers:
@@ -254,9 +264,15 @@ _COMPACT_PLATFORM_NAMES = {
     "ios": ProductFamily.IOS, "iosclassic": ProductFamily.IOS,
     "nxos": ProductFamily.NX_OS,
     "asa": ProductFamily.ASA, "ftd": ProductFamily.FTD, "fxos": ProductFamily.FXOS,
-    "fmc": ProductFamily.FTD,
+    "fmc": ProductFamily.FMC,
     "ise": ProductFamily.ISE, "isepic": ProductFamily.ISE,
 }
+
+
+# FMC appliance and virtual models as typed: "FMC 4600", "FMC4700", "FMCv",
+# "FMCv300", "FMC1600-K9". Cisco's advisories name no models (CSAF 20079:
+# "FMC Appliances", regardless of configuration), so any FMC model is FMC.
+_FMC_MODEL = re.compile(r"\bfmc\s?(v\s?\d*|\d{3,4}(\s?k9)?)?\b")
 
 
 # -----------------------------
@@ -273,6 +289,7 @@ _IN_SCOPE: dict = {
     ProductFamily.NX_OS:      {ProductFamily.NX_OS, ProductFamily.UNKNOWN},
     ProductFamily.ASA:        {ProductFamily.ASA, ProductFamily.FTD, ProductFamily.FXOS, ProductFamily.UNKNOWN},
     ProductFamily.FTD:        {ProductFamily.FTD, ProductFamily.ASA, ProductFamily.FXOS, ProductFamily.UNKNOWN},
+    ProductFamily.FMC:        {ProductFamily.FMC},   # FMC records only, never IOS/NTP/OpenSSL
     ProductFamily.FXOS:       {ProductFamily.FXOS, ProductFamily.ASA, ProductFamily.FTD, ProductFamily.UNKNOWN},
     ProductFamily.RV_SERIES:  {ProductFamily.RV_SERIES, ProductFamily.UNKNOWN},
     ProductFamily.MERAKI:     {ProductFamily.MERAKI, ProductFamily.UNKNOWN},

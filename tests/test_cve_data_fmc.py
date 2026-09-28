@@ -85,29 +85,101 @@ def test_train_fix_lookup_ignores_ise_and_missing_trains(engine):
     assert train_fix_for_version(rec, "garbage") is None
 
 
+# FMC-FREE-TEXT (2026-09-27, variant b): FMC is its own family. These names
+# used to map to FTD (NOT EVALUATED, v0.6.60); they now reach the FMC records
+# and nothing else, with a coverage note in every FMC report.
 @pytest.mark.parametrize("name", [
     "Cisco Secure Firewall Management Center", "Firewall Management Center",
-    "Firepower Management Center", "Cisco Secure FMC", "FMC",
-    "Cisco Secure Firewall Threat Defense",
+    "Firepower Management Center", "Cisco Secure FMC", "Secure FMC", "FMC", "FMCv",
+    "FMC 4600", "FMC4700", "FMC 1600", "FMC 2600", "FMC 1700", "FMC 2700",
+    "FMCv300", "FMC1600-K9", "Cisco FMC 2600",
 ])
 def test_fmc_product_names_are_recognised(name):
-    assert normalize_user_platform(name) is ProductFamily.FTD
+    assert normalize_user_platform(name) is ProductFamily.FMC
 
 
-def test_cisco_product_name_is_not_evaluated_instead_of_false_clean():
-    """Was: 104 unrelated IOS/NTP/OpenSSL CVEs, neither FMC KEV bug, no note."""
-    r = client.post("/analyze/cve", json={"platform": "Cisco Secure Firewall Management Center",
-                                          "version": "7.6.4", "include_suggestions": True})
-    data = r.json()
+def test_ftd_stays_ftd_and_not_evaluated():
+    assert normalize_user_platform("Cisco Secure Firewall Threat Defense") is ProductFamily.FTD
+    data = _analyze("FTD", "7.6.4")
     assert data["matched"] == []
     assert data["coverage_note"].startswith("NOT EVALUATED")
 
 
-def test_api_fmc_model_764_reports_both_kev_criticals():
-    r = client.post("/analyze/cve", json={"platform": "FMC 4600", "version": "7.6.4",
+def _analyze(platform, version):
+    r = client.post("/analyze/cve", json={"platform": platform, "version": version,
                                           "include_suggestions": True})
-    ids = {c["cve_id"] for c in r.json()["matched"]}
-    assert {"CVE-2026-20079", "CVE-2026-20131"} <= ids
+    assert r.status_code == 200
+    return r.json()
+
+
+def _fmc_note_expected(engine):
+    from services.cve_engine import is_fmc_record
+    ids = sorted(c.cve_id for c in engine.cves if is_fmc_record(c))
+    return ids, ("FMC coverage: only %d advisories in the dataset (%s). Everything else "
+                 "for this platform is not evaluated, never assumed clean."
+                 % (len(ids), ", ".join(ids)))
+
+
+def test_fmc_records_are_exactly_the_two_curated_ones(engine):
+    ids, _ = _fmc_note_expected(engine)
+    assert ids == ["CVE-2026-20079", "CVE-2026-20131"]
+
+
+@pytest.mark.parametrize("platform", ["FMC 4600", "Cisco Secure Firewall Management Center",
+                                      "Firepower Management Center", "FMC"])
+def test_fmc_764_is_exactly_the_two_fmc_cves_plus_note(engine, platform):
+    """Was ("FMC 4600"): the 2 FMC CVEs + 16 IOS/NTP/OpenSSL ones, no note.
+    Was (Cisco's product name, v0.6.60): NOT EVALUATED, 0 CVEs."""
+    data = _analyze(platform, "7.6.4")
+    assert {c["cve_id"] for c in data["matched"]} == {"CVE-2026-20079", "CVE-2026-20131"}
+    _, note = _fmc_note_expected(engine)
+    assert data["coverage_note"].startswith(note)
+    assert "only 2 advisories" in data["coverage_note"]
+
+
+def test_fmcv_766_is_empty_but_never_reads_clean(engine):
+    data = _analyze("FMCv", "7.6.6")
+    assert data["matched"] == []
+    _, note = _fmc_note_expected(engine)
+    assert data["coverage_note"].startswith(note)
+    assert not data["coverage_note"].startswith("NOT EVALUATED")
+
+
+def test_fmc_note_counts_from_the_data_not_a_constant():
+    from services.cve_engine import fmc_coverage_note
+
+    class R:
+        def __init__(self, cid, url):
+            self.cve_id, self.advisory_url, self.title = cid, url, "x"
+            self.platforms, self.product_families = ["FMC"], []
+    one = fmc_coverage_note([R("CVE-1", "u1")])
+    assert "only 1 advisory in the dataset (CVE-1)" in one
+    three = fmc_coverage_note([R("CVE-1", "u1"), R("CVE-2", "u2"), R("CVE-3", "u2")])
+    assert "only 2 advisories in the dataset (CVE-1, CVE-2, CVE-3)" in three
+    assert "nothing was evaluated" in fmc_coverage_note([])
+
+
+def test_fmc_note_has_no_em_dash(engine):
+    from services.cve_engine import fmc_coverage_note
+    assert "\u2014" not in fmc_coverage_note(engine.cves)
+    assert "\u2014" not in fmc_coverage_note([])
+
+
+def test_fmc_family_never_admits_other_families(engine):
+    for version in ("7.6.4", "7.0.1", "6.4.0.13", "10.0.0", "15.2.4", "17.9.4"):
+        ids = {c.cve_id for c in engine.match("FMC 4600", version)}
+        assert ids <= {"CVE-2026-20079", "CVE-2026-20131"}, (version, ids)
+
+
+def test_fmc_records_stay_out_of_ios_xe(engine):
+    for version in ("7.6.4", "17.9.4", "16.12.4"):
+        ids = {c.cve_id for c in engine.match("IOS XE", version)}
+        assert not ids & {"CVE-2026-20079", "CVE-2026-20131"}, version
+
+
+def test_api_fmc_model_764_reports_both_kev_criticals():
+    ids = {c["cve_id"] for c in _analyze("FMC 4600", "7.6.4")["matched"]}
+    assert ids == {"CVE-2026-20079", "CVE-2026-20131"}
 
 
 def test_asa_2018_0101_uses_cisco_rev_2_4_fixes(engine):
