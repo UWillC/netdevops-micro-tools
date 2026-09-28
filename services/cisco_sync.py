@@ -350,13 +350,17 @@ def auto_sync_new_cves(cached_advisories: List[Dict[str, Any]], platform: str = 
                 if vtype != "generic":
                     tags.append(vtype)
                 mit_data = _build_mitigation(cve_id, adv, tags)
-                wa = cisco_workaround.fetch(mit_data.get("cisco_psirt"))
-                if wa:
-                    mit_data["cisco_workaround"] = wa
-                mit_path = os.path.join(MITIGATION_DIR, f"{cve_upper}.json")
-                with open(mit_path, "w", encoding="utf-8") as f:
-                    json.dump(mit_data, f, indent=2, ensure_ascii=False)
-                existing_mit.add(cve_upper)
+                # MITIG-WRONG-CVE gate: no mitigation under an advisory that does not list the CVE.
+                wa, rejected = cisco_workaround.fetch_checked(mit_data.get("cisco_psirt"), cve_upper)
+                if rejected:
+                    print(f"[SYNC] Mitigation for {cve_upper} rejected: advisory does not list it")
+                else:
+                    if wa:
+                        mit_data["cisco_workaround"] = wa
+                    mit_path = os.path.join(MITIGATION_DIR, f"{cve_upper}.json")
+                    with open(mit_path, "w", encoding="utf-8") as f:
+                        json.dump(mit_data, f, indent=2, ensure_ascii=False)
+                    existing_mit.add(cve_upper)
 
     if imported > 0:
         print(f"[SYNC] Auto-imported {imported} new CVEs from Cisco PSIRT to local database")

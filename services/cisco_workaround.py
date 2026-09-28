@@ -11,7 +11,7 @@ import json
 import re
 import urllib.request
 from datetime import date
-from typing import Optional
+from typing import Optional, Tuple
 
 CSAF_URL = ("https://sec.cloudapps.cisco.com/security/center/contentjson/"
             "CiscoSecurityAdvisory/{sa}/csaf/{sa}.json")
@@ -62,6 +62,11 @@ def extract(csaf: dict) -> Optional[str]:
     return "\n\n".join(parts) or None
 
 
+def csaf_cves(csaf: dict) -> list:
+    """CVE ids the advisory itself lists (CSAF `vulnerabilities[].cve`), sorted."""
+    return sorted({v.get("cve") for v in csaf.get("vulnerabilities") or [] if v.get("cve")})
+
+
 def build(csaf: dict, sa: str, fetched: Optional[str] = None) -> Optional[dict]:
     text = extract(csaf)
     if text is None:
@@ -71,19 +76,50 @@ def build(csaf: dict, sa: str, fetched: Optional[str] = None) -> Optional[dict]:
         "text": text,
         "source": CSAF_URL.format(sa=sa),
         "fetched": fetched or date.today().isoformat(),
+        # MITIG-WRONG-CVE (2026-09-27): which CVEs this text is about, so a record whose
+        # advisory does not list its own CVE is detectable offline (test_mitig_advisory_cve).
+        "cves": csaf_cves(csaf),
     }
 
 
-def fetch(url_or_id: Optional[str], timeout: int = 20) -> Optional[dict]:
-    """Network fetch + build. Any failure = None (the UI then says 'not checked')."""
+def _get_csaf(sa: str, timeout: int) -> dict:
+    req = urllib.request.Request(CSAF_URL.format(sa=sa),
+                                 headers={"User-Agent": "netdevops-micro-tools"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def _fetch_checked(url_or_id: Optional[str], cve_id: Optional[str],
+                   timeout: int = 20) -> Tuple[Optional[dict], bool]:
+    """(record or None, rejected).
+
+    Importer gate (MITIG-WRONG-CVE, 2026-09-27): three hand-written records pointed at an
+    advisory for a different CVE, so Cisco's text and our steps described the wrong bug.
+    rejected=True only when Cisco's CSAF was read and does NOT list cve_id: the caller must
+    not write the mitigation. A network failure is not a rejection (record None, False).
+    """
     sa = advisory_id(url_or_id)
     if not sa:
-        return None
+        return None, False
     try:
-        req = urllib.request.Request(CSAF_URL.format(sa=sa),
-                                     headers={"User-Agent": "netdevops-micro-tools"})
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return build(json.loads(resp.read().decode("utf-8")), sa)
+        csaf = _get_csaf(sa, timeout)
     except Exception as e:  # noqa: BLE001 - a missing section must never break an import
         print(f"cisco_workaround: {sa}: {type(e).__name__}: {str(e)[:120]}")
-        return None
+        return None, False
+    listed = csaf_cves(csaf)
+    if cve_id and cve_id.upper() not in listed:
+        print(f"cisco_workaround: REJECTED {cve_id}: {sa} does not list it "
+              f"(lists {', '.join(listed) or 'no CVE'})")
+        return None, True
+    return build(csaf, sa), False
+
+
+def fetch_checked(url_or_id: Optional[str], cve_id: Optional[str],
+                  timeout: int = 20) -> Tuple[Optional[dict], bool]:
+    """Importer entry point; see _fetch_checked."""
+    return _fetch_checked(url_or_id, cve_id, timeout)
+
+
+def fetch(url_or_id: Optional[str], timeout: int = 20) -> Optional[dict]:
+    """Network fetch + build, no CVE check. Any failure = None (UI says 'not checked')."""
+    return _fetch_checked(url_or_id, None, timeout)[0]

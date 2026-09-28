@@ -61,7 +61,8 @@ def test_extract_takes_only_the_workarounds_note():
     built = cw.build(csaf, "cisco-sa-x", fetched="2026-09-25")
     assert built == {"status": "none",
                      "text": "There are no workarounds that address this vulnerability.",
-                     "source": cw.CSAF_URL.format(sa="cisco-sa-x"), "fetched": "2026-09-25"}
+                     "source": cw.CSAF_URL.format(sa="cisco-sa-x"), "fetched": "2026-09-25",
+                     "cves": []}
     assert cw.build({"document": {"notes": []}}, "cisco-sa-x") is None
 
 
@@ -106,9 +107,12 @@ def test_audited_sample_is_marked_reviewed():
     reviewed = {os.path.basename(p)[:-5] for p in glob.glob(os.path.join(MIT, "CVE-*.json"))
                 if _mit(os.path.basename(p)[:-5]).get("steps_reviewed")}
     auto = {c for c in reviewed if _mit(c).get("review_method") == "auto-patch-only"}
+    manual2 = {c for c in reviewed if _mit(c).get("review_method") == "manual-2of7"}
     assert len(auto) == 54
-    assert reviewed == C1_SAMPLE | MITIG_REVIEW_1 | auto
-    assert not auto & (C1_SAMPLE | MITIG_REVIEW_1)
+    assert manual2 == MITIG_REVIEW_2
+    assert reviewed == C1_SAMPLE | MITIG_REVIEW_1 | auto | MITIG_REVIEW_2
+    assert not auto & (C1_SAMPLE | MITIG_REVIEW_1 | MITIG_REVIEW_2)
+    assert len(reviewed) == 104
 
 
 C1_SAMPLE = {"CVE-2018-0171", "CVE-2018-0296", "CVE-2023-20025", "CVE-2023-20198",
@@ -121,6 +125,84 @@ MITIG_REVIEW_1 = {"CVE-2026-20079", "CVE-2026-20131", "CVE-2023-20109", "CVE-201
                   "CVE-2018-0173", "CVE-2018-0172", "CVE-2018-0167", "CVE-2018-0158",
                   "CVE-2018-0156", "CVE-2018-0155", "CVE-2017-12319", "CVE-2017-12240",
                   "CVE-2017-12237", "CVE-2017-6744", "CVE-2017-6743", "CVE-2017-6740"}
+
+
+# MITIG-REVIEW 2/7 (2026-09-27): 3 records under a wrong advisory, the 6 remaining KEV
+# files, then the 11 most recent advisories (ties: CVE number descending).
+MITIG_REVIEW_2 = {"CVE-2020-3452", "CVE-2024-20291", "CVE-2024-20356",
+                  "CVE-2017-6739", "CVE-2017-6738", "CVE-2017-6737", "CVE-2017-6736",
+                  "CVE-2017-6627", "CVE-2019-1653",
+                  "CVE-2025-20316", "CVE-2025-20315", "CVE-2025-20312", "CVE-2025-20293",
+                  "CVE-2025-20240", "CVE-2025-20160", "CVE-2025-20149", "CVE-2025-20221",
+                  "CVE-2025-20202", "CVE-2025-20196", "CVE-2025-20195"}
+
+
+@pytest.mark.parametrize("cve", sorted(MITIG_REVIEW_2))
+def test_review2_no_template_leftovers(cve):
+    d = _mit(cve)
+    assert d["steps_reviewed"] == "2026-09-27"
+    t = _all_text({k: d[k] for k in ("workaround_steps", "acl_mitigation", "recommended_fix", "detection")})
+    for bad in ("copy tftp:", "Control Plane Policing", "Review advisory for specific workarounds",
+                "Upgrade to patched IOS XE version", "NO PATCH"):
+        assert bad not in t, bad
+
+
+def test_review2_wrong_advisories_rehomed():
+    expected = {"CVE-2020-3452": "cisco-sa-asaftd-ro-path-KJuQhB86",
+                "CVE-2024-20291": "cisco-sa-nxos-po-acl-TkyePgvL",
+                "CVE-2024-20356": "cisco-sa-cimc-cmd-inj-bLuPcb"}
+    for cve, sa in expected.items():
+        d = _mit(cve)
+        assert cw.advisory_id(d["cisco_psirt"]) == sa
+        assert cw.advisory_id(d["cisco_workaround"]["source"]) == sa
+        assert cve in d["cisco_workaround"]["cves"]
+    # CVE-2024-20291 was a copy of CVE-2024-20399 (NX-OS CLI command injection).
+    t = _all_text(_mit("CVE-2024-20291"))
+    assert "command injection" not in t.lower() and "port channel" in t
+    assert "ip access-group <ACL_NAME> in" in t
+    # Cisco's ASA/FTD table, not the old higher-but-unsourced numbers.
+    t = _all_text(_mit("CVE-2020-3452"))
+    assert "9.6.4.42" in t and "9.6.4.45" not in t and "6.2.3.16" in t
+    # IMC M7: 4.3(2.240009) is not a fix on M7 (Cisco: 4.3(3.240022)).
+    fix = _mit("CVE-2024-20356")["recommended_fix"]
+    assert "M7: 4.3 -> 4.3(3.240022)" in fix
+
+
+@pytest.mark.parametrize("cve", ["CVE-2020-3452", "CVE-2024-20356"])
+def test_review2_none_means_patch_only(cve):
+    d = _mit(cve)
+    assert d["cisco_workaround"]["status"] in {"none", "mitigation"}
+    assert d["acl_mitigation"] is None
+    for step in d["workaround_steps"][:2]:
+        assert "Not a Cisco workaround" in step["platform_notes"]
+
+
+@pytest.mark.parametrize("cve", ["CVE-2017-6736", "CVE-2017-6737", "CVE-2017-6738", "CVE-2017-6739"])
+def test_review2_snmp_2017_same_view_as_6740(cve):
+    d, ref = _mit(cve), _mit("CVE-2017-6740")
+    assert d["workaround_steps"] == ref["workaround_steps"]
+    assert "snmp-server view NO_BAD_SNMP ciscoMabMIB excluded" in _all_text(d)
+
+
+def test_review2_cisco_mitigations_present():
+    def cmds(cve):
+        return [c for s in _mit(cve)["workaround_steps"] for c in s["commands"]]
+    assert " hold-queue 350 in" in cmds("CVE-2017-6627")
+    assert " 10 deny udp any any eq 0" in cmds("CVE-2017-6627")
+    rv = _mit("CVE-2019-1653")
+    assert "1.4.2.22" in rv["recommended_fix"] and "# Web UI: Firewall > General" in cmds("CVE-2019-1653")
+    assert "no-patch" not in rv["tags"] and "config.exp" not in _all_text(rv)
+    assert "no ip nbar classification tunneled-traffic capwap" in cmds("CVE-2025-20315")
+    assert "snmp-server view SNMP_DOS cbQosREDClassStatsEntry excluded" in cmds("CVE-2025-20312")
+    assert "crypto pki server <WLC_HOSTNAME>_WLC_CA" in cmds("CVE-2025-20293")
+    assert "no shell processing full" in cmds("CVE-2025-20149")
+    assert " no cdp" in cmds("CVE-2025-20202")
+    assert "no iox" in cmds("CVE-2025-20196")
+    assert "ip http access-class ipv4 restrict_ipv4_webui" in cmds("CVE-2025-20195")
+    assert "no ip http secure-server" in cmds("CVE-2025-20240")
+    assert "show running-config | include interface Vlan|out$" in cmds("CVE-2025-20316")
+    tac = _all_text(_mit("CVE-2025-20160"))
+    assert "tacacs-server key YOUR-GLOBAL-SECRET" not in tac and "eq 49" not in tac
 
 
 @pytest.mark.parametrize("cve", sorted(c for c in MITIG_REVIEW_1 if _mit(c)["cisco_workaround"]["status"] == "none"))
@@ -228,4 +310,4 @@ def test_imports_attach_ciscos_text():
     for mod in (cisco_sync, imp):
         with open(mod.__file__, encoding="utf-8") as f:
             src = f.read()
-        assert 'cisco_workaround.fetch(mit_data.get("cisco_psirt"))' in src
+        assert 'cisco_workaround.fetch_checked(mit_data.get("cisco_psirt"), cve_upper)' in src

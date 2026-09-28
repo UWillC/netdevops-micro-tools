@@ -150,9 +150,16 @@ ADVISORY_MISMATCH = {"CVE-2020-3452", "CVE-2024-20291", "CVE-2024-20356"}
 
 
 def test_repo_has_nothing_left_to_auto_review():
-    """Offline: every bare 'no workarounds' record left unreviewed is a known mismatch."""
+    """Offline: no bare 'no workarounds' record is left unreviewed.
+
+    Until MITIG-REVIEW 2/7 the three ADVISORY_MISMATCH records were left here; they were
+    re-homed to the right advisory and reviewed by hand (review_method manual-2of7).
+    """
     left = {c for c, _, _ in mp.run(MIT, dry_run=True, cve_lookup=lambda sa: None)[mp.UNKNOWN]}
-    assert left == ADVISORY_MISMATCH
+    assert left == set()
+    for cve in ADVISORY_MISMATCH:
+        with open(os.path.join(MIT, f"{cve}.json"), encoding="utf-8") as f:
+            assert json.load(f)["review_method"] == "manual-2of7"
 
 
 def test_auto_reviewed_files_are_patch_only_and_cisco_says_none():

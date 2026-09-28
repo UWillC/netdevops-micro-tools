@@ -85,3 +85,4 @@ def _cisco_workaround_offline(monkeypatch):
     """
     from services import cisco_workaround
     monkeypatch.setattr(cisco_workaround, "fetch", lambda *a, **k: None)
+    monkeypatch.setattr(cisco_workaround, "fetch_checked", lambda *a, **k: (None, False))

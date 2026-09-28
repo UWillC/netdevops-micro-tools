@@ -423,7 +423,7 @@ def main():
     existing_data = set(f.replace(".json", "").upper() for f in os.listdir(CVE_DATA_DIR) if f.endswith(".json"))
     existing_mit = set(f.replace(".json", "").upper() for f in os.listdir(MITIGATION_DIR) if f.endswith(".json"))
 
-    stats = {"cve_created": 0, "cve_skipped": 0, "mit_created": 0, "mit_skipped": 0}
+    stats = {"cve_created": 0, "cve_skipped": 0, "mit_created": 0, "mit_skipped": 0, "mit_rejected": 0}
 
     for adv in advisories:
         cves = adv.get("cves", [])
@@ -460,20 +460,26 @@ def main():
             else:
                 cve_data_for_mit = build_cve_data(cve_id, adv, ver_min, ver_max)
                 mit_data = build_mitigation(cve_id, adv, cve_data_for_mit)
+                rejected = False
                 if not dry_run:
-                    wa = cisco_workaround.fetch(mit_data.get("cisco_psirt"))
+                    # MITIG-WRONG-CVE gate: the advisory's CSAF must list this CVE.
+                    wa, rejected = cisco_workaround.fetch_checked(mit_data.get("cisco_psirt"), cve_upper)
                     if wa:
                         mit_data["cisco_workaround"] = wa
-                if dry_run:
+                if rejected:
+                    print(f"  REJECTED {mit_path}: advisory does not list {cve_upper}")
+                    stats["mit_rejected"] += 1
+                elif dry_run:
                     print(f"  [DRY] Would create: {mit_path}")
+                    stats["mit_created"] += 1
                 else:
                     with open(mit_path, "w", encoding="utf-8") as f:
                         json.dump(mit_data, f, indent=2, ensure_ascii=False)
-                stats["mit_created"] += 1
+                    stats["mit_created"] += 1
 
     print(f"\n{'[DRY RUN] ' if dry_run else ''}Results:")
     print(f"  CVE data:   {stats['cve_created']} created, {stats['cve_skipped']} skipped (already exist)")
-    print(f"  Mitigations: {stats['mit_created']} created, {stats['mit_skipped']} skipped (already exist)")
+    print(f"  Mitigations: {stats['mit_created']} created, {stats['mit_skipped']} skipped (already exist), {stats['mit_rejected']} rejected (advisory does not list the CVE)")
 
     if not dry_run:
         total_cve = len([f for f in os.listdir(CVE_DATA_DIR) if f.endswith(".json")])

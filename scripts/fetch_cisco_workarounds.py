@@ -30,10 +30,16 @@ def main():
             stats["skipped"] += 1
             continue
         sa = cw.advisory_id(data.get("cisco_psirt"))
+        cve = data.get("cve_id") or os.path.basename(path)[:-5]
         if sa not in cache:
             cache[sa] = cw.fetch(sa)
             time.sleep(0.3)
         wa = cache[sa]
+        # MITIG-WRONG-CVE gate: never attach an advisory's text to a CVE it does not list.
+        if wa and cve not in (wa.get("cves") or []):
+            stats["failed"] += 1
+            print(f"  REJECTED {os.path.basename(path)}: {sa} lists {wa.get('cves')}, not {cve}")
+            continue
         if not wa:
             stats["failed"] += 1
             print(f"  no Cisco text: {os.path.basename(path)} ({sa})")
