@@ -109,12 +109,14 @@ def test_audited_sample_is_marked_reviewed():
     auto = {c for c in reviewed if _mit(c).get("review_method") == "auto-patch-only"}
     manual2 = {c for c in reviewed if _mit(c).get("review_method") == "manual-2of7"}
     manual3 = {c for c in reviewed if _mit(c).get("review_method") == "manual-3of7"}
+    manual4 = {c for c in reviewed if _mit(c).get("review_method") == "manual-4of7"}
     assert len(auto) == 54
     assert manual2 == MITIG_REVIEW_2
     assert manual3 == MITIG_REVIEW_3
-    assert reviewed == C1_SAMPLE | MITIG_REVIEW_1 | auto | MITIG_REVIEW_2 | MITIG_REVIEW_3
-    assert not auto & (C1_SAMPLE | MITIG_REVIEW_1 | MITIG_REVIEW_2 | MITIG_REVIEW_3)
-    assert len(reviewed) == 124
+    assert manual4 == MITIG_REVIEW_4
+    assert reviewed == C1_SAMPLE | MITIG_REVIEW_1 | auto | MITIG_REVIEW_2 | MITIG_REVIEW_3 | MITIG_REVIEW_4
+    assert not auto & (C1_SAMPLE | MITIG_REVIEW_1 | MITIG_REVIEW_2 | MITIG_REVIEW_3 | MITIG_REVIEW_4)
+    assert len(reviewed) == 144
 
 
 C1_SAMPLE = {"CVE-2018-0171", "CVE-2018-0296", "CVE-2023-20025", "CVE-2023-20198",
@@ -149,6 +151,44 @@ MITIG_REVIEW_3 = {"CVE-2025-20194", "CVE-2025-20193", "CVE-2025-20189", "CVE-202
 
 SNMP_DOS_2025 = {"CVE-2025-20169", "CVE-2025-20170", "CVE-2025-20171", "CVE-2025-20172",
                  "CVE-2025-20173", "CVE-2025-20174", "CVE-2025-20175", "CVE-2025-20176"}
+
+
+# MITIG-REVIEW 4/7 (2026-09-28): 13 `workaround` files 2017-2024 + 7 `mitigation` files.
+MITIG_REVIEW_4 = {"CVE-2017-6741", "CVE-2021-27853", "CVE-2021-27854", "CVE-2021-27861",
+                  "CVE-2021-27862", "CVE-2023-20186", "CVE-2023-20187", "CVE-2024-20307",
+                  "CVE-2024-20308", "CVE-2024-20309", "CVE-2024-20316", "CVE-2024-20373",
+                  "CVE-2024-20414", "CVE-2024-20324", "CVE-2024-20313", "CVE-2024-20312",
+                  "CVE-2024-20278", "CVE-2024-3596", "CVE-2023-20235", "CVE-2023-20076"}
+
+
+@pytest.mark.parametrize("cve", sorted(MITIG_REVIEW_4))
+def test_review4_no_template_leftovers(cve):
+    d = _mit(cve)
+    assert d["steps_reviewed"] == "2026-09-28"
+    assert d["review_method"] == "manual-4of7"
+    t = _all_text({k: d[k] for k in ("workaround_steps", "acl_mitigation", "recommended_fix", "detection")})
+    for bad in ("copy tftp:", "Control Plane Policing", "Review advisory for specific workarounds",
+                "Upgrade to patched IOS XE version", "NO PATCH", "10.0.0.200", "ISE 3.1+"):
+        assert bad not in t, bad
+
+
+def test_review4_specific_cisco_text_is_reflected():
+    t6741 = [c for s in _mit("CVE-2017-6741")["workaround_steps"] for c in s["commands"]]
+    assert sum(c.startswith("snmp-server view NO_BAD_SNMP ") for c in t6741) == 16
+    assert "mac access-group CSCwa14271 in" in _all_text(_mit("CVE-2021-27853")["workaround_steps"])
+    for cve in ("CVE-2021-27854", "CVE-2021-27862"):
+        assert "Not a Cisco workaround" in _all_text(_mit(cve)["workaround_steps"])
+        assert _mit(cve)["acl_mitigation"] is None
+    assert "No mitigations or workarounds" in _all_text(_mit("CVE-2021-27861")["workaround_steps"])
+    assert "no ip scp server enable" in _all_text(_mit("CVE-2023-20186")["workaround_steps"])
+    assert "platform multicast lre off" in _all_text(_mit("CVE-2023-20187")["workaround_steps"])
+    assert "default buffers huge size" in _all_text(_mit("CVE-2024-20307")["workaround_steps"])
+    assert "no crypto isakmp fragmentation" in _all_text(_mit("CVE-2024-20308")["workaround_steps"])
+    assert "transport input none" in _all_text(_mit("CVE-2024-20309")["workaround_steps"])
+    assert "standard named" in _all_text(_mit("CVE-2024-20373")["workaround_steps"])
+    assert "no iox" in _all_text(_mit("CVE-2023-20076")["workaround_steps"])
+    assert "DTLS" in _all_text(_mit("CVE-2024-3596")["workaround_steps"])
+    assert _mit("CVE-2024-20414")["acl_mitigation"] is None
 
 
 @pytest.mark.parametrize("cve", sorted(MITIG_REVIEW_3))
