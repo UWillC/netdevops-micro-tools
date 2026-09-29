@@ -110,13 +110,21 @@ def test_audited_sample_is_marked_reviewed():
     manual2 = {c for c in reviewed if _mit(c).get("review_method") == "manual-2of7"}
     manual3 = {c for c in reviewed if _mit(c).get("review_method") == "manual-3of7"}
     manual4 = {c for c in reviewed if _mit(c).get("review_method") == "manual-4of7"}
+    manual5 = {c for c in reviewed if _mit(c).get("review_method") == "manual-5of7"}
     assert len(auto) == 54
     assert manual2 == MITIG_REVIEW_2
     assert manual3 == MITIG_REVIEW_3
     assert manual4 == MITIG_REVIEW_4
-    assert reviewed == C1_SAMPLE | MITIG_REVIEW_1 | auto | MITIG_REVIEW_2 | MITIG_REVIEW_3 | MITIG_REVIEW_4
-    assert not auto & (C1_SAMPLE | MITIG_REVIEW_1 | MITIG_REVIEW_2 | MITIG_REVIEW_3 | MITIG_REVIEW_4)
-    assert len(reviewed) == 144
+    assert manual5 == MITIG_REVIEW_5
+    assert reviewed == C1_SAMPLE | MITIG_REVIEW_1 | auto | MITIG_REVIEW_2 | MITIG_REVIEW_3 | MITIG_REVIEW_4 | MITIG_REVIEW_5
+    assert not auto & (C1_SAMPLE | MITIG_REVIEW_1 | MITIG_REVIEW_2 | MITIG_REVIEW_3 | MITIG_REVIEW_4 | MITIG_REVIEW_5)
+    assert len(reviewed) == 150  # every mitigation file has been checked against Cisco's text
+
+
+def test_every_mitigation_file_is_reviewed():
+    for p in glob.glob(os.path.join(MIT, "CVE-*.json")):
+        d = _mit(os.path.basename(p)[:-5])
+        assert d.get("steps_reviewed"), p  # C1 sample + batch 1/7 predate review_method
 
 
 C1_SAMPLE = {"CVE-2018-0171", "CVE-2018-0296", "CVE-2023-20025", "CVE-2023-20198",
@@ -159,6 +167,31 @@ MITIG_REVIEW_4 = {"CVE-2017-6741", "CVE-2021-27853", "CVE-2021-27854", "CVE-2021
                   "CVE-2024-20308", "CVE-2024-20309", "CVE-2024-20316", "CVE-2024-20373",
                   "CVE-2024-20414", "CVE-2024-20324", "CVE-2024-20313", "CVE-2024-20312",
                   "CVE-2024-20278", "CVE-2024-3596", "CVE-2023-20235", "CVE-2023-20076"}
+
+
+# MITIG-REVIEW 5/7 (2026-09-28): the last 6 files -> 150/150.
+MITIG_REVIEW_5 = {"CVE-2022-20851", "CVE-2023-20065", "CVE-2023-20066", "CVE-2023-20067",
+                  "CVE-2023-20227", "CVE-2023-20231"}
+
+
+@pytest.mark.parametrize("cve", sorted(MITIG_REVIEW_5))
+def test_review5_no_template_leftovers(cve):
+    d = _mit(cve)
+    assert d["steps_reviewed"] == "2026-09-28"
+    assert d["review_method"] == "manual-5of7"
+    t = _all_text({k: d[k] for k in ("workaround_steps", "acl_mitigation", "recommended_fix", "detection")})
+    for bad in ("copy tftp:", "Control Plane Policing", "Review advisory for specific workarounds",
+                "Upgrade to patched IOS XE version", "NO PATCH"):
+        assert bad not in t, bad
+
+
+def test_review5_specific_cisco_text_is_reflected():
+    assert "no iox" in _all_text(_mit("CVE-2023-20065")["workaround_steps"])
+    assert "HTTP TLV Caching" in _all_text(_mit("CVE-2023-20067")["workaround_steps"])
+    assert "eq 1701" in _all_text(_mit("CVE-2023-20227")["workaround_steps"])
+    assert "Lobby Ambassador" in _all_text(_mit("CVE-2023-20231")["workaround_steps"])
+    for cve in ("CVE-2022-20851", "CVE-2023-20066", "CVE-2023-20231"):
+        assert _mit(cve)["acl_mitigation"] is None
 
 
 @pytest.mark.parametrize("cve", sorted(MITIG_REVIEW_4))
