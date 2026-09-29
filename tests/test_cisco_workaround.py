@@ -108,11 +108,13 @@ def test_audited_sample_is_marked_reviewed():
                 if _mit(os.path.basename(p)[:-5]).get("steps_reviewed")}
     auto = {c for c in reviewed if _mit(c).get("review_method") == "auto-patch-only"}
     manual2 = {c for c in reviewed if _mit(c).get("review_method") == "manual-2of7"}
+    manual3 = {c for c in reviewed if _mit(c).get("review_method") == "manual-3of7"}
     assert len(auto) == 54
     assert manual2 == MITIG_REVIEW_2
-    assert reviewed == C1_SAMPLE | MITIG_REVIEW_1 | auto | MITIG_REVIEW_2
-    assert not auto & (C1_SAMPLE | MITIG_REVIEW_1 | MITIG_REVIEW_2)
-    assert len(reviewed) == 104
+    assert manual3 == MITIG_REVIEW_3
+    assert reviewed == C1_SAMPLE | MITIG_REVIEW_1 | auto | MITIG_REVIEW_2 | MITIG_REVIEW_3
+    assert not auto & (C1_SAMPLE | MITIG_REVIEW_1 | MITIG_REVIEW_2 | MITIG_REVIEW_3)
+    assert len(reviewed) == 124
 
 
 C1_SAMPLE = {"CVE-2018-0171", "CVE-2018-0296", "CVE-2023-20025", "CVE-2023-20198",
@@ -135,6 +137,55 @@ MITIG_REVIEW_2 = {"CVE-2020-3452", "CVE-2024-20291", "CVE-2024-20356",
                   "CVE-2025-20316", "CVE-2025-20315", "CVE-2025-20312", "CVE-2025-20293",
                   "CVE-2025-20240", "CVE-2025-20160", "CVE-2025-20149", "CVE-2025-20221",
                   "CVE-2025-20202", "CVE-2025-20196", "CVE-2025-20195"}
+
+
+# MITIG-REVIEW 3/7 (2026-09-28): the 16 remaining 2025 advisories (SNMP DoS x8, web UI x3,
+# WLC x2, DHCP snooping, SNMPv3, ASR 903) + the 4 most recent 2024 ones.
+MITIG_REVIEW_3 = {"CVE-2025-20194", "CVE-2025-20193", "CVE-2025-20189", "CVE-2025-20188",
+                  "CVE-2025-20186", "CVE-2025-20176", "CVE-2025-20175", "CVE-2025-20174",
+                  "CVE-2025-20173", "CVE-2025-20172", "CVE-2025-20171", "CVE-2025-20170",
+                  "CVE-2025-20169", "CVE-2025-20162", "CVE-2025-20151", "CVE-2025-20140",
+                  "CVE-2024-20510", "CVE-2024-20455", "CVE-2024-20437", "CVE-2024-20436"}
+
+SNMP_DOS_2025 = {"CVE-2025-20169", "CVE-2025-20170", "CVE-2025-20171", "CVE-2025-20172",
+                 "CVE-2025-20173", "CVE-2025-20174", "CVE-2025-20175", "CVE-2025-20176"}
+
+
+@pytest.mark.parametrize("cve", sorted(MITIG_REVIEW_3))
+def test_review3_no_template_leftovers(cve):
+    d = _mit(cve)
+    assert d["steps_reviewed"] == "2026-09-28"
+    assert d["review_method"] == "manual-3of7"
+    t = _all_text({k: d[k] for k in ("workaround_steps", "acl_mitigation", "recommended_fix", "detection")})
+    for bad in ("copy tftp:", "Control Plane Policing", "Review advisory for specific workarounds",
+                "Upgrade to patched IOS XE version", "NO PATCH", "no ap image upgrade"):
+        assert bad not in t, bad
+
+
+@pytest.mark.parametrize("cve", sorted(SNMP_DOS_2025))
+def test_review3_snmp_dos_files_carry_ciscos_oid_view(cve):
+    """cisco-sa-snmp-dos-sdxnSUcW: Cisco's mitigation is an SNMP view excluding 52 OIDs,
+    applied to every community and v3 group. Same error class as C1's CVE-2025-20352."""
+    d = _mit(cve)
+    cmds = [c for s in d["workaround_steps"] for c in s["commands"]]
+    excluded = [c for c in cmds if c.startswith("snmp-server view SNMP_DOS ") and c.endswith(" excluded")]
+    assert len(excluded) == 52 + 3, len(excluded)  # 52 OIDs + snmpUsmMIB/snmpVacmMIB/snmpCommunityMIB
+    assert "snmp-server view SNMP_DOS ipAddressPrefixEntry.5 excluded" in cmds
+    assert "snmp-server community <COMMUNITY> view SNMP_DOS RO" in cmds
+    assert "snmp-server group <V3_GROUP> v3 auth read SNMP_DOS write SNMP_DOS" in cmds
+
+
+def test_review3_specific_cisco_text_is_reflected():
+    assert "no wireless ipv6 client" in _all_text(_mit("CVE-2025-20140")["workaround_steps"])
+    assert "ip dhcp snooping vlan" in _all_text(_mit("CVE-2025-20162")["workaround_steps"])
+    assert "no service internal" in _all_text(_mit("CVE-2024-20437")["workaround_steps"])
+    assert "lobby" in _all_text(_mit("CVE-2025-20186")["workaround_steps"])
+    assert "uea_mgr" in _all_text(_mit("CVE-2025-20189")["workaround_steps"])
+    t188 = _all_text(_mit("CVE-2025-20188")["workaround_steps"])
+    assert "deny tcp any any eq 8443" in t188 and "debug wireless bundle client" in t188
+    assert "Airespace IPv6 ACL Name" in _all_text(_mit("CVE-2024-20510")["workaround_steps"])
+    assert _mit("CVE-2024-20436")["acl_mitigation"] is None
+    assert _mit("CVE-2024-20437")["acl_mitigation"] is None
 
 
 @pytest.mark.parametrize("cve", sorted(MITIG_REVIEW_2))
