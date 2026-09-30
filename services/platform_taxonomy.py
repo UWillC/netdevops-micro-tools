@@ -27,6 +27,7 @@ class ProductFamily(str, Enum):
     IOS = "ios"                   # IOS classic (12.x, 15.x)
     IOS_XE = "ios-xe"             # IOS XE (3.x, 16.x, 17.x) — Catalyst, ISR, ASR routers
     IOS_XE_SDWAN = "ios-xe-sdwan" # cEdge / Catalyst SD-WAN (autonomous IOS XE in SD-WAN mode)
+    SDWAN_CONTROLLERS = "sd-wan-controllers"  # Catalyst SD-WAN Manager/Controller/Validator (vManage/vSmart/vBond); not cEdge (SDWAN-01, 2026-09-30)
     IOS_XE_WLC = "ios-xe-wlc"     # Catalyst 9800 WLC
     IOS_XR = "ios-xr"             # ASR 9000, NCS, 8000 series
     NX_OS = "nx-os"               # Nexus switches
@@ -76,6 +77,9 @@ _TITLE_PATTERNS: List[Tuple[List[str], ProductFamily]] = [
     (["small business rv", "rv series", "rv320", "rv325", "rv340", "rv345", "rv042", "rv082", "rv016", "rv215w"], ProductFamily.RV_SERIES),
 
     # --- Network OS (more specific first) ---
+    # SDWAN-01: controllers before cEdge; "Catalyst SD-WAN Manager" is not IOS XE.
+    (["sd-wan manager", "sd-wan controller", "sd-wan validator", "sd-wan vmanage", "vmanage",
+      "vsmart", "vbond"], ProductFamily.SDWAN_CONTROLLERS),
     (["cisco ios xe sd-wan", "cisco ios-xe sd-wan", "catalyst sd-wan"], ProductFamily.IOS_XE_SDWAN),
     (["catalyst 9800", "ios xe wireless controller"], ProductFamily.IOS_XE_WLC),
     (["cisco ios xr", "ios-xr"], ProductFamily.IOS_XR),
@@ -193,6 +197,11 @@ _USER_INPUT_ALIASES: List[Tuple[List[str], ProductFamily]] = [
       "cisco fmc"], ProductFamily.FMC),
     (["cisco ftd", "firepower threat defense", "firewall threat defense"], ProductFamily.FTD),
     (["cisco fxos", "firepower extensible"], ProductFamily.FXOS),
+    # SDWAN-01 (2026-09-30): "Catalyst SD-WAN Manager 20.12.5" matched "catalyst sd-wan"
+    # (cEdge) and got 99 IOS/NGWC/glibc CVEs, no note, and not CVE-2026-76504 (KEV).
+    # Controllers have no dataset yet: NOT EVALUATED, never an IOS XE answer.
+    (["sd-wan manager", "sd-wan controller", "sd-wan validator", "vmanage", "vsmart", "vbond"],
+     ProductFamily.SDWAN_CONTROLLERS),
     (["cisco ios xe sd-wan", "catalyst sd-wan", "cedge"], ProductFamily.IOS_XE_SDWAN),
     (["catalyst 9800", "ios xe wireless"], ProductFamily.IOS_XE_WLC),
     (["cisco ios xr", "ios-xr", "ios xr"], ProductFamily.IOS_XR),
@@ -290,6 +299,7 @@ _IN_SCOPE: dict = {
     ProductFamily.ASA:        {ProductFamily.ASA, ProductFamily.FTD, ProductFamily.FXOS, ProductFamily.UNKNOWN},
     ProductFamily.FTD:        {ProductFamily.FTD, ProductFamily.ASA, ProductFamily.FXOS, ProductFamily.UNKNOWN},
     ProductFamily.FMC:        {ProductFamily.FMC},   # FMC records only, never IOS/NTP/OpenSSL
+    ProductFamily.SDWAN_CONTROLLERS: {ProductFamily.SDWAN_CONTROLLERS},  # SDWAN-01
     ProductFamily.FXOS:       {ProductFamily.FXOS, ProductFamily.ASA, ProductFamily.FTD, ProductFamily.UNKNOWN},
     ProductFamily.RV_SERIES:  {ProductFamily.RV_SERIES, ProductFamily.UNKNOWN},
     ProductFamily.MERAKI:     {ProductFamily.MERAKI, ProductFamily.UNKNOWN},
@@ -338,6 +348,7 @@ _PRODUCT_NAME_FAMILY_PATTERNS: List[Tuple[ProductFamily, re.Pattern]] = [
     # IOS XR — most specific, matches "Cisco IOS XR Software ..."
     (ProductFamily.IOS_XR, re.compile(r"Cisco\s+IOS\s+XR\b", re.I)),
     # IOS XE variants (SD-WAN and WLC are MORE specific than bare IOS XE)
+    (ProductFamily.SDWAN_CONTROLLERS, re.compile(r"SD-WAN\s+(Manager|Controller|Validator|vManage)|\bvManage\b|\bvSmart\b|\bvBond\b", re.I)),
     (ProductFamily.IOS_XE_SDWAN, re.compile(r"Cisco\s+IOS\s+XE\s+Catalyst\s+SD-WAN|Catalyst\s+SD-WAN", re.I)),
     (ProductFamily.IOS_XE_WLC, re.compile(r"Catalyst\s+9800|IOS\s+XE\s+Wireless\s+Controller", re.I)),
     (ProductFamily.IOS_XE, re.compile(r"Cisco\s+IOS\s+XE\b", re.I)),

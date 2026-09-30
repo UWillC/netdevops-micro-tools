@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.63] – 2026-09-30 (SDWAN-01: SD-WAN controllers are not IOS XE)
+
+### Fixed
+- **"Catalyst SD-WAN Manager" was answered from the IOS XE dataset.** The alias
+  "catalyst sd-wan" (cEdge, IOS XE in SD-WAN mode) also caught the controllers, so
+  Manager 20.12.5 got 99 IOS / NGWC / glibc CVEs on production, no coverage note,
+  and not CVE-2026-76504 (Critical, CISA KEV 2026-09-30). New family
+  `sd-wan-controllers` (Catalyst SD-WAN Manager / Controller / Validator, vManage,
+  vSmart, vBond) in user input, advisory titles and PSIRT product names, checked
+  before cEdge. No controller dataset yet: the report now says NOT EVALUATED and
+  points to Cisco Software Checker, never "not vulnerable".
+- Regression: 12 platform/version pairs (IOS XE, cEdge, IOS, NX-OS, ISE, FMC,
+  device models) return identical CVE lists before and after.
+- Tests: `tests/test_sdwan_controllers_family.py` (12); suite 1659 -> 1671.
+
+### Next
+- SDWAN-02: controller dataset from Cisco CSAF (per-train fixed releases), so the
+  family moves from NOT EVALUATED to covered.
+
 ## [v0.6.62] – 2026-09-30 (per-IP rate limit on POST + whoami real client IP)
 
 ### Security
