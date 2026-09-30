@@ -21,6 +21,11 @@ app = FastAPI(
     version=APP_VERSION,
 )
 
+# Per-IP limit on every POST (fix 2026-09-30). Added before CORS so CORS stays
+# the outer layer and a 429 still carries the CORS headers the landing needs.
+from api.rate_limit import RateLimitMiddleware  # noqa: E402
+app.add_middleware(RateLimitMiddleware)
+
 # CORS for local frontend (dev)
 origins = [
     "http://127.0.0.1:5500",  # VS Code Live Server (częsty port)

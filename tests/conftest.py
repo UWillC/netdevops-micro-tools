@@ -86,3 +86,13 @@ def _cisco_workaround_offline(monkeypatch):
     from services import cisco_workaround
     monkeypatch.setattr(cisco_workaround, "fetch", lambda *a, **k: None)
     monkeypatch.setattr(cisco_workaround, "fetch_checked", lambda *a, **k: (None, False))
+
+
+@pytest.fixture(autouse=True)
+def _rate_limit_off(monkeypatch):
+    """The suite fires thousands of POSTs from one TestClient address; the
+    per-IP limiter (api/rate_limit.py) would start returning 429 mid-run.
+    tests/test_rate_limit.py turns it back on for its own tests."""
+    from api import rate_limit
+    monkeypatch.setattr(rate_limit, "ENABLED", False)
+
