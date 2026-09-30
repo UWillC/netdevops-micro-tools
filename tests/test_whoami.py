@@ -29,11 +29,21 @@ def test_whoami_browser_gets_json():
     assert body["method"] == "GET"
 
 
-def test_whoami_respects_x_forwarded_for_first_entry():
+def test_whoami_uses_address_cloudflare_saw():
+    # Production chain (measured 30.09): <client-sent>, <real client>, <CF edge>
     headers = dict(CURL_UA)
-    headers["X-Forwarded-For"] = "203.0.113.7, 10.0.0.1, 10.0.0.2"
+    headers["X-Forwarded-For"] = "203.0.113.7, 198.51.100.42, 172.71.223.186"
     resp = client.get("/tools/whoami", headers=headers)
-    assert resp.text.strip() == "203.0.113.7"
+    assert resp.text.strip() == "198.51.100.42"
+
+
+def test_whoami_ignores_forged_or_proxy_internal_first_entry():
+    # WHOAMI-01: corporate proxy adds its internal address; a caller can add anything
+    headers = dict(CURL_UA)
+    headers["X-Forwarded-For"] = "10.20.30.40,70.160.137.150, 172.71.146.135"
+    assert client.get("/tools/whoami/ip", headers=headers).text.strip() == "70.160.137.150"
+    headers["X-Forwarded-For"] = "1.2.3.4,70.160.137.150, 172.71.146.135"
+    assert client.get("/tools/whoami/ip", headers=headers).text.strip() == "70.160.137.150"
 
 
 def test_whoami_ip_always_plain():

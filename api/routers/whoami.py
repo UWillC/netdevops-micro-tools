@@ -3,7 +3,9 @@ Whoami Router (ifconfig.me-style client info)
 
 Returns the caller's public IP and connection metadata.
 curl-first: plain text IP for CLI clients, full JSON for browsers/APIs.
-Behind Render's proxy the client IP is the first entry of X-Forwarded-For.
+Behind Render + Cloudflare the client IP is the second-to-last X-Forwarded-For
+entry (measured 2026-09-30; the first entry is client-controlled, see
+api/rate_limit.py). Fix WHOAMI-01.
 Note: Render's edge 301-redirects http:// to https:// — documented usage
 always shows explicit https:// URLs.
 """
@@ -13,6 +15,8 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeou
 
 from fastapi import APIRouter, Request
 from fastapi.responses import PlainTextResponse, JSONResponse
+
+from api.rate_limit import client_ip as _edge_client_ip
 
 
 router = APIRouter()
@@ -37,15 +41,12 @@ REVERSE_DNS_TIMEOUT_S = 0.8
 
 
 def client_ip(request: Request) -> str:
-    """First X-Forwarded-For entry (real client behind proxy), else socket peer."""
-    xff = request.headers.get("x-forwarded-for", "")
-    if xff:
-        first = xff.split(",")[0].strip()
-        if first:
-            return first
-    if request.client:
-        return request.client.host
-    return "unknown"
+    """
+    Address Cloudflare saw (second-to-last X-Forwarded-For entry), else socket
+    peer. One rule with the rate limiter. The old first-entry rule showed a
+    corporate proxy's internal 10.x address, or anything the caller typed.
+    """
+    return _edge_client_ip(request)
 
 
 def reverse_dns(ip: str) -> str:
