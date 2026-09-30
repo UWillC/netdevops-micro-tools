@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.61] – 2026-09-29 (MITIG-REVIEW 150/150 + kev_watch feature flag)
+
+### Fixed
+- **MITIG-REVIEW closed: all 150 bundled mitigations checked against Cisco's own
+  workaround text** (batches 2/7-5/7, 2026-09-27/28; 1/7 and the auto patch-only
+  pass came earlier, `d10dc52`, `6dd3067`):
+  - 2/7 (`8c74d6f`): 20 mitigations; 3 records pointed at the wrong advisory
+    (CVE-2020-3452, CVE-2024-20291 was a copy of CVE-2024-20399, CVE-2024-20356),
+    18 corrected, 2 patch-only. Importer now rejects an advisory whose CSAF does not
+    list the CVE. 104/150 reviewed.
+  - 3/7 (`9fd9786`): 20 mitigations; 18 corrected, 2 syntax-aligned; SNMP DoS x8
+    get Cisco's SNMP_DOS OID view. 124/150 reviewed, +65 tests.
+  - 4/7 (`c6d9e9e`): 20 mitigations; 17 corrected, 3 marked "no Cisco workaround".
+    144/150 reviewed, +21 tests.
+  - 5/7 (`ce77752`): last 6 mitigations -> 150/150 reviewed.
+- Test `tests/test_cisco_workaround.py` now asserts every mitigation file carries
+  `steps_reviewed`, so an unreviewed file fails the suite.
+
+### Added
+- `kev_watch` in `/meta/version` `feature_flags` (KEV Watch shipped in v0.6.59 but
+  the flag was missing).
+- Cache-buster `?v=` in `web/index.html` follows the version.
+
 ## [v0.6.60] – 2026-09-27 (CVE-DATA-FMC: FMC fixed releases per train)
 
 ### Fixed

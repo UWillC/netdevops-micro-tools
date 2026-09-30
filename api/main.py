@@ -133,7 +133,7 @@ def meta_version():
     return MetaInfo(
         version=APP_VERSION,
         build_time=datetime.datetime.utcnow().isoformat() + "Z",
-        feature_flags=["cve_engine_v3", "nvd_enrichment", "nvd_cache", "web_ui_v2", "profiles_v2", "profiles_cve", "security_score", "subnet_calc", "mtu_calc", "config_parser", "cloud_deploy", "export_pdf", "cve_mitigation_advisor", "timezone_converter", "ip_path_tracer", "port_auditor", "config_explainer", "config_drift", "cis_audit", "whoami", "ise_coverage", "threat_feed_local", "kev_badges", "ise_analyzer", "bundled_cve", "kev_catalog", "known_affected_match", "ise_full_coverage"]
+        feature_flags=["cve_engine_v3", "nvd_enrichment", "nvd_cache", "web_ui_v2", "profiles_v2", "profiles_cve", "security_score", "subnet_calc", "mtu_calc", "config_parser", "cloud_deploy", "export_pdf", "cve_mitigation_advisor", "timezone_converter", "ip_path_tracer", "port_auditor", "config_explainer", "config_drift", "cis_audit", "whoami", "ise_coverage", "threat_feed_local", "kev_badges", "ise_analyzer", "bundled_cve", "kev_catalog", "known_affected_match", "ise_full_coverage", "kev_watch"]
     )
 
 # Mount static files (CSS, JS) - must be after all API routes
