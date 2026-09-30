@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.62] – 2026-09-30 (per-IP rate limit on POST + whoami real client IP)
+
+### Security
+- **Per-IP rate limit on every POST endpoint** (`1cfe810`): 60/min and 600/h per
+  client IP across all generators and analyzers; `/api/subscribe` also 5 per 15 min
+  (each call reaches MailerLite). GET (pages, assets, whoami, KEV Watch) is never
+  limited. Over the limit: HTTP 429, generic message, `Retry-After`, CORS headers
+  kept. Logs carry only a SHA-256 prefix of the IP. `api/rate_limit.py`, 8 tests.
+  Verified in production: request 61 in a minute returns 429, a forged
+  `X-Forwarded-For` does not open a new bucket.
+
+### Fixed
+- **What's My IP showed the first `X-Forwarded-For` entry** (`232cac4`, WHOAMI-01):
+  behind a corporate proxy that is the proxy's internal address, and any caller
+  could put anything there. Both hostnames sit behind Cloudflare and the chain is
+  `<client-sent>, <real client>, <Cloudflare edge>` (measured 2026-09-30), so the
+  tool now reports the second-to-last entry, the same rule as the rate limiter.
+
 ## [v0.6.61] – 2026-09-29 (MITIG-REVIEW 150/150 + kev_watch feature flag)
 
 ### Fixed
