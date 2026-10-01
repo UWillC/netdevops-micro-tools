@@ -200,7 +200,10 @@ _USER_INPUT_ALIASES: List[Tuple[List[str], ProductFamily]] = [
     # SDWAN-01 (2026-09-30): "Catalyst SD-WAN Manager 20.12.5" matched "catalyst sd-wan"
     # (cEdge) and got 99 IOS/NGWC/glibc CVEs, no note, and not CVE-2026-76504 (KEV).
     # Controllers have no dataset yet: NOT EVALUATED, never an IOS XE answer.
-    (["sd-wan manager", "sd-wan controller", "sd-wan validator", "vmanage", "vsmart", "vbond"],
+    # SDWAN-02.1 fix (K1): "SD-WAN Control Components" is Cisco's name for all
+    # three controllers together; "catalyst sd-wan" must not claim it as cEdge.
+    (["sd-wan manager", "sd-wan controller", "sd-wan validator", "sd-wan control component",
+      "vmanage", "vsmart", "vbond"],
      ProductFamily.SDWAN_CONTROLLERS),
     (["cisco ios xe sd-wan", "catalyst sd-wan", "cedge"], ProductFamily.IOS_XE_SDWAN),
     (["catalyst 9800", "ios xe wireless"], ProductFamily.IOS_XE_WLC),

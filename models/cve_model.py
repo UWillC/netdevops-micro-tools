@@ -164,6 +164,12 @@ class CVEEntry(BaseModel):
     # is "not listed as of this date", not proof about later releases.
     known_affected_as_of: Optional[str] = None
 
+    # SDWAN-02.1 fix S1 (2026-10-01) — releases that Cisco's CSAF affected-
+    # product list names although the advisory's Fixed Software table calls
+    # them fixed. Not matched on (the table decides); a query for one of them
+    # is reported in `cisco_source_conflicts`. Used by sd-wan-controllers only.
+    csaf_listed_past_fix: List[str] = Field(default_factory=list)
+
     # CVE-007 (2026-09-18) — set when this CVE is a Cisco hardening-release
     # CVE, i.e. a CWE category rather than a single defect. None = ordinary CVE.
     bundled: Optional[CVEBundledInfo] = None

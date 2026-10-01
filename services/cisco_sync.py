@@ -26,6 +26,7 @@ from services import cisco_workaround
 PROJECT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 CVE_DATA_DIR = os.path.join(PROJECT_DIR, "cve_data", "ios_xe")
 MITIGATION_DIR = os.path.join(PROJECT_DIR, "cve_mitigations")
+SDWAN_CONTROLLERS_DIR = os.path.join(PROJECT_DIR, "cve_data", "sdwan_controllers")
 
 XE_VERSION_RE = re.compile(r"Cisco IOS XE Software\s+(\d[\d.]+)")
 
@@ -312,6 +313,14 @@ def auto_sync_new_cves(cached_advisories: List[Dict[str, Any]], platform: str = 
         f.replace(".json", "").upper()
         for f in os.listdir(MITIGATION_DIR) if f.endswith(".json")
     )
+    # SDWAN-02.1 fix (K1): SD-WAN control-component CVEs live in their own
+    # curated dataset. Never re-create them as IOS XE records (the stale
+    # cve_data/ios_xe/cve-2026-20127.json was exactly that).
+    sdwan_cve = set(
+        f.replace(".json", "").upper()
+        for f in (os.listdir(SDWAN_CONTROLLERS_DIR) if os.path.isdir(SDWAN_CONTROLLERS_DIR) else [])
+        if f.endswith(".json")
+    )
 
     imported = 0
     refreshed = 0
@@ -332,7 +341,9 @@ def auto_sync_new_cves(cached_advisories: List[Dict[str, Any]], platform: str = 
 
             # CVE data file
             cve_path = os.path.join(CVE_DATA_DIR, f"{cve_lower}.json")
-            if cve_upper not in existing_cve:
+            if cve_upper in sdwan_cve and cve_upper not in existing_cve:
+                pass
+            elif cve_upper not in existing_cve:
                 cve_data = _build_cve_json(cve_id, adv, ver_min, ver_max)
                 with open(cve_path, "w", encoding="utf-8") as f:
                     json.dump(cve_data, f, indent=2, ensure_ascii=False)

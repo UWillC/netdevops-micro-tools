@@ -671,6 +671,7 @@ def platform_matches(query_platform: str, cve_platforms: List[str]) -> bool:
 _FAMILY_DATA_DIRS = {
     ProductFamily.ISE: "cve_data/ise",
     ProductFamily.NX_OS: "cve_data/nx_os",   # NX-OS-01
+    ProductFamily.SDWAN_CONTROLLERS: "cve_data/sdwan_controllers",  # SDWAN-02.1
 }
 DEFAULT_DATA_DIR = "cve_data/ios_xe"
 
@@ -730,6 +731,188 @@ def fmc_coverage_note(entries) -> str:
         f"FMC coverage: only {n} {'advisory' if n == 1 else 'advisories'} in the dataset "
         f"({', '.join(e.cve_id for e in records)}). Everything else for this platform is "
         f"not evaluated, never assumed clean. For the rest, use Cisco Software Checker."
+    )
+
+
+# -----------------------------
+# SDWAN-02.1 (2026-10-01) - Catalyst SD-WAN control components
+# -----------------------------
+# Manager / Controller / Validator (vManage / vSmart / vBond) are fixed per
+# train, and sometimes per maintenance line inside a train: for CVE-2026-20182
+# Cisco's 20.12 cell reads "20.12.5.4 / 20.12.6.2 / 20.12.7.1", so 20.12.6.1 is
+# affected although it sorts above 20.12.5.4. Keys in first_fixed_version.fixes
+# (written by scripts/seed_sdwan_controllers_cve_data.py):
+#   sd-wan-controllers-20.12      whole train (may name a release on a later train)
+#   sd-wan-controllers-20.12.5    a maintenance line Cisco fixed separately
+#   sd-wan-controllers-<20.9      "Earlier than 20.9 - Migrate to a fixed release"
+#   value "migrate"               no fixed release on this train
+SDWAN_FAMILY_KEY = ProductFamily.SDWAN_CONTROLLERS.value
+SDWAN_MIGRATE = "migrate"
+
+# Which control component the user named. A Manager-only advisory
+# (CVE-2026-76504) says nothing about a Controller or Validator.
+# SDWAN-02.1 fix (K2): "Cisco SD-WAN Controllers" (plural) is Cisco's old name
+# for all three components, and "Control Components" is the current one. Both
+# name no single component, so only the singular "controller" means vSmart.
+_SDWAN_COMPONENT_PATTERNS = (
+    ("manager", re.compile(r"manager|vmanage", re.I)),
+    ("validator", re.compile(r"validator|vbond", re.I)),
+    ("controller", re.compile(r"\bcontroller\b|vsmart", re.I)),
+)
+
+
+def sdwan_component(platform: str) -> Optional[str]:
+    """'manager' / 'controller' / 'validator', or None when the input names none.
+
+    None (all three) for "Controllers" and "Control Components".
+    """
+    for name, rx in _SDWAN_COMPONENT_PATTERNS:
+        if rx.search(platform or ""):
+            return name
+    return None
+
+
+# SDWAN-02.1 fix (K1): "Catalyst SD-WAN" (or bare "SD-WAN") with a 20.x / 26.x
+# release is a control component: cEdge runs IOS XE 17.x, the controllers run
+# 20.x / 26.x. Without this the query went to the IOS XE dataset, got a stale
+# cEdge-shaped CVE-2026-20127 record and never saw CVE-2026-76504 / -20182.
+# Anything naming cEdge, vEdge or IOS XE is left alone.
+SDWAN_ALL_COMPONENTS = "Catalyst SD-WAN Control Components"
+_SDWAN_WORD = re.compile(r"sd[\s_\-]?wan", re.I)
+_SDWAN_EDGE_WORDS = re.compile(r"cedge|vedge|ios[\s_\-]?xe|\bedge\b|router", re.I)
+_SDWAN_CONTROLLER_TRAIN = re.compile(r"^\s*(?:release\s*)?(?:20|26)\.\d+", re.I)
+
+
+def sdwan_effective_platform(platform: str, version: str) -> str:
+    """The platform to analyse: SDWAN_ALL_COMPONENTS for an unspecific SD-WAN
+    name with a controller release, otherwise `platform` unchanged."""
+    p = platform or ""
+    if not _SDWAN_WORD.search(p) or _SDWAN_EDGE_WORDS.search(p):
+        return platform
+    if normalize_user_platform(p) not in (ProductFamily.IOS_XE_SDWAN, None):
+        return platform
+    if not _SDWAN_CONTROLLER_TRAIN.match(version or ""):
+        return platform
+    return SDWAN_ALL_COMPONENTS
+
+
+def sdwan_listed_past_fix(cve, version: str) -> bool:
+    """Cisco's CSAF affected list names `version` although the Fixed Software
+    table says it is fixed (SDWAN-02.1 fix S1). Exact release match only."""
+    target = _tokenize_version(version)
+    return any(_tokenize_version(v) == target
+               for v in (getattr(cve, "csaf_listed_past_fix", None) or []))
+
+
+def is_sdwan_record(cve) -> bool:
+    return SDWAN_FAMILY_KEY in (getattr(cve, "product_families", None) or [])
+
+
+def _sdwan_record_covers(cve, component: Optional[str]) -> bool:
+    if component is None:
+        return True
+    return any(component in (p or "").lower() or
+               {"manager": "vmanage", "controller": "vsmart", "validator": "vbond"}[component]
+               in (p or "").lower()
+               for p in (getattr(cve, "platforms", None) or []))
+
+
+def sdwan_fix_for_version(cve, version: str) -> Optional[str]:
+    """First fixed release for `version` from the record's table, or None.
+
+    Returns SDWAN_MIGRATE when Cisco names no fixed release for the train, and
+    None when the table says nothing about the train at all.
+    """
+    parts = _tokenize_version(version)
+    if len(parts) < 2 or parts == (0,):
+        return None
+    ff = getattr(cve, "first_fixed_version", None)
+    fixes = (getattr(ff, "fixes", None) or {}) if ff is not None else {}
+    prefix = SDWAN_FAMILY_KEY + "-"
+    if len(parts) >= 3:
+        line = fixes.get(prefix + "%d.%d.%d" % parts[:3])
+        if line:
+            return line
+    train = fixes.get(prefix + "%d.%d" % parts[:2])
+    if train:
+        return train
+    for key, value in fixes.items():
+        if key.startswith(prefix + "<"):
+            bound = _tokenize_version(key[len(prefix) + 1:])
+            if _cmp_tuples(tuple(parts[:2]), tuple(bound[:2])) < 0:
+                return value
+    return None
+
+
+def match_sdwan_record(cve, version: str) -> Optional[bool]:
+    """Is a control component at `version` affected by `cve`? None = unreadable release.
+
+    1. The table names a fix for the line/train -> affected iff running < fix.
+    2. The table says "migrate" for the train -> affected, no fix on it.
+    3. Train newer than every train in the table -> not affected (a later
+       train than anything the advisory lists).
+    4. Otherwise (a train inside the table's span it does not name) ->
+       affected: fail towards "review this", never towards "clean".
+    """
+    target = _tokenize_version(version)
+    if len(target) < 2 or target == (0,):
+        return None
+    fix = sdwan_fix_for_version(cve, version)
+    if fix == SDWAN_MIGRATE:
+        return True
+    if fix:
+        fix_ver = _extract_version(fix)
+        if fix_ver is None:
+            return True
+        return _cmp_tuples(target, fix_ver) < 0
+    ff = getattr(cve, "first_fixed_version", None)
+    prefix = SDWAN_FAMILY_KEY + "-"
+    trains = []
+    for key in ((getattr(ff, "fixes", None) or {}) if ff is not None else {}):
+        if key.startswith(prefix) and not key.startswith(prefix + "<"):
+            trains.append(_tokenize_version(key[len(prefix):])[:2])
+    if not trains:
+        return None
+    if _cmp_tuples(tuple(target[:2]), max(trains)) > 0:
+        return False
+    return True
+
+
+def sdwan_coverage_note(entries, conflicts=None) -> str:
+    """What the SD-WAN controller answer rests on, said in every such report.
+
+    The count and the list come from the loaded records, never a constant.
+    Doctrine: a release with no match is "not evaluated" for everything outside
+    the listed advisories, never "not vulnerable".
+    """
+    records = sorted((e for e in entries if is_sdwan_record(e)), key=lambda e: e.cve_id)
+    if not records:
+        return ("NOT EVALUATED: the Catalyst SD-WAN controller dataset is empty on this "
+                "instance. An empty result here means \"not checked\", not \"not vulnerable\" "
+                "\u2014 use Cisco Software Checker.")
+    advisories = {getattr(e, "advisory_url", None) or e.cve_id for e in records}
+    n = len(advisories)
+    kev = sum(1 for e in records if getattr(e, "kev", None) is not None)
+    return (
+        f"Catalyst SD-WAN Manager/Controller/Validator coverage: only {n} "
+        f"{'advisory' if n == 1 else 'advisories'} in the dataset "
+        f"({', '.join(e.cve_id for e in records)}; {kev} in CISA KEV), all rated Critical by "
+        f"Cisco and matched against each advisory's per-train Fixed Software table. Every other "
+        f"SD-WAN controller advisory is not evaluated, never assumed clean. For the rest, use "
+        f"Cisco Software Checker."
+    ) + _sdwan_conflict_sentence(conflicts)
+
+
+def _sdwan_conflict_sentence(conflicts) -> str:
+    """S1: name the CVEs where Cisco's sources disagree about this release."""
+    ids = sorted(set(conflicts or []))
+    if not ids:
+        return ""
+    return (
+        f" Cisco's sources disagree for your release on {', '.join(ids)}: the advisory's CSAF "
+        f"affected-product list includes it, the Fixed Software table names it as fixed. The "
+        f"table (the part PSIRT validates) was followed, so {'it is' if len(ids) == 1 else 'they are'} "
+        f"not reported as a match. Verify in Cisco Software Checker."
     )
 
 
@@ -1310,6 +1493,24 @@ class CVEEngine:
                     self.excluded_by_known_affected.append(cve.cve_id)
             return self._sort_matched(matched)
 
+        # SDWAN-02.1: controller records only, per-train / per-line fix table,
+        # filtered to the component the user named.
+        if query_family == ProductFamily.SDWAN_CONTROLLERS:
+            self.excluded_by_known_affected = []
+            self.cisco_source_conflicts = []
+            component = sdwan_component(platform)
+            for cve in self.cves:
+                if not is_sdwan_record(cve) or not _sdwan_record_covers(cve, component):
+                    continue
+                hit = match_sdwan_record(cve, version)
+                if hit:
+                    matched.append(cve)
+                elif hit is False and sdwan_listed_past_fix(cve, version):
+                    # S1: Cisco's two sources disagree. The table (validated by
+                    # PSIRT) is followed, the case is reported, never silent.
+                    self.cisco_source_conflicts.append(cve.cve_id)
+            return self._sort_matched(matched)
+
         # FMC-FREE-TEXT: FMC records only, matched by release range / per-train
         # fix. The family filter below lets UNKNOWN-titled records through, which
         # is how "FMC 4600" collected 16 IOS/NTP/OpenSSL CVEs; FMC never does.
@@ -1496,6 +1697,52 @@ class CVEEngine:
             )
         return note
 
+    @staticmethod
+    def _recommended_upgrade_sdwan(matched: List[CVEEntry], version: str) -> Optional[str]:
+        """Lowest release that closes every matched SD-WAN controller CVE.
+
+        Per CVE: the fix for the caller's line/train. The target is the highest
+        of them. If any CVE has no fixed release on the train, migration is the
+        only remediation and that is said plainly (SDWAN-02.1).
+        """
+        if not matched:
+            return None
+        target = _tokenize_version(version)
+        train = ".".join(str(p) for p in target[:2])
+        best = None
+        driver = None
+        no_fix = []
+        unknown = []
+        for cve in matched:
+            fix = sdwan_fix_for_version(cve, version)
+            if fix == SDWAN_MIGRATE:
+                no_fix.append(cve.cve_id)
+                continue
+            parsed = _extract_version(fix) if fix else None
+            if parsed is None:
+                unknown.append(cve.cve_id)
+                continue
+            if best is None or _cmp_tuples(parsed, best[1]) > 0:
+                best, driver = (fix, parsed), cve
+        if no_fix:
+            return (
+                f"No fixed release exists on the Catalyst SD-WAN {train} train for "
+                f"{len(no_fix)} of {len(matched)} matched CVEs (e.g. {no_fix[0]}). "
+                f"Migrate to a train with a fixed release (see each advisory's Fixed Software table)."
+            )
+        if best is None:
+            return (f"Fixed release not determined for the {len(unknown)} matched CVE(s) "
+                    f"on the Catalyst SD-WAN {train} train; see each advisory's Fixed Software table.")
+        note = f"{best[0]} \u2014 driven by {driver.cve_id}"
+        if getattr(driver, "kev", None) is not None:
+            note += " (KEV, actively exploited)"
+        if tuple(best[1][:2]) != tuple(target[:2]):
+            note += f". That release is on another train than yours ({train}): Cisco names no fix on {train}"
+        if unknown:
+            note += (f". Fixed release not determined for {len(unknown)} further CVE(s) "
+                     f"(e.g. {unknown[0]}); check those advisories before closing the change")
+        return note
+
     def recommended_upgrade(self, matched: List[CVEEntry],
                             platform: Optional[str] = None,
                             version: Optional[str] = None) -> Optional[str]:
@@ -1513,6 +1760,8 @@ class CVEEngine:
         """
         if platform and version and normalize_user_platform(platform) == ProductFamily.ISE:
             return self._recommended_upgrade_ise(matched, version)
+        if platform and version and normalize_user_platform(platform) == ProductFamily.SDWAN_CONTROLLERS:
+            return self._recommended_upgrade_sdwan(matched, version)
         if platform and normalize_user_platform(platform) == ProductFamily.NX_OS:
             if not matched:
                 return None

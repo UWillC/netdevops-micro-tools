@@ -9,7 +9,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from services.cve_engine import ambiguous_release, fmc_coverage_note, nxos_coverage_note, platform_coverage_note, uncovered_family, CVEEngine, CVEEngineConfig, cvss_rating_from_score, data_dir_for_platform, is_bundled_cve, ise_coverage_note, ise_lifecycle_note, severity_info, detect_bundle, data_confidence, coverage_uncertain_ids, published_date_demoted_ids
+from services.cve_engine import ambiguous_release, fmc_coverage_note, sdwan_coverage_note, sdwan_effective_platform, nxos_coverage_note, platform_coverage_note, uncovered_family, CVEEngine, CVEEngineConfig, cvss_rating_from_score, data_dir_for_platform, is_bundled_cve, ise_coverage_note, ise_lifecycle_note, severity_info, detect_bundle, data_confidence, coverage_uncertain_ids, published_date_demoted_ids
 from services.eol_registry import detect_eol
 from services.provenance import cve_provenance
 
@@ -213,9 +213,13 @@ def _apply_kev_catalog(entries: list) -> list:
 @router.post("/cve", response_model=CVEAnalyzeResponse)
 def analyze_cve(req: CVEAnalyzeRequest):
     # 1) Base run (local JSON only) to find which CVE IDs apply.
+    # SDWAN-02.1 fix (K1): "Catalyst SD-WAN 20.18.2.1" is a control component,
+    # not cEdge. Every step below works on the effective platform; the response
+    # echoes what the user typed.
+    platform = sdwan_effective_platform(req.platform, req.version)
     # ISE-03: the dataset directory follows the queried product family —
     # an ISE query must read cve_data/ise, not the IOS XE default.
-    _data_dir = data_dir_for_platform(req.platform)
+    _data_dir = data_dir_for_platform(platform)
     base_engine = CVEEngine(config=CVEEngineConfig(
         engine_version="0.3.7", data_dir=_data_dir))
     base_engine.load_all()
@@ -227,12 +231,12 @@ def analyze_cve(req: CVEAnalyzeRequest):
     # browsed would match against lists as old as the last deploy. Non-blocking:
     # this request is answered from disk, the next one benefits.
     _sync_platform = _ANALYZER_SYNC_PLATFORM.get(_data_dir)
-    if (_sync_platform and uncovered_family(req.platform) is None
-            and not ambiguous_release(req.platform, req.version)):
+    if (_sync_platform and uncovered_family(platform) is None
+            and not ambiguous_release(platform, req.version)):
         _age = _platform_cache_age_hours(_sync_platform)
         if _age is None or _age * 3600 > PLATFORM_CACHE_TTL:
             _refresh_platform_cache_in_background(_sync_platform)
-    matched_base = base_engine.match(req.platform, req.version)
+    matched_base = base_engine.match(platform, req.version)
 
     # KEV-X: stamp live CISA KEV status on the matches. Done on the base run so
     # it applies whether or not NVD enrichment is enabled.
@@ -251,13 +255,13 @@ def analyze_cve(req: CVEAnalyzeRequest):
             ],
         )
         enriched_engine.load_all()
-        matched = _apply_kev_catalog(enriched_engine.match(req.platform, req.version))
+        matched = _apply_kev_catalog(enriched_engine.match(platform, req.version))
         summary = enriched_engine.summary(matched)
-        recommendation = enriched_engine.recommended_upgrade(matched, req.platform, req.version) if req.include_suggestions else None
+        recommendation = enriched_engine.recommended_upgrade(matched, platform, req.version) if req.include_suggestions else None
     else:
         matched = matched_base
         summary = base_engine.summary(matched)
-        recommendation = base_engine.recommended_upgrade(matched, req.platform, req.version) if req.include_suggestions else None
+        recommendation = base_engine.recommended_upgrade(matched, platform, req.version) if req.include_suggestions else None
 
     # v0.3.6 P1.3 + v0.6.16 CVE-007: per-CVE severity transparency map.
     severity_details = {cve.cve_id: severity_info(cve) for cve in matched}
@@ -273,7 +277,7 @@ def analyze_cve(req: CVEAnalyzeRequest):
     # a per-family fix are likely patched in intermediate releases. Flag them
     # as uncertain so the UI can render informationally.
     _base_uncertain = coverage_uncertain_ids(matched)
-    _stale_ids = published_date_demoted_ids(matched, req.platform, req.version)
+    _stale_ids = published_date_demoted_ids(matched, platform, req.version)
     # Dedupe while preserving order: base list first, then stale IDs not
     # already present. Deterministic for snapshot tests.
     _seen = set(_base_uncertain)
@@ -288,7 +292,7 @@ def analyze_cve(req: CVEAnalyzeRequest):
     matched = CVEEngine._sort_matched(matched, uncertain_ids=set(coverage_uncertain_list))
     # v0.6.18 CVE-009: EoL platform check (independent of CVE matches —
     # populated even when matched is empty).
-    eol_status = detect_eol(req.platform, req.version)
+    eol_status = detect_eol(platform, req.version)
 
     # v0.6.21: when the platform is EoL, the engine's "upgrade to X" output
     # is misleading — there is no patch path. Override the displayed
@@ -311,7 +315,7 @@ def analyze_cve(req: CVEAnalyzeRequest):
         tool_version=_APP_VERSION,
         cve_engine_version="0.3.7",
         matched_cves=matched,
-        data_dir=data_dir_for_platform(req.platform),
+        data_dir=data_dir_for_platform(platform),
         kev_catalog_version=kev_catalog.catalog_version(),
     )
 
@@ -330,11 +334,12 @@ def analyze_cve(req: CVEAnalyzeRequest):
         cisco_source_conflicts=sorted(getattr(base_engine, "cisco_source_conflicts", [])),
         coverage_note=(ise_coverage_note(base_engine.cves) if _data_dir == "cve_data/ise"
                        else nxos_coverage_note(base_engine.cves) if _data_dir == "cve_data/nx_os"
+                       else sdwan_coverage_note(base_engine.cves, getattr(base_engine, "cisco_source_conflicts", [])) if _data_dir == "cve_data/sdwan_controllers"
                        else fmc_coverage_note(base_engine.cves)
-                       if normalize_user_platform(req.platform) == ProductFamily.FMC
-                       else platform_coverage_note(req.platform, req.version)),
+                       if normalize_user_platform(platform) == ProductFamily.FMC
+                       else platform_coverage_note(platform, req.version)),
         dataset_syncing=dataset_is_syncing(_sync_platform),
-        lifecycle_note=ise_lifecycle_note(req.platform, req.version),
+        lifecycle_note=ise_lifecycle_note(platform, req.version),
         excluded_not_listed=sorted(base_engine.excluded_by_known_affected),
         matched_on_known_affected=sum(1 for c in matched if any((c.known_affected or {}).values())),
         known_affected_as_of=_known_affected_dates(base_engine.cves),
@@ -366,6 +371,17 @@ def check_cve(cve_id: str):
         if cve.cve_id.upper() == cve_id_upper:
             entry = cve
             break
+
+    # SDWAN-02.1 fix (K1): SD-WAN controller CVEs are only in their own
+    # dataset. Found there, they must not fall through to the PSIRT lookup,
+    # whose auto-import writes IOS XE records.
+    if entry is None:
+        sd_engine = CVEEngine(config=CVEEngineConfig(
+            engine_version="0.3.7", data_dir="cve_data/sdwan_controllers"))
+        sd_engine.load_all()
+        entry = next((c for c in sd_engine.cves if c.cve_id.upper() == cve_id_upper), None)
+        if entry is not None:
+            engine = sd_engine
 
     # Not found locally? Try Cisco PSIRT API (fallback lookup)
     if entry is None:

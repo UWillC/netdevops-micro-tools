@@ -33,7 +33,7 @@ if PROJECT_DIR not in sys.path:
 from services.cve_sources import CiscoAdvisoryProvider  # noqa: E402
 
 _ADV_RE = re.compile(r"CiscoSecurityAdvisory/([^/?#\s]+)")
-DATASETS = ("cve_data/ios_xe", "cve_data/ise", "cve_data/nx_os")
+DATASETS = ("cve_data/ios_xe", "cve_data/ise", "cve_data/nx_os", "cve_data/sdwan_controllers")
 
 
 def classify(record, psirt_advisory_ids):

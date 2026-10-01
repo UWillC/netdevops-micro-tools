@@ -38,10 +38,13 @@ def test_title_detection():
     ) == ProductFamily.IOS_XE_SDWAN
 
 
-def test_manager_query_is_not_evaluated_not_ios_xe():
+def test_manager_query_is_not_answered_from_ios_xe():
+    """SDWAN-02.1 replaced NOT EVALUATED with the controller dataset; the
+    SDWAN-01 guarantee that remains is: never an IOS XE answer."""
     r = client.post("/analyze/cve", json={"platform": "Catalyst SD-WAN Manager", "version": "20.12.5"})
     assert r.status_code == 200
     body = r.json()
-    assert body["matched"] == []
-    assert body["coverage_note"].startswith("NOT EVALUATED")
-    assert "not vulnerable" in body["coverage_note"]
+    assert body["matched"]
+    assert all("sd-wan-controllers" in m["product_families"] for m in body["matched"])
+    assert body["coverage_note"].startswith("Catalyst SD-WAN Manager/Controller/Validator coverage")
+    assert "never assumed clean" in body["coverage_note"]

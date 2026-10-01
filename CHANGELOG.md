@@ -4,6 +4,40 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.64] – 2026-10-01 (SDWAN-02.1: Catalyst SD-WAN controller dataset, 3 KEV criticals)
+
+### Added
+- **Controller dataset `cve_data/sdwan_controllers/`**: CVE-2026-76504 (Manager only,
+  CVSS 9.8, CISA KEV 2026-09-30), CVE-2026-20127 and CVE-2026-20182 (Manager /
+  Controller / Validator, CVSS 10.0, KEV). Seeded from Cisco CSAF Fixed Software tables
+  + openVuln + CISA KEV 2026.09.30 (`scripts/seed_sdwan_controllers_cve_data.py`,
+  `--check` guard). Per-train and per-maintenance-line matching, "migrate" below 20.9,
+  component filter, coverage note with advisory/KEV count, per-train upgrade target.
+  Manager 20.12.5 now reports all three with 20.12.8.2 as the target; 20.12.8.2 reports
+  none of them (other advisories still not evaluated, never "not vulnerable").
+
+### Fixed (independent fact review before release)
+- **"Catalyst SD-WAN" / "SD-WAN" / "Control Components" with a 20.x/26.x release** were
+  answered from the IOS XE dataset (stale hand-written 20127 record, no KEV): 20.18.2.1
+  looked clean for 76504 and 20182. They now route to the controller dataset; cEdge and
+  IOS XE 17.x unchanged. Stale `cve_data/ios_xe/cve-2026-20127.json` removed; PSIRT
+  auto-sync and `/analyze/cve/{id}` no longer recreate controller CVEs as IOS XE records.
+- **"SD-WAN Controllers" (plural)** meant vSmart only, so Manager lost 76504; it now means
+  all three components.
+- **Releases Cisco's CSAF lists as affected but its own table lists as fixed** (20182: 8,
+  20127: 1) appear in `cisco_source_conflicts` with "Verify in Cisco Software Checker"
+  instead of silently clean.
+- Mitigation wording follows Cisco (ports 22/830 + known IPs; 76504 workaround On-Prem
+  only, Cloud Hosted already mitigated).
+
+### Tests
+- `tests/test_sdwan_controllers_{dataset,fixes}.py`; regression 21/21 non-target queries
+  identical; suite 1671 -> 1790.
+
+### Next
+- SDWAN-02.2: `cisco-sa-sdwan-authbp` (3 more KEV CVEs), build suffixes `.01`/`20.12.401`,
+  device profiles for controllers, controller releases 17.2-19.x.
+
 ## [v0.6.63] – 2026-09-30 (SDWAN-01: SD-WAN controllers are not IOS XE)
 
 ### Fixed
