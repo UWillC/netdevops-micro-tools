@@ -10,6 +10,7 @@ from api.routers.snmpv3 import (
 )
 from api.routers.ntp import generate_ntp_cli, generate_ntp_oneline, generate_ntp_template
 from api.routers.aaa import generate_aaa_local_only, generate_aaa_tacacs, generate_aaa_template, to_oneline as aaa_to_oneline, AAARequest
+from api.ssh_crypto import ssh_crypto_cli_lines, ssh_crypto_settings
 
 router = APIRouter()
 
@@ -238,7 +239,7 @@ logging console warnings
 """
 
 
-def generate_security_baseline(mode: str, skip_ssh: bool = False):
+def generate_security_baseline(mode: str, skip_ssh: bool = False, device: str = "Cisco IOS XE"):
     base = """
 ! Security baseline
 no ip http server
@@ -251,22 +252,40 @@ ip ssh authentication-retries 3
 ip ssh time-out 60
 """
 
-    if mode == "secure":
-        base += """
-ip ssh cipher aes256-ctr
-ip ssh key-exchange group14-sha256
-"""
+    # SSH algorithms (secure/hardened) come from api/ssh_crypto.py, the single
+    # source shared with the audit rules. Valid IOS/IOS XE syntax only.
+    crypto = ssh_crypto_cli_lines(mode, device)
+    if crypto:
+        base += "\n" + "\n".join(crypto) + "\n"
 
     if mode == "hardened":
-        base += """
-ip ssh cipher aes256-ctr aes192-ctr aes128-ctr
-ip ssh key-exchange group16-sha512
-ip ssh key-exchange group14-sha256
-no cdp run
+        base += """no cdp run
 no lldp run
 """
 
     return base
+
+
+def _yaml_list(items) -> str:
+    return "[" + ", ".join(f'"{i}"' for i in items) + "]"
+
+
+def _yaml_ssh_crypto(mode: str, device: str) -> str:
+    """SSH crypto block for the YAML template, built from the same settings as the CLI."""
+    s = ssh_crypto_settings(mode, device)
+    pad = " " * 6
+    if not s:
+        return f"{pad}ssh_crypto: null  # standard mode keeps device defaults"
+    notes = "\n".join(f'{pad}    - "{n}"' for n in s["notes"]) or f"{pad}    []"
+    return (
+        f"{pad}ssh_crypto:\n"
+        f'{pad}  min_release: "{s["min_release"]}"\n'
+        f"{pad}  ssh_encryption: {_yaml_list(s['encryption'])}\n"
+        f"{pad}  ssh_mac: {_yaml_list(s['mac'])}\n"
+        f"{pad}  ssh_kex: {_yaml_list(s['kex'])}\n"
+        f"{pad}  ssh_dh_min_size: {s['dh_min_size']}\n"
+        f"{pad}  notes:\n{notes}"
+    )
 
 
 # --------------------------------------------------------------------
@@ -348,6 +367,7 @@ golden_config:
       ssh_timeout: {'"n/a - see AAA"' if aaa_has_ssh else '60'}
       cdp: {"false" if req.mode == "hardened" else "true"}
       lldp: {"false" if req.mode == "hardened" else "true"}
+{_yaml_ssh_crypto(req.mode, req.device)}
 """
     return yaml.strip()
 
@@ -402,7 +422,7 @@ def assemble_golden(req: GoldenConfigRequest):
         sections.append("! Logging\n" + generate_logging())
     if req.include_security:
         # Skip SSH in security baseline if AAA already provides SSH prerequisites
-        sections.append("! Security\n" + generate_security_baseline(req.mode, skip_ssh=aaa_has_ssh))
+        sections.append("! Security\n" + generate_security_baseline(req.mode, skip_ssh=aaa_has_ssh, device=req.device))
 
     final = "\n\n".join(sections)
 

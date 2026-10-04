@@ -4,6 +4,38 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.65] – 2026-10-04 (GC-FIX-01: Golden Config emitted non-IOS SSH commands)
+
+### Fixed
+- **Golden Config `secure` / `hardened` emitted SSH commands that do not exist on IOS or
+  IOS XE** (since the endpoint shipped on 2025-12-02): `ip ssh cipher ...` and
+  `ip ssh key-exchange group14-sha256 / group16-sha512` are ASA-style syntax. The device
+  rejects them line by line, so a "hardened" config silently kept the default SSH
+  algorithms (on IOS XE before 17.10 these include diffie-hellman-group14-sha1 and
+  hmac-sha1; on 16.x CBC and 3DES). If you applied Golden Config before v0.6.65, those
+  lines never took effect: regenerate and re-apply the SSH section.
+- Now emitted (valid from IOS XE 16.3, Cisco IOS Security Command Reference D-L):
+  - `secure`: `ip ssh server algorithm encryption aes256-ctr aes192-ctr aes128-ctr`,
+    `ip ssh server algorithm kex ecdh-sha2-nistp384 ecdh-sha2-nistp256`,
+    `ip ssh dh min size 2048`
+  - `hardened`: same encryption, kex `ecdh-sha2-nistp521 ecdh-sha2-nistp384
+    ecdh-sha2-nistp256`, `ip ssh dh min size 4096`
+  - Newer algorithms appear only as `!` comments with their first release
+    (hmac-sha2 MAC 16.5.1b, AES-GCM 17.9.1, curve25519 / group16-sha512 17.11.1a).
+  - A device without "XE" in its name (classic IOS 15.x) gets no `kex` line; that
+    command starts in IOS XE 16.3.
+- The YAML template now carries the same SSH algorithms as the CLI
+  (`security.ssh_crypto`); before it had none.
+- SSH algorithm names live in one module, `api/ssh_crypto.py` (allowed, newer and weak
+  lists), for the generator and the upcoming HARD-03 audit rule.
+- Removed unused legacy script `golden-config/golden_config_v02.py` (same bug).
+
+### Tests
+- `tests/test_golden_config_ssh.py` (212): no `ip ssh cipher|key-exchange` in any
+  mode / format / device, `ip ssh` allowlist, algorithms from the shared lists and
+  available since 16.3, valid `dh min size`, YAML equals CLI, Config Drift counts the
+  new lines as protective. Suite 1790 -> 2002.
+
 ## [v0.6.64] – 2026-10-01 (SDWAN-02.1: Catalyst SD-WAN controller dataset, 3 KEV criticals)
 
 ### Added
