@@ -40,6 +40,7 @@ DEFAULT_LIMITS = (
 # Extra, stricter limits per path (on top of DEFAULT_LIMITS)
 PATH_LIMITS = {
     "/api/subscribe": ((5, 15 * 60),),  # each call hits MailerLite
+    "/api/beta/token": ((5, 15 * 60),),  # read-only backfill lookup (BETA-A)
 }
 MAX_KEYS_BEFORE_SWEEP = 10_000
 

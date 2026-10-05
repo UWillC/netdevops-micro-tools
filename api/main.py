@@ -26,6 +26,12 @@ app = FastAPI(
 from api.rate_limit import RateLimitMiddleware  # noqa: E402
 app.add_middleware(RateLimitMiddleware)
 
+# Public beta (BETA-A, 2026-10-05): a 2xx tool answer with a valid X-Beta-Token
+# marks that tester active for the day (MailerLite date fields, async). Sits
+# between CORS and the limiter; a 429 is not 2xx, so it is never counted.
+from api.beta import BetaActivityMiddleware  # noqa: E402
+app.add_middleware(BetaActivityMiddleware)
+
 # CORS for local frontend (dev)
 origins = [
     "http://127.0.0.1:5500",  # VS Code Live Server (częsty port)
