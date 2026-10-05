@@ -4,6 +4,47 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.7.0] – unreleased (beta branch `beta/variant-a`, PUBLIC BETA variant A)
+
+Not deployed. Ships only after the landing privacy policy is true (@ciso M1) and
+`BETA_TOKEN_SECRET` is set in Render; see the build report of 2026-10-05.
+
+### Added
+- **Active beta tester measurement (variant A).** `/api/subscribe` returns a signed
+  token `v1.<subscriber_id>.<b64url(hmac_sha256)>` for the MailerLite subscriber id
+  (secret `BETA_TOKEN_SECRET`, at least 32 bytes; optional
+  `BETA_TOKEN_SECRET_PREVIOUS` for rotation). No secret = no token, app unchanged.
+  Same answer for a new and an existing address.
+- `POST /api/beta/token`: read-only backfill for browsers unlocked before tokens
+  existed. Looks the address up (GET only), returns a token for Gated Tools
+  members and a same-shape decoy otherwise; never creates or regroups anyone.
+  Limited like `/api/subscribe` (5 per 15 min per IP).
+- `api/beta.py` `BetaActivityMiddleware`: a 2xx answer on a tool path (`/generate`,
+  `/analyze`, `/tools`, `/mitigate`, `/export`, `/profiles`, `/api/kev`; GET and
+  POST; page-load fetches `/analyze/advisories` and `/profiles/list` excluded) with
+  a valid `X-Beta-Token` marks the subscriber active for the day. The body is never
+  read. Once per subscriber per day (in memory) a background task writes MailerLite
+  DATE fields `beta_first_use` (only while empty) and `beta_last_use` with
+  `PUT /subscribers/{id}`, fields only: never status, groups or resubscribe.
+  MailerLite errors are swallowed; logs carry no email, id, token or body.
+- `web/app-gate.js`: one fetch wrapper adds `X-Beta-Token` only to same-origin
+  tool paths (never the feedback widget, Google or other origins); token saved from
+  subscribe; silent once-a-day backfill.
+
+### Changed
+- Gate copy for the public beta: "Join the public beta", beta emails with
+  unsubscribe, tester status needs a confirmed email at the end of the beta,
+  privacy policy link. Home banner and footer updated.
+- App footer: "Public beta" + privacy policy link.
+
+### Removed
+- Google Analytics 4 (`G-SP6VHRYCNC`) from the tools app (@ciso M2): it only sent
+  page views and could read localStorage, including the gate email.
+
+### Tests
+- `tests/test_beta_activity.py` (47) and `tests/test_beta_frontend.py` (11, wrapper
+  run in Node). Suite 2002 -> 2060 passed, 1 skipped.
+
 ## [v0.6.67] – 2026-10-06 (HF-U1: Threat Feed platform filter is a closed list)
 
 ### Security
