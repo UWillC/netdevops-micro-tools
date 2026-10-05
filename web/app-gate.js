@@ -1,11 +1,21 @@
 // -----------------------------
-// Gated Tools — Email Gate System
+// Gated Tools - Email Gate System (public beta, BETA-A)
 // Free tools: no email required
 // Gated tools: one-time email → localStorage → permanent access
 // -----------------------------
 
 const GATE_EMAIL_KEY = "netdevops_email";
 const GATE_UNLOCKED_KEY = "netdevops_unlocked";
+// Public beta (BETA-A): signed tester token from /api/subscribe or the backfill
+const GATE_TOKEN_KEY = "netdevops_beta_token";
+const GATE_BACKFILL_KEY = "netdevops_beta_backfill_day";
+const PRIVACY_URL = "https://netdevops.thebackroom.ai/legal/privacy.html";
+
+// Tool paths that carry X-Beta-Token (mirror of api/beta.py TOOL_PREFIXES).
+// Tools live at the root, not under /api. Page-load fetches are excluded.
+const BETA_TOOL_PREFIXES = ["/generate/", "/analyze/", "/tools/", "/mitigate/", "/export/", "/profiles/", "/api/kev/"];
+const BETA_PASSIVE_PATHS = ["/analyze/advisories", "/analyze/critical-feed", "/profiles/list"];
+const BETA_DEV_API_ORIGIN = "http://127.0.0.1:8000";
 
 // Tools that are FREE (no email required)
 // Threat Feed is on home page, always visible. KEV Watch (KW-01) is free like it.
@@ -13,10 +23,59 @@ const FREE_TOOLS = ["home", "iperf", "subnet", "mtu", "timezone", "kev-watch"];
 
 
 // -----------------------------
+// Storage helpers (private windows can throw)
+// -----------------------------
+function gateGet(key) {
+  try { return localStorage.getItem(key); } catch (e) { return null; }
+}
+
+function gateSet(key, value) {
+  try { localStorage.setItem(key, value); } catch (e) { /* ignore */ }
+}
+
+// -----------------------------
+// Beta token: only same-origin requests to tool paths get it.
+// Never the feedback widget (AWS), never Google, never any other origin.
+// -----------------------------
+function betaTokenApplies(rawUrl, loc) {
+  loc = loc || window.location;
+  let u;
+  try { u = new URL(rawUrl, loc.href); } catch (e) { return false; }
+  if (u.origin === "null") return false;
+  const allowed = [loc.origin];
+  if (loc.protocol === "file:" || loc.hostname === "localhost" || loc.hostname === "127.0.0.1") {
+    allowed.push(BETA_DEV_API_ORIGIN);  // local dev: page and API on different ports
+  }
+  if (!allowed.includes(u.origin)) return false;
+  if (BETA_PASSIVE_PATHS.includes(u.pathname)) return false;
+  return BETA_TOOL_PREFIXES.some(p => u.pathname.startsWith(p));
+}
+
+(function installBetaFetch() {
+  if (typeof window === "undefined" || typeof window.fetch !== "function" || window.__betaFetchInstalled) return;
+  window.__betaFetchInstalled = true;
+  const nativeFetch = window.fetch.bind(window);
+  window.fetch = function (input, init) {
+    try {
+      const token = gateGet(GATE_TOKEN_KEY);
+      const isRequest = input && typeof input === "object" && "url" in input;
+      const url = isRequest ? input.url : String(input);
+      if (token && betaTokenApplies(url)) {
+        const base = (init && init.headers) || (isRequest ? input.headers : undefined);
+        const headers = new Headers(base);
+        headers.set("X-Beta-Token", token);
+        init = Object.assign({}, init || {}, { headers: headers });
+      }
+    } catch (e) { /* never break a tool call over the token */ }
+    return nativeFetch(input, init);
+  };
+})();
+
+// -----------------------------
 // Check if user has unlocked gated tools
 // -----------------------------
 function isGateUnlocked() {
-  return localStorage.getItem(GATE_UNLOCKED_KEY) === "true";
+  return gateGet(GATE_UNLOCKED_KEY) === "true";
 }
 
 function isFreeTool(tabName) {
@@ -28,11 +87,11 @@ function shouldGate(tabName) {
 }
 
 // -----------------------------
-// Unlock — save email + set flag
+// Unlock - save email + set flag
 // -----------------------------
 function unlockGate(email) {
-  localStorage.setItem(GATE_EMAIL_KEY, email);
-  localStorage.setItem(GATE_UNLOCKED_KEY, "true");
+  gateSet(GATE_EMAIL_KEY, email);
+  gateSet(GATE_UNLOCKED_KEY, "true");
 
   // Remove all lock badges from sidebar and home grid
   document.querySelectorAll(".gate-lock").forEach(el => el.remove());
@@ -43,7 +102,7 @@ function unlockGate(email) {
 
   // Show success toast
   if (typeof showToast === "function") {
-    showToast("All tools unlocked! Happy automating.");
+    showToast("All tools unlocked. Thanks for testing. Tell us what broke.");
   }
 }
 
@@ -60,11 +119,42 @@ async function submitEmail(email) {
       body: JSON.stringify({ email: email })
     });
     const data = await resp.json();
+    if (data && typeof data.token === "string" && data.token) {
+      gateSet(GATE_TOKEN_KEY, data.token);
+    }
     return data.success !== false;
   } catch (err) {
-    // Non-blocking — even if backend fails, unlock locally
+    // Non-blocking - even if backend fails, unlock locally
     console.warn("Subscribe failed (non-blocking):", err);
     return true;
+  }
+}
+
+// -----------------------------
+// Backfill: unlocked before tokens existed -> ask once a day, silently.
+// Read-only on the server: it never subscribes anyone.
+// -----------------------------
+async function backfillBetaToken() {
+  if (!isGateUnlocked() || gateGet(GATE_TOKEN_KEY)) return;
+  const email = gateGet(GATE_EMAIL_KEY);
+  if (!email) return;
+  const today = new Date().toISOString().slice(0, 10);
+  if (gateGet(GATE_BACKFILL_KEY) === today) return;
+  gateSet(GATE_BACKFILL_KEY, today);
+  try {
+    const baseUrl = (typeof API_BASE_URL !== "undefined") ? API_BASE_URL : "";
+    const resp = await fetch(`${baseUrl}/api/beta/token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: email })
+    });
+    if (!resp.ok) return;
+    const data = await resp.json();
+    if (data && typeof data.token === "string" && data.token) {
+      gateSet(GATE_TOKEN_KEY, data.token);
+    }
+  } catch (err) {
+    /* silent: the tools work without a token */
   }
 }
 
@@ -83,13 +173,13 @@ function showGateModal(targetTab) {
     <div class="gate-modal">
       <button class="gate-modal-close" id="gate-modal-close" title="Close">&times;</button>
       <div class="gate-modal-icon">🔓</div>
-      <h2>Unlock 15 Pro Tools</h2>
-      <p>Enter your email to get instant access to all config generators, security audits, and advanced network tools.</p>
+      <h2>Join the public beta</h2>
+      <p>Every tool is free while we test them on real networks. Enter your email to unlock the 15 tools behind this gate.</p>
       <form id="gate-email-form" class="gate-email-form">
         <input type="email" id="gate-email-input" placeholder="your@email.com" required autocomplete="email" />
-        <button type="submit" class="btn-primary gate-submit-btn">Unlock All Tools</button>
+        <button type="submit" class="btn-primary gate-submit-btn">Unlock all tools</button>
       </form>
-      <p class="gate-modal-note">One-time only. No spam. No account needed.</p>
+      <p class="gate-modal-note">We will email you about the beta (unsubscribe in any email) and use your address to recognise you as a tester. Run at least one tool, confirm your email when the beta ends, and every beta tool stays free for you after it. No account, no card. <a href="${PRIVACY_URL}" target="_blank" rel="noopener">Privacy policy</a></p>
     </div>
   `;
 
@@ -194,10 +284,10 @@ function addGateBanner() {
     <div class="gate-notice-content">
       <span class="gate-notice-icon">🔓</span>
       <div class="gate-notice-text">
-        <strong>6 tools free. 15 pro tools: just enter your email.</strong>
-        <span>One-time. No spam. No account needed.</span>
+        <strong>Public beta: every tool is free.</strong>
+        <span>6 tools are open now. Enter your email to unlock the other 15.</span>
       </div>
-      <button class="btn-primary gate-notice-btn" id="gate-notice-btn">Unlock Pro Tools</button>
+      <button class="btn-primary gate-notice-btn" id="gate-notice-btn">Unlock beta tools</button>
     </div>
   `;
 
@@ -217,10 +307,9 @@ function updateHomeFooter() {
   if (!footer) return;
 
   if (isGateUnlocked()) {
-    const email = localStorage.getItem(GATE_EMAIL_KEY) || "";
-    footer.textContent = "All tools unlocked. Happy automating.";
+    footer.textContent = "All tools unlocked. Thanks for testing.";
   } else {
-    footer.textContent = "6 free tools. Enter email to unlock the other 15.";
+    footer.textContent = "Public beta. 6 tools open, 15 more with your email.";
   }
 }
 
@@ -231,6 +320,7 @@ function initGate() {
   addLockBadges();
   addGateBanner();
   updateHomeFooter();
+  backfillBetaToken();
 }
 
 // Run on DOM ready

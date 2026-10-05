@@ -1037,6 +1037,13 @@ textarea:focus {
   opacity: 0.7;
 }
 
+/* Privacy policy link in the gate note and the app footer (BETA-A, @ciso M3) */
+.gate-modal-note a,
+.footer a {
+  color: inherit;
+  text-decoration: underline;
+}
+
 /* Gate notice on home page */
 .gate-notice {
   margin: 24px 0 0;
