@@ -4,6 +4,30 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.66] – 2026-10-05 (M11: device profiles hardening)
+
+### Security
+- **Profile name validation.** A profile name is now limited to 1-64 letters, digits,
+  `-` or `_`, and must resolve to a file inside `profiles/`. Anything else is refused
+  with 400 on load, save and delete.
+- **Server-side profile storage is disabled during the public beta.**
+  `POST /profiles/save` and `DELETE /profiles/delete/{name}` return 403 and write
+  nothing. The demo profiles shipped with the app (branch, dc, lab) stay available
+  read-only, and Vulnerabilities, Security Scores and the security report only read
+  them.
+- The Threat Feed platform filter (`/analyze/advisories?platform=`) accepts plain
+  lowercase identifiers only (e.g. `iosxe`, `nxos`); anything else returns 400.
+
+### Changed
+- Device Profiles tab: Save, Update and Delete are disabled with a short notice; Load
+  and Apply to forms work as before.
+
+### Tests
+- `tests/test_profiles_m11.py` (118): name allowlist on every path, symlinks out of
+  `profiles/` ignored, save/delete refused with nothing written, demo profiles and the
+  aggregate endpoints unchanged, CVE Analyzer data untouched, Threat Feed platform
+  filter. Suite 2002 -> 2120.
+
 ## [v0.6.65] – 2026-10-04 (GC-FIX-01: Golden Config emitted non-IOS SSH commands)
 
 ### Fixed

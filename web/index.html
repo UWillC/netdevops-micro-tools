@@ -24,10 +24,10 @@
   <meta name="twitter:description" content="22 live modules: CVE exposure, hardening audit, config drift, hardened Cisco configs. Browser-based, free, no install." />
   <meta name="twitter:image" content="https://netdevops-tools.thebackroom.ai/static/og-card.jpg" />
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
-  <link rel="stylesheet" href="style-base.css?v=0.6.65" />
-  <link rel="stylesheet" href="style-home.css?v=0.6.65" />
-  <link rel="stylesheet" href="style-tools.css?v=0.6.65" />
-  <link rel="stylesheet" href="style-kev.css?v=0.6.65" />
+  <link rel="stylesheet" href="style-base.css?v=0.6.66" />
+  <link rel="stylesheet" href="style-home.css?v=0.6.66" />
+  <link rel="stylesheet" href="style-tools.css?v=0.6.66" />
+  <link rel="stylesheet" href="style-kev.css?v=0.6.66" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-SP6VHRYCNC"></script>
@@ -3177,7 +3177,7 @@ line vty 0 15
             <div class="profiles-actions">
               <button id="profiles-refresh" class="btn-secondary">Refresh</button>
               <button id="profiles-load" class="btn-primary">Load</button>
-              <button id="profiles-delete" class="btn-secondary">Delete</button>
+              <button id="profiles-delete" class="btn-secondary btn-disabled" disabled title="Server-side profile storage is disabled during the public beta">Delete</button>
             </div>
 
             <div class="form-row inline-row">
@@ -3190,7 +3190,7 @@ line vty 0 15
             <div class="profiles-status" id="profiles-status">Ready.</div>
 
             <p class="profiles-hint">
-              Profiles are stored on the backend. Use Docker volume mapping to persist them across restarts.
+              Server-side profile storage is disabled during the public beta. The demo profiles (branch, dc, lab) can be loaded and applied to the forms; saving, updating and deleting are off.
             </p>
           </div>
 
@@ -3227,10 +3227,10 @@ line vty 0 15
               </div>
 
               <div class="profiles-actions">
-                <button id="profiles-save" class="btn-primary">Save profile</button>
+                <button id="profiles-save" class="btn-primary btn-disabled" disabled title="Server-side profile storage is disabled during the public beta">Save profile</button>
               </div>
 
-              <div class="profiles-status" id="profiles-save-status"></div>
+              <div class="profiles-status" id="profiles-save-status">Saving profiles on the server is disabled during the public beta.</div>
             </div>
 
             <!-- EDIT VIEW (shown after Load) -->
@@ -3246,12 +3246,12 @@ line vty 0 15
               </div>
 
               <div class="profiles-actions">
-                <button id="profiles-update" class="btn-primary">Update profile</button>
+                <button id="profiles-update" class="btn-primary btn-disabled" disabled title="Server-side profile storage is disabled during the public beta">Update profile</button>
                 <button id="profiles-apply-to-forms" class="btn-secondary">Apply to forms</button>
               </div>
 
               <div class="profiles-status" id="profiles-editor-status">
-                Edit JSON and click "Update profile" to save changes.
+                Demo profile, read-only. Edit JSON and click "Apply to forms" to use it.
               </div>
             </div>
 
@@ -3267,24 +3267,24 @@ line vty 0 15
   </footer>
 
   <!-- Gate: email gate for pro tools (must load BEFORE core) -->
-  <script src="app-gate.js?v=0.6.65"></script>
+  <script src="app-gate.js?v=0.6.66"></script>
   <!-- Core: theme, tabs, navigation, utilities -->
-  <script src="app-core.js?v=0.6.65"></script>
+  <script src="app-core.js?v=0.6.66"></script>
   <!-- Config Generators: SNMPv3, NTP, AAA, iPerf3 -->
-  <script src="app-config.js?v=0.6.65"></script>
+  <script src="app-config.js?v=0.6.66"></script>
   <!-- Golden Config form -->
-  <script src="app-golden.js?v=0.6.65"></script>
+  <script src="app-golden.js?v=0.6.66"></script>
   <!-- CVE Analyzer -->
-  <script src="app-security.js?v=0.6.65"></script>
+  <script src="app-security.js?v=0.6.66"></script>
   <!-- Profiles, Vuln Widget, Security Score, Export -->
-  <script src="app-profiles.js?v=0.6.65"></script>
+  <script src="app-profiles.js?v=0.6.66"></script>
   <!-- Hints, Tooltips, Golden Config UI, SNMP Multi-Host -->
-  <script src="app-ui.js?v=0.6.65"></script>
+  <script src="app-ui.js?v=0.6.66"></script>
   <!-- Subnet, MTU, Config Parser, CVE Mitigation, Timezone, Military DTG, IP Path Tracer -->
-  <script src="app-network.js?v=0.6.65"></script>
+  <script src="app-network.js?v=0.6.66"></script>
   <!-- Threat Feed, Port Auditor -->
-  <script src="app-feeds.js?v=0.6.65"></script>
+  <script src="app-feeds.js?v=0.6.66"></script>
   <!-- KEV Watch (KW-01) -->
-  <script src="app-kev.js?v=0.6.65"></script>
+  <script src="app-kev.js?v=0.6.66"></script>
 </body>
 </html>

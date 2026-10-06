@@ -34,6 +34,19 @@ const profilesNewBtn = document.getElementById("profiles-new");
 
 let profilesCache = [];
 
+// M11 (v0.6.66): the server refuses save/delete during the public beta.
+// Buttons are disabled in index.html; the handlers below stop early too.
+const PROFILES_STORAGE_DISABLED = true;
+const PROFILES_STORAGE_DISABLED_MSG =
+  "Server-side profile storage is disabled during the public beta.";
+
+function profilesStorageBlocked(setStatus) {
+  if (!PROFILES_STORAGE_DISABLED) return false;
+  setStatus(PROFILES_STORAGE_DISABLED_MSG);
+  showToast("Profiles", PROFILES_STORAGE_DISABLED_MSG);
+  return true;
+}
+
 function setProfilesStatus(message) {
   if (!profilesStatus) return;
   profilesStatus.textContent = message;
@@ -80,7 +93,7 @@ function getSelectedProfileName() {
 function updateProfilesButtonsState() {
   const hasSelection = !!getSelectedProfileName();
   setBtnEnabled(profilesLoadBtn, hasSelection);
-  setBtnEnabled(profilesDeleteBtn, hasSelection);
+  setBtnEnabled(profilesDeleteBtn, hasSelection && !PROFILES_STORAGE_DISABLED);
 }
 
 async function fetchProfilesList() {
@@ -250,7 +263,7 @@ async function refreshProfilesUI() {
     if (profilesCache.length === 0) {
       profilesSelect.innerHTML = `<option value="">(no profiles found)</option>`;
       setProfilesStatus(
-        "No profiles found on the backend. Save one to get started."
+        "No demo profiles found on the backend."
       );
       updateProfilesButtonsState();
       return;
@@ -304,7 +317,7 @@ if (profilesLoadBtn) {
 
       setProfilesStatus(`Profile loaded: ${name}. Forms updated.`);
       setProfilesEditorContent(profile);
-      setProfilesEditorStatus(`Editing: ${name}`);
+      setProfilesEditorStatus(`Viewing: ${name} (read-only demo profile)`);
       showToast("Profile loaded", name);
 
       // Switch to Edit view
@@ -317,6 +330,7 @@ if (profilesLoadBtn) {
 
 if (profilesDeleteBtn) {
   profilesDeleteBtn.addEventListener("click", async () => {
+    if (profilesStorageBlocked(setProfilesStatus)) return;
     const name = getSelectedProfileName();
     if (!name) {
       setProfilesStatus("Select a profile first.");
@@ -350,6 +364,7 @@ if (profilesDeleteBtn) {
 
 if (profilesSaveBtn) {
   profilesSaveBtn.addEventListener("click", async () => {
+    if (profilesStorageBlocked(setProfilesSaveStatus)) return;
     const name = ((profileNameInput && profileNameInput.value) || "").trim();
     const description = (
       (profileDescriptionInput && profileDescriptionInput.value) ||
@@ -400,6 +415,7 @@ if (profilesSaveBtn) {
 // Update profile from editor (JSON)
 if (profilesUpdateBtn) {
   profilesUpdateBtn.addEventListener("click", async () => {
+    if (profilesStorageBlocked(setProfilesEditorStatus)) return;
     if (!profilesEditor || !profilesEditor.value.trim()) {
       setProfilesEditorStatus("Editor is empty. Load a profile first.");
       return;
@@ -474,7 +490,7 @@ if (profilesNewBtn) {
     // Clear form fields for new profile
     if (profileNameInput) profileNameInput.value = "";
     if (profileDescriptionInput) profileDescriptionInput.value = "";
-    setProfilesSaveStatus("");
+    setProfilesSaveStatus(PROFILES_STORAGE_DISABLED ? PROFILES_STORAGE_DISABLED_MSG : "");
   });
 }
 

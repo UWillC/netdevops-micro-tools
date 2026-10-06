@@ -1004,16 +1004,28 @@ def _get_advisories_feed(platform: str = "all"):
 # because the "critical-feed" suffix pattern matches ad/tracking feed naming
 # conventions. The new route uses neutral "advisories" language. The old
 # route is kept as an alias for any cached browser clients.
+# M11 (v0.6.66): `platform` becomes a cache file name (cache/cisco/<platform>.json)
+# and a background PSIRT refresh writes to it. Same class as the profile-name
+# bug: hold it to plain slug characters so it can never leave the cache dir.
+_FEED_PLATFORM_RE = re.compile(r"^[a-z0-9_-]{1,32}$")
+
+
+def _validated_feed_platform(platform: str) -> str:
+    if platform == "all" or _FEED_PLATFORM_RE.fullmatch(platform or ""):
+        return platform
+    raise HTTPException(status_code=400, detail="Invalid platform filter.")
+
+
 @router.get("/advisories", response_model=CriticalFeedResponse)
 def get_advisories(platform: str = "all"):
     """
     Returns latest Cisco PSIRT security advisories.
     Optional filter: ?platform=iosxe|ios|nxos|asa|ftd|all
     """
-    return _get_advisories_feed(platform)
+    return _get_advisories_feed(_validated_feed_platform(platform))
 
 
 @router.get("/critical-feed", response_model=CriticalFeedResponse, deprecated=True)
 def get_critical_feed_alias(platform: str = "all"):
     """DEPRECATED: use /advisories instead. Kept for backward compat."""
-    return _get_advisories_feed(platform)
+    return _get_advisories_feed(_validated_feed_platform(platform))

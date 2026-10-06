@@ -1,6 +1,8 @@
 import os
+import re
 import json
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Dict, Any, List, Optional
 
 from models.profile_model import (
@@ -26,29 +28,78 @@ from models.cve_model import CVEEntry
 from services.cve_engine import CVEEngine
 
 
+# M11 (2026-10-05): a profile name becomes a file name, so it is held to a strict
+# allowlist. No dots, no slashes, no unicode: "../x", "/abs/path", "a/b",
+# "..json" and look-alike characters can never reach the filesystem.
+PROFILE_NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+PROFILE_STORAGE_DISABLED_MESSAGE = (
+    "Server-side profile storage is disabled during the public beta. "
+    "The demo profiles can still be loaded."
+)
+
+
+class InvalidProfileName(ValueError):
+    """Profile name outside the allowlist or resolving outside profiles/."""
+
+
+class ProfileStorageDisabled(PermissionError):
+    """Saving or deleting profiles on the server is switched off."""
+
+
 class ProfileService:
     """
     Handles reading, listing and saving device profiles.
     Profiles are stored as JSON files inside profiles/ directory.
+
+    M11 (v0.6.66): writes are off by default (`allow_writes=False`). The
+    deployed app only serves the demo profiles shipped in the repo, read-only.
+    `allow_writes=True` exists for tests, so name validation on the write path
+    is proven independently of the switch.
     """
 
-    def __init__(self, profiles_dir: str = "profiles"):
+    def __init__(self, profiles_dir: str = "profiles", allow_writes: bool = False):
         self.dir = profiles_dir
+        self.allow_writes = allow_writes
         os.makedirs(self.dir, exist_ok=True)
 
+    def _base(self) -> Path:
+        return Path(self.dir).resolve()
+
     def _path(self, name: str) -> str:
-        """Generate full path for profile name."""
-        if not name.endswith(".json"):
-            name = name + ".json"
-        return os.path.join(self.dir, name)
+        """Full path for a profile name; raises InvalidProfileName.
+
+        Two checks: the name matches PROFILE_NAME_RE, and the resolved path
+        (symlinks followed) is a direct child of profiles/.
+        """
+        if not isinstance(name, str) or not PROFILE_NAME_RE.fullmatch(name):
+            raise InvalidProfileName(
+                "Invalid profile name. Use 1-64 characters: letters, digits, '-' or '_'."
+            )
+        base = self._base()
+        resolved = (base / f"{name}.json").resolve()
+        if not resolved.is_relative_to(base) or resolved.parent != base:
+            raise InvalidProfileName("Invalid profile name.")
+        return str(resolved)
 
     def list_profiles(self) -> List[str]:
-        """Return list of profiles (file names without .json)."""
-        files = []
+        """Return list of profiles (file names without .json).
+
+        Only files whose name passes the same allowlist as load, and which
+        resolve inside profiles/, are listed.
+        """
+        names = []
         for f in os.listdir(self.dir):
-            if f.endswith(".json"):
-                files.append(f.replace(".json", ""))
-        return sorted(files)
+            if not f.endswith(".json"):
+                continue
+            stem = f[: -len(".json")]
+            try:
+                path = self._path(stem)
+            except InvalidProfileName:
+                continue
+            if os.path.isfile(path):
+                names.append(stem)
+        return sorted(names)
 
     def load_profile(self, name: str) -> Dict[str, Any]:
         """Load profile JSON and return dict."""
@@ -60,15 +111,19 @@ class ProfileService:
             return json.load(f)
 
     def save_profile(self, profile: DeviceProfile) -> None:
-        """Save DeviceProfile into JSON."""
+        """Save DeviceProfile into JSON (only when writes are allowed)."""
         path = self._path(profile.name)
+        if not self.allow_writes:
+            raise ProfileStorageDisabled(PROFILE_STORAGE_DISABLED_MESSAGE)
 
         with open(path, "w") as f:
             json.dump(profile.model_dump(), f, indent=2)
 
     def delete_profile(self, name: str) -> None:
-        """Delete profile file."""
+        """Delete profile file (only when writes are allowed)."""
         path = self._path(name)
+        if not self.allow_writes:
+            raise ProfileStorageDisabled(PROFILE_STORAGE_DISABLED_MESSAGE)
         if os.path.isfile(path):
             os.remove(path)
 

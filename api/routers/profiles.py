@@ -1,6 +1,10 @@
 from fastapi import APIRouter, HTTPException
 
-from services.profile_service import ProfileService
+from services.profile_service import (
+    InvalidProfileName,
+    ProfileService,
+    ProfileStorageDisabled,
+)
 from models.profile_model import DeviceProfile, ProfileVulnerabilitiesResponse
 from models.security_score import SecurityScoreResponse
 
@@ -20,14 +24,23 @@ def load_profile(name: str):
     try:
         data = svc.load_profile(name)
         return data
+    except InvalidProfileName as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Profile not found")
 
 
 # Save profile
+# M11 (v0.6.66): server-side storage is off. Name is validated first (400),
+# then the request is refused (403); nothing is written to disk.
 @router.post("/profiles/save")
 def save_profile(profile: DeviceProfile):
-    svc.save_profile(profile)
+    try:
+        svc.save_profile(profile)
+    except InvalidProfileName as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ProfileStorageDisabled as e:
+        raise HTTPException(status_code=403, detail=str(e))
     return {"status": "ok", "saved_as": profile.name}
 
 
@@ -37,6 +50,10 @@ def delete_profile(name: str):
     try:
         svc.delete_profile(name)
         return {"status": "deleted", "name": name}
+    except InvalidProfileName as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ProfileStorageDisabled as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Profile not found")
 
