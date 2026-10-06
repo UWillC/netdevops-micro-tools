@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.6.67] – 2026-10-06 (HF-U1: Threat Feed platform filter is a closed list)
+
+### Security
+- **The Threat Feed platform filter accepts only the platforms offered in the UI.**
+  `/analyze/advisories` and the deprecated `/analyze/critical-feed` take
+  `all`, `iosxe`, `ios`, `nxos`, `asa`, `ftd` or `ise`; any other value returns 400
+  and starts no upstream Cisco PSIRT request and writes no cache file. Before, any
+  lowercase identifier was accepted and triggered a background PSIRT pull for it.
+
+### Tests
+- `tests/test_feed_platform_allowlist.py` (44): the server list matches the Threat Feed
+  dropdown, every UI value returns 200 on both routes, unknown values return 400 with
+  no PSIRT call and no cache file. Suite 2120 -> 2164.
+
 ## [v0.6.66] – 2026-10-05 (M11: device profiles hardening)
 
 ### Security

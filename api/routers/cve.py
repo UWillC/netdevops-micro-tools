@@ -1005,13 +1005,18 @@ def _get_advisories_feed(platform: str = "all"):
 # conventions. The new route uses neutral "advisories" language. The old
 # route is kept as an alias for any cached browser clients.
 # M11 (v0.6.66): `platform` becomes a cache file name (cache/cisco/<platform>.json)
-# and a background PSIRT refresh writes to it. Same class as the profile-name
-# bug: hold it to plain slug characters so it can never leave the cache dir.
-_FEED_PLATFORM_RE = re.compile(r"^[a-z0-9_-]{1,32}$")
+# and a background PSIRT refresh writes to it.
+# HF-U1 (v0.6.67): a slug pattern still let any unknown value (`zzz`) start a
+# PSIRT pull (up to five pages against the shared 30/min limit) and leave a
+# cache file behind. The filter is now a closed list: exactly the values of the
+# Threat Feed dropdown (#cisco-advisories-platform in web/index.html; a test
+# keeps the two in step). Anything else is refused before any PSIRT call or
+# cache write.
+FEED_PLATFORMS = ("all", "iosxe", "ios", "nxos", "asa", "ftd", "ise")
 
 
 def _validated_feed_platform(platform: str) -> str:
-    if platform == "all" or _FEED_PLATFORM_RE.fullmatch(platform or ""):
+    if platform in FEED_PLATFORMS:
         return platform
     raise HTTPException(status_code=400, detail="Invalid platform filter.")
 
@@ -1020,7 +1025,7 @@ def _validated_feed_platform(platform: str) -> str:
 def get_advisories(platform: str = "all"):
     """
     Returns latest Cisco PSIRT security advisories.
-    Optional filter: ?platform=iosxe|ios|nxos|asa|ftd|all
+    Optional filter: ?platform= one of FEED_PLATFORMS (all, iosxe, ios, nxos, asa, ftd, ise)
     """
     return _get_advisories_feed(_validated_feed_platform(platform))
 
