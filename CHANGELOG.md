@@ -43,7 +43,7 @@ Not deployed. Ships only after the landing privacy policy is true (@ciso M1) and
 
 ### Tests
 - `tests/test_beta_activity.py` (47) and `tests/test_beta_frontend.py` (11, wrapper
-  run in Node). Suite 2002 -> 2060 passed, 1 skipped.
+  run in Node). Suite 2164 -> 2222 passed, 1 skipped (on top of v0.6.67).
 
 ## [v0.6.67] – 2026-10-06 (HF-U1: Threat Feed platform filter is a closed list)
 
