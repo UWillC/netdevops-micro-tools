@@ -7,7 +7,8 @@ All notable changes to this project will be documented in this file.
 ## [v0.7.0] – unreleased (beta branch `beta/variant-a`, PUBLIC BETA variant A)
 
 Not deployed. Ships only after the landing privacy policy is true (@ciso M1) and
-`BETA_TOKEN_SECRET` is set in Render; see the build report of 2026-10-05.
+`BETA_TOKEN_SECRET`, `BETA_ID_MIN` and `BETA_ID_MAX` are set in Render; see the build
+report of 2026-10-05.
 
 ### Added
 - **Active beta tester measurement (variant A).** `/api/subscribe` returns a signed
@@ -18,6 +19,17 @@ Not deployed. Ships only after the landing privacy policy is true (@ciso M1) and
 - `POST /api/beta/token`: read-only backfill for browsers unlocked before tokens
   existed. Looks the address up (GET only), returns a token for Gated Tools
   members and a same-shape decoy otherwise; never creates or regroups anyone.
+  The decoy id is 18 digits inside the range of real ids of this account
+  (FIX-5), deterministic per address. FIX-5a: a real token only for a member whose
+  id is inside that same range; a member outside it (e.g. joined after the range was
+  frozen) gets the decoy of an unknown address, so no backfill answer reveals
+  membership. New subscribers get their real token from `/api/subscribe` (unchanged).
+  FIX-5b: the range is configuration, `BETA_ID_MIN`/`BETA_ID_MAX` (lowest and highest
+  id of the Gated Tools group at deploy time; `scripts/ml_group_id_range.py` prints
+  them, ids and counts only, never an e-mail); no hard-coded subscriber ids in code.
+  Missing or invalid range = `{"token": null}` for everyone, like a missing secret.
+  The decoy copies the bit layout of this account's ids (bit 10 = 1, bits 11-19 = 0,
+  bits 0-9 free) and is drawn uniformly by HMAC inside the range.
   Limited like `/api/subscribe` (5 per 15 min per IP).
 - `api/beta.py` `BetaActivityMiddleware`: a 2xx answer on a tool path (`/generate`,
   `/analyze`, `/tools`, `/mitigate`, `/export`, `/profiles`, `/api/kev`; GET and
@@ -42,8 +54,10 @@ Not deployed. Ships only after the landing privacy policy is true (@ciso M1) and
   page views and could read localStorage, including the gate email.
 
 ### Tests
-- `tests/test_beta_activity.py` (47) and `tests/test_beta_frontend.py` (11, wrapper
-  run in Node). Suite 2164 -> 2222 passed, 1 skipped (on top of v0.6.67).
+- `tests/test_beta_activity.py` (83) and `tests/test_beta_frontend.py` (11, wrapper
+  run in Node). Suite 2164 -> 2258 passed, 1 skipped (on top of v0.6.67).
+  Example MailerLite ids in tests are synthetic (random, same bit layout); a test
+  fails if `api/beta.py` holds any 18-digit literal with the real-id layout.
 
 ## [v0.6.67] – 2026-10-06 (HF-U1: Threat Feed platform filter is a closed list)
 

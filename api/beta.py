@@ -155,17 +155,93 @@ def verify_token(token: Optional[str]) -> Optional[str]:
     return None
 
 
-def decoy_subscriber_id(email: str) -> Optional[str]:
-    """Stable, numeric, non-existent-looking id for an address that is not a
-    subscriber, so the read-only backfill answers the same shape either way
-    (no enumeration). A decoy token later meets a 404 in MailerLite and is
-    dropped; nothing is created."""
-    secret = current_secret()
-    if secret is None:
+# FIX-5 / FIX-5b (@ciso 2026-10-05, 2026-10-07): a decoy must look like a real
+# MailerLite id of this account, in value AND in bit layout.
+#
+# Layout seen on every subscriber id of this account checked on 2026-10-07
+# (time-ordered, snowflake style):
+#   bits 20+    time-ordered part (grows with signup time)
+#   bits 10-19  constant: bit 10 = 1, bits 11-19 = 0  (ID_FIXED_MASK/VALUE)
+#   bits 0-9    varies (looks uniform)
+# A random number has that pattern with odds 1/1024, so a decoy must copy it.
+ID_FIXED_MASK = 0x3FF << 10
+ID_FIXED_VALUE = 1 << 10
+_ID_LOW_BITS = 20          # bits below the time-ordered part
+_ID_FREE_MASK = 0x3FF      # bits 0-9
+
+# The range is configuration, not code (FIX-5b / @ciso U-2): BETA_ID_MIN and
+# BETA_ID_MAX = the lowest and highest subscriber id in the Gated Tools group
+# at deploy time (scripts/ml_group_id_range.py prints both). Decoys fall
+# uniformly inside it, and the backfill issues a real token only inside it
+# (FIX-5a). Missing or invalid range = the backfill answers {"token": null}
+# for everyone, like a missing secret: no decoys, no enumeration.
+_RANGE_RE = re.compile(r"^[0-9]{1,32}$")
+
+
+def has_real_id_shape(subscriber_id) -> bool:
+    """True if the id carries the constant bits of this account's ids."""
+    try:
+        value = int(str(subscriber_id))
+    except (TypeError, ValueError):
+        return False
+    return value > 0 and (value & ID_FIXED_MASK) == ID_FIXED_VALUE
+
+
+def id_range():
+    """(min, max) from BETA_ID_MIN/BETA_ID_MAX, or None if missing or invalid."""
+    raw_min = os.getenv("BETA_ID_MIN", "").strip()
+    raw_max = os.getenv("BETA_ID_MAX", "").strip()
+    if not raw_min or not raw_max:
+        _warn_once("BETA_ID_RANGE:missing",
+                   "BETA_ID_MIN/BETA_ID_MAX not set: beta backfill answers no token")
         return None
+    if not (_RANGE_RE.match(raw_min) and _RANGE_RE.match(raw_max)):
+        _warn_once("BETA_ID_RANGE:bad", "BETA_ID_MIN/BETA_ID_MAX not numeric: ignored")
+        return None
+    lo, hi = int(raw_min), int(raw_max)
+    # room for at least one full time slot strictly between the bounds
+    if (hi >> _ID_LOW_BITS) - (lo >> _ID_LOW_BITS) < 2:
+        _warn_once("BETA_ID_RANGE:narrow",
+                   "BETA_ID_MIN/BETA_ID_MAX empty, reversed or too narrow: ignored")
+        return None
+    return lo, hi
+
+
+def decoy_subscriber_id(email: str) -> Optional[str]:
+    """Stable id for an address that is not a subscriber, shaped like a real
+    MailerLite id (range and constant bits), so the read-only backfill answers
+    the same shape either way (no enumeration). A decoy token later meets a
+    404 in MailerLite and is dropped; nothing is created."""
+    secret = current_secret()
+    bounds = id_range()
+    if secret is None or bounds is None:
+        return None
+    lo, hi = bounds
     digest = hmac.new(secret, b"decoy:" + email.strip().lower().encode("utf-8"),
                       hashlib.sha256).digest()
-    return str(int.from_bytes(digest[:8], "big") % 10**18).rjust(18, "1")
+    # Time part strictly between the bounds' time parts, so any low bits keep
+    # the value inside [lo, hi]. 128 bits mod the span: bias < 2^-90.
+    t_lo = (lo >> _ID_LOW_BITS) + 1
+    t_span = (hi >> _ID_LOW_BITS) - t_lo
+    t = t_lo + int.from_bytes(digest[:16], "big") % t_span
+    free = int.from_bytes(digest[16:18], "big") & _ID_FREE_MASK
+    return str((t << _ID_LOW_BITS) | ID_FIXED_VALUE | free)
+
+
+def in_backfill_range(subscriber_id) -> bool:
+    """FIX-5a (@ciso 2026-10-07): the backfill issues a real token only for an
+    id inside [BETA_ID_MIN, BETA_ID_MAX], the same frozen range the decoys
+    use. Anyone outside it (every subscriber newer than MAX) gets a decoy, so
+    no backfill answer can say "this address is on the list". New subscribers
+    get their real token from /api/subscribe instead. No range = False."""
+    bounds = id_range()
+    if bounds is None:
+        return False
+    try:
+        value = int(str(subscriber_id))
+    except (TypeError, ValueError):
+        return False
+    return bounds[0] <= value <= bounds[1]
 
 
 # ---------------------------------------------------------------- activity

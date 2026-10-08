@@ -92,11 +92,13 @@ async def subscribe(req: SubscribeRequest):
 async def beta_token(req: SubscribeRequest):
     """Read-only backfill: token for an existing Gated Tools subscriber.
 
-    Never creates, updates or regroups anyone. An unknown address gets a decoy
-    token of the same shape (no enumeration); it is dropped later on a 404.
+    Never creates, updates or regroups anyone. An unknown address, and a member
+    whose id is outside [BETA_ID_MIN, BETA_ID_MAX] (FIX-5a), gets a decoy token
+    of the same shape (no enumeration); it is dropped later on a 404. No id
+    range configured (FIX-5b) = no token for anyone, like a missing secret.
     Rate-limited with /api/subscribe's budget (api/rate_limit.py PATH_LIMITS).
     """
-    if not MAILERLITE_API_KEY or beta.current_secret() is None:
+    if not MAILERLITE_API_KEY or beta.current_secret() is None or beta.id_range() is None:
         return {"token": None}
 
     headers = {"Authorization": f"Bearer {MAILERLITE_API_KEY}", "Accept": "application/json"}
@@ -119,5 +121,9 @@ async def beta_token(req: SubscribeRequest):
     except Exception as exc:
         print(f"[WARN] beta backfill: lookup error {type(exc).__name__}")
 
-    token = beta.issue_token(sid) if sid else beta.issue_token(beta.decoy_subscriber_id(req.email))
+    # FIX-5a: a real token only inside the frozen decoy range; anyone else
+    # (e.g. joined after BETA_ID_MAX) takes the decoy path, same shape.
+    if not (sid and beta.in_backfill_range(sid)):
+        sid = beta.decoy_subscriber_id(req.email)
+    token = beta.issue_token(sid)
     return {"token": token}
