@@ -108,3 +108,96 @@ def test_limiter_bug_fails_open(client, clock, monkeypatch):
         raise RuntimeError("counter broken")
     monkeypatch.setattr(rl.limiter, "check_and_record", boom)
     assert _post(client, _xff("x")).status_code != 429
+
+
+# --- Retention sweep (2026-10-18): privacy policy "in memory for up to about an hour" ---
+
+def test_retention_covers_longest_window():
+    assert rl.RETENTION_SECONDS == 60 * 60
+    assert rl.SWEEP_INTERVAL == 5 * 60
+
+
+def test_sweep_drops_inactive_ip_without_it_returning():
+    c = Clock()
+    lim = rl.SlidingWindowLimiter(clock=c)
+    keys = [("ip:70.0.0.1", rl.DEFAULT_LIMITS), ("ip:70.0.0.1|/api/subscribe", rl.PATH_LIMITS["/api/subscribe"])]
+    assert lim.check_and_record(keys) is None
+    assert lim.key_count() == 2
+    # Still inside the hour: a due sweep keeps the address.
+    c.t += 30 * 60
+    assert lim.sweep_if_due() is True
+    assert lim.key_count() == 2
+    # Past the hour: the next due sweep removes it, although the IP never came back.
+    c.t += 31 * 60
+    assert lim.sweep_if_due() is True
+    assert lim.key_count() == 0
+
+
+def test_sweep_not_due_before_interval():
+    c = Clock()
+    lim = rl.SlidingWindowLimiter(clock=c)
+    c.t += rl.SWEEP_INTERVAL - 1
+    assert lim.sweep_if_due() is False
+    c.t += 1
+    assert lim.sweep_if_due() is True
+
+
+def test_inline_sweep_on_post_when_due():
+    """A POST from another client clears an inactive address once a sweep is due."""
+    c = Clock()
+    lim = rl.SlidingWindowLimiter(clock=c)
+    lim.check_and_record([("ip:70.0.0.1", rl.DEFAULT_LIMITS)])
+    c.t += 60 * 60 + rl.SWEEP_INTERVAL
+    lim.check_and_record([("ip:70.0.0.2", rl.DEFAULT_LIMITS)])
+    assert lim.key_count() == 1
+
+
+def test_sweep_keeps_active_limits_intact(client, clock):
+    for _ in range(60):
+        _post(client, _xff("x"))
+    clock.t += 30  # inside the minute window
+    rl.limiter.sweep_if_due()
+    assert _post(client, _xff("x")).status_code == 429
+
+
+def test_sweeper_loop_calls_sweep_and_survives_errors(monkeypatch):
+    calls = []
+
+    class Boom:
+        def sweep_if_due(self):
+            calls.append(1)
+            if len(calls) == 1:
+                raise RuntimeError("bug")
+            return True
+
+    monkeypatch.setattr(rl, "limiter", Boom())
+
+    class Stop(Exception):
+        pass
+
+    def fake_sleep(seconds):
+        assert seconds == rl.SWEEP_INTERVAL
+        if len(calls) >= 2:
+            raise Stop
+
+    with pytest.raises(Stop):
+        rl._sweeper_loop(sleep=fake_sleep)
+    assert len(calls) == 2
+
+
+def test_start_sweeper_once(monkeypatch):
+    started = []
+
+    class FakeThread:
+        def __init__(self, target, name, daemon):
+            assert daemon is True
+            started.append(name)
+
+        def start(self):
+            pass
+
+    monkeypatch.setattr(rl, "_sweeper_started", False)
+    monkeypatch.setattr(rl.threading, "Thread", FakeThread)
+    assert rl.start_sweeper() is True
+    assert rl.start_sweeper() is False
+    assert started == ["rate-limit-sweeper"]

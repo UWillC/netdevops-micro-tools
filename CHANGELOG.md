@@ -4,9 +4,38 @@ All notable changes to this project will be documented in this file.
 
 ---
 
-## [v0.7.0] – unreleased (beta branch `beta/variant-a`, PUBLIC BETA variant A)
+## [v0.7.1] – 2026-10-18 (rate limiter retention sweep, FTD PSIRT product, subscribe logs)
 
-Not deployed. Ships only after the landing privacy policy is true (@ciso M1) and
+### Privacy
+- **Inactive IP addresses leave the rate limiter within about an hour.** Before, an
+  address stayed in memory until the same address came back, until more than 10,000
+  addresses were held, or until a restart, so the privacy policy could not promise a
+  retention time. A background thread (started at app startup) now sweeps every
+  5 minutes and drops request times older than the longest window (1 h), deleting
+  addresses left with none; the same sweep runs inline on a POST when due. Worst case:
+  1 h + 5 min after the last request. Rate limit hits are still logged with a hashed IP.
+
+### Fixed
+- **Threat Feed `ftd` asked Cisco PSIRT for the slug instead of the product name.**
+  `CiscoAdvisoryProvider.PLATFORM_PRODUCTS` maps `ftd` to
+  "Cisco Secure Firewall Threat Defense (FTD) Software" (the prefix used by every FTD
+  entry in the local PSIRT cache), so the feed no longer depends on fuzzy matching.
+
+### Changed
+- `api/routers/subscribe.py`: the "partial" path (MailerLite answers other than
+  200/201/422) logs `status=NNN`, and the "offline" path logs the exception type.
+  No address, id or response body in the log.
+
+### Tests
+- `tests/test_rate_limit.py` (+7): retention equals the longest window, a due sweep
+  removes an address that never returns, no sweep before the interval, inline sweep
+  on POST, active limits survive a sweep, the sweeper thread survives errors and
+  starts once. `tests/test_ftd_psirt_product.py` (3), `tests/test_beta_activity.py` (+6).
+  Suite 2258 -> 2274 passed, 1 skipped.
+
+## [v0.7.0] – 2026-10-16 (PUBLIC BETA variant A)
+
+Deployed 2026-10-16. Shipped only after the landing privacy policy is true (@ciso M1) and
 `BETA_TOKEN_SECRET`, `BETA_ID_MIN` and `BETA_ID_MAX` are set in Render; see the build
 report of 2026-10-05.
 

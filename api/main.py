@@ -23,7 +23,7 @@ app = FastAPI(
 
 # Per-IP limit on every POST (fix 2026-09-30). Added before CORS so CORS stays
 # the outer layer and a 429 still carries the CORS headers the landing needs.
-from api.rate_limit import RateLimitMiddleware  # noqa: E402
+from api.rate_limit import RateLimitMiddleware, start_sweeper  # noqa: E402
 app.add_middleware(RateLimitMiddleware)
 
 # Public beta (BETA-A, 2026-10-05): a 2xx tool answer with a valid X-Beta-Token
@@ -126,6 +126,12 @@ def api_root():
         "status": "ok",
         "message": "NetDevOps Micro-Tools API is running.",
     }
+
+@app.on_event("startup")
+def _start_rate_limit_sweeper():
+    # Retention promise in the privacy policy: inactive IPs leave memory within ~1 h.
+    start_sweeper()
+
 
 @app.on_event("startup")
 def _warm_up_cve_datasets():
