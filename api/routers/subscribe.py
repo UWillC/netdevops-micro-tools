@@ -80,11 +80,18 @@ async def subscribe(req: SubscribeRequest):
         if resp.status_code == 422:
             return {"success": False, "message": "Invalid email", "token": None}
 
-        # Other errors — still unlock locally, just log
+        # Other errors — still unlock locally, just log. SUB-LOG (2026-10-18):
+        # the October 401 (bad key) was only found by backfill because this
+        # path was silent. Status code only: never the address or the body
+        # (MailerLite error bodies can echo the e-mail).
+        print(f"[WARN] subscribe: MailerLite answered status={resp.status_code}; "
+              "unlocked locally, no token")
         return _ok("Subscribed (partial)", None)
 
-    except Exception:
+    except Exception as exc:
         # Network error — still return success so user isn't blocked
+        print(f"[WARN] subscribe: MailerLite call failed {type(exc).__name__}; "
+              "unlocked locally, no token")
         return _ok("Subscribed (offline)", None)
 
 

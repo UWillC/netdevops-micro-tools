@@ -193,6 +193,26 @@ def test_subscribe_without_secret_works_as_before(client, ml, monkeypatch):
     assert body["success"] is True and body["token"] is None
 
 
+@pytest.mark.parametrize("status", [401, 403, 429, 500, 503])
+def test_subscribe_partial_logs_status_without_address(client, ml, capsys, status):
+    """SUB-LOG: a MailerLite error is visible in the log (status only, no e-mail)."""
+    ml.post_status = status
+    body = client.post("/api/subscribe", json={"email": "secret.user@b.co"}).json()
+    assert body == {"success": True, "message": "Subscribed (partial)", "token": None}
+    out = capsys.readouterr().out
+    assert f"status={status}" in out
+    assert "secret.user" not in out and "b.co" not in out
+
+
+def test_subscribe_offline_logs_error_type_without_address(client, ml, capsys):
+    ml.raise_on = "POST"
+    body = client.post("/api/subscribe", json={"email": "secret.user@b.co"}).json()
+    assert body["message"] == "Subscribed (offline)" and body["token"] is None
+    out = capsys.readouterr().out
+    assert "ConnectError" in out
+    assert "secret.user" not in out and "b.co" not in out
+
+
 def test_subscribe_dev_mode_has_no_token(client, ml, monkeypatch):
     monkeypatch.setattr(sub, "MAILERLITE_API_KEY", "")
     body = client.post("/api/subscribe", json={"email": "a@b.co"}).json()

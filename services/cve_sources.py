@@ -247,6 +247,11 @@ class CiscoAdvisoryProvider(CVEProvider):
         # product="ise" verbatim, which the PSIRT API answers with a fuzzy
         # match — precise product name keeps the platform cache clean.
         "ise": "Cisco Identity Services Engine",
+        # FTD-PSIRT (2026-10-18). Without this mapping the provider queried
+        # product="ftd" verbatim (fuzzy match, same story as ISE-02). The name
+        # is what PSIRT puts in productNames today (1725 of 1725 FTD entries in
+        # cache/cisco on 2026-10-18; Cisco renamed "Firepower Threat Defense").
+        "ftd": "Cisco Secure Firewall Threat Defense (FTD) Software",
     }
 
     def __init__(self, platform: str = "iosxe", max_pages: int = 5):
