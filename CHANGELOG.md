@@ -4,6 +4,39 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.7.2] – 2026-10-22 (safe upgrade path: the recommended release is checked)
+
+### CVE Analyzer
+- **The recommended upgrade target is re-matched against the same dataset and the
+  report says what is left on it** (UPG-01, first feedback from an outside user:
+  "provide the safe upgrade path"). New field `upgrade_target_check` (target, kind:
+  same-train / train-change / migration, `safe`, critical/high left, what else stays
+  matched) and one "Safe upgrade path" statement under the target in the report and
+  the summary. A target is called safe only with 0 critical/high on re-match; otherwise
+  the report says "Target check failed". Measured: IOS XE 17.9.4 → 17.15.4a, 0
+  critical/high, 5 medium still matched, which the report did not mention before.
+- **ISE trains without a fix now get a named target.** "Migrate to a supported train"
+  is followed by the lowest newer train and patch that closes every CVE in the dataset,
+  never a train in End of Software Maintenance or Software Maintenance (3.0-3.2):
+  ISE 3.2 Patch 4 and 3.0 Patch 8 → 3.3 Patch 12.
+- Train change wording points to the target's release notes for prerequisites
+  (ROMMON/bootloader, intermediate releases); this dataset does not hold them.
+- Re-matching a hypothetical release does not overwrite the caller's
+  "excluded by Known Affected" and source-conflict lists.
+- 11 tests (`tests/test_upgrade_target_check.py`).
+
+### Fixed
+- **A release typed with its product label no longer under-reports** (MATCH-02, found
+  while testing the target check). For platform "IOS XE", `17.9.4` matched 71 CVEs,
+  `IOS XE 17.9.4` matched **5** (the label broke Known Affected membership, so listed
+  CVEs were dropped as "not on Cisco's list") and the first line of `show version`
+  matched 104 (no family recognised, no list filter). The analyzer now reduces IOS /
+  IOS XE input to the release token first (`clean_release_input`); all three give 71.
+  ISE, NX-OS and SD-WAN input is untouched (own parsers). The response still echoes
+  what was typed. 19 tests (`tests/test_release_input.py`).
+
+---
+
 ## [v0.7.1] – 2026-10-18 (rate limiter retention sweep, FTD PSIRT product, subscribe logs)
 
 ### Privacy

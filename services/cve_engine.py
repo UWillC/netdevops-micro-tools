@@ -1799,3 +1799,151 @@ class CVEEngine:
         is_kev = any(t in driver_tags for t in ("kev", "actively-exploited", "zero-day"))
         kev_note = " (KEV, actively exploited)" if is_kev else ""
         return f"{best_str} — driven by {driver.cve_id}{kev_note}{_same_train_hint(driver, version, best_ver)}"
+
+    # -------------------------
+    # UPG-01: safe upgrade path
+    # -------------------------
+    def ise_migration_target(self, version: str) -> Optional[str]:
+        """Lowest newer ISE train + patch that closes every CVE we hold for it.
+
+        Used when the caller's train has no fix ("Migrate to a supported
+        train"). Per candidate train, newest-first is tempting and wrong: the
+        lowest train that works is the smaller change. A train is skipped when
+        any record says "migrate" for it, or when re-matching the proposed
+        patch still finds a critical/high CVE. None = no train qualifies on
+        this dataset, which callers must say instead of naming one.
+        """
+        from services.cisco_version import CiscoIseVersion
+        from services.ise_fixed_table import MIGRATE
+
+        running = CiscoIseVersion.parse(_strip_ise_label(version))
+        if running is None:
+            return None
+        trains = set()
+        for cve in self.cves:
+            ff = getattr(cve, "first_fixed_version", None)
+            for key in ((getattr(ff, "fixes", None) or {}) if ff else {}):
+                if key.startswith("ise-") and not key.startswith("ise-<"):
+                    trains.add(key[len("ise-"):])
+
+        def _train_key(t: str) -> Tuple[int, ...]:
+            return tuple(int(p) for p in t.split("."))
+
+        for train in sorted(trains, key=_train_key):
+            if _train_key(train) <= (running.major, running.minor):
+                continue
+            if tuple(_train_key(train)[:2]) in _ISE_TRAIN_LIFECYCLE:
+                continue   # EoSM / Software Maintenance: not a migration target
+            patches = []
+            blocked = False
+            for cve in self.cves:
+                ff = getattr(cve, "first_fixed_version", None)
+                fix = ((getattr(ff, "fixes", None) or {}) if ff else {}).get("ise-" + train)
+                if fix is None:
+                    continue
+                if fix == MIGRATE:
+                    blocked = True
+                    break
+                parsed = CiscoIseVersion.parse(fix)
+                if parsed is not None:
+                    patches.append((parsed, fix))
+            if blocked or not patches:
+                continue
+            candidate = max(patches)[1]
+            remaining = self._rematch("ISE", candidate)
+            if not any((c.severity or "").lower() in ("critical", "high") for c in remaining):
+                return candidate
+        return None
+
+    def _rematch(self, platform: str, version: str) -> List[CVEEntry]:
+        """match() for a hypothetical release, without touching the report state.
+
+        match() resets excluded_by_known_affected / cisco_source_conflicts, which
+        the analyzer response reads for the CALLER's release.
+        """
+        saved = (getattr(self, "excluded_by_known_affected", []),
+                 getattr(self, "cisco_source_conflicts", []))
+        try:
+            return self.match(platform, version)
+        finally:
+            self.excluded_by_known_affected, self.cisco_source_conflicts = saved
+
+    def check_upgrade_target(self, platform: str, version: str,
+                             recommendation: Optional[str]) -> Optional[dict]:
+        """Re-run the matcher on the recommended release and say what is left.
+
+        The recommendation is the lowest release that closes every matched
+        critical/high CVE. Nobody had checked that release against the rest of
+        the dataset, and the report never said what stays open on it (medium
+        and low, or a CVE published after the driver's fix). This answers both,
+        within this dataset only. None when there is no target to check.
+        """
+        if not recommendation:
+            return None
+        kind = None
+        target = None
+        if " — driven by " in recommendation:
+            target = recommendation.split(" — driven by ")[0].strip()
+            user = _tokenize_version(_strip_ise_label(version))
+            tgt = _tokenize_version(_strip_ise_label(target))
+            kind = "same-train" if tuple(user[:2]) == tuple(tgt[:2]) else "train-change"
+        elif (normalize_user_platform(platform) == ProductFamily.ISE
+              and recommendation.startswith("No fixed release exists")):
+            target = self.ise_migration_target(version)
+            kind = "migration"
+            if target is None:
+                return {
+                    "target": None, "kind": kind, "safe": False,
+                    "critical_high": [], "remaining": {}, "remaining_ids": [],
+                    "statement": ("Safe upgrade path: no newer ISE train in this dataset closes "
+                                  "every known CVE. Use Cisco Software Checker to pick the target."),
+                }
+        if not target:
+            return None
+
+        # Match on the bare release: "IOS XE 17.9.4" in the version slot matches
+        # 5 CVEs where "17.9.4" matches 71 (measured 2026-10-22), which would
+        # make every IOS XE target look clean.
+        bare = re.search(r"\d.*", target)
+        remaining = self._rematch(platform, bare.group(0) if bare else target)
+        order = ["critical", "high", "medium", "low"]
+        remaining = sorted(remaining, key=lambda c: (
+            order.index((c.severity or "").lower()) if (c.severity or "").lower() in order else len(order),
+            c.cve_id))
+        crit_high = [c.cve_id for c in remaining if (c.severity or "").lower() in ("critical", "high")]
+        counts: Dict[str, int] = {}
+        for c in remaining:
+            sev = (c.severity or "unknown").lower()
+            counts[sev] = counts.get(sev, 0) + 1
+        safe = not crit_high
+
+        path = {
+            "same-train": "stays on your train",
+            "train-change": "is a train change: read the target's release notes for "
+                            "upgrade prerequisites (ROMMON/bootloader, intermediate releases)",
+            "migration": "is a migration to a supported train (your train has no fix)",
+        }[kind]
+        if safe:
+            if remaining:
+                left = ", ".join(f"{counts[s]} {s}" for s in order + ["unknown"] if counts.get(s))
+                ids = ", ".join(c.cve_id for c in remaining[:5])
+                more = f" and {len(remaining) - 5} more" if len(remaining) > 5 else ""
+                tail = f"Still matched on it: {left} ({ids}{more})."
+            else:
+                tail = "Nothing else matched on it."
+            statement = (f"Safe upgrade path: {target} {path}. Target check: re-run against this "
+                         f"dataset, 0 critical/high. {tail} Scope: CVEs in this dataset only; "
+                         f"confirm in Cisco Software Checker before the change.")
+        else:
+            statement = (f"Target check failed: {target} still matches {len(crit_high)} "
+                         f"critical/high CVE(s) ({', '.join(crit_high[:5])}). Do not treat it as "
+                         f"safe; take the matched advisories to Cisco Software Checker.")
+        return {
+            "target": target,
+            "kind": kind,
+            "safe": safe,
+            "critical_high": crit_high,
+            "remaining": counts,
+            "remaining_ids": [c.cve_id for c in remaining],
+            "statement": statement,
+        }

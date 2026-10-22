@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from services.cve_engine import ambiguous_release, fmc_coverage_note, sdwan_coverage_note, sdwan_effective_platform, nxos_coverage_note, platform_coverage_note, uncovered_family, CVEEngine, CVEEngineConfig, cvss_rating_from_score, data_dir_for_platform, is_bundled_cve, ise_coverage_note, ise_lifecycle_note, severity_info, detect_bundle, data_confidence, coverage_uncertain_ids, published_date_demoted_ids
 from services.eol_registry import detect_eol
+from services.known_affected import clean_release_input
 from services.provenance import cve_provenance
 
 
@@ -84,6 +85,12 @@ class CVEAnalyzeResponse(BaseModel):
     # (End of Software Maintenance / Software Maintenance / ISE-PIC end-of-sale).
     # One statement per report, and only when it applies to the caller.
     lifecycle_note: Optional[str] = None
+    # UPG-01 (2026-10-22, first outside-user feedback: "provide the safe upgrade
+    # path"): the recommended release re-matched against the same dataset —
+    # target, train change or migration, critical/high left (must be 0 to be
+    # called safe) and what else stays matched. None when there is no target
+    # (no recommendation, NX-OS, EoL hardware).
+    upgrade_target_check: Optional[dict] = None
     # MATCH-01 (2026-09-18): CVE ids dropped because the queried release is not
     # on Cisco's Known Affected list for that advisory. Reported so the reader
     # can see what was ruled out and on whose authority, instead of the list
@@ -217,6 +224,9 @@ def analyze_cve(req: CVEAnalyzeRequest):
     # not cEdge. Every step below works on the effective platform; the response
     # echoes what the user typed.
     platform = sdwan_effective_platform(req.platform, req.version)
+    # MATCH-02: every step below works on the bare release; the response
+    # echoes what the user typed.
+    version = clean_release_input(req.version)
     # ISE-03: the dataset directory follows the queried product family —
     # an ISE query must read cve_data/ise, not the IOS XE default.
     _data_dir = data_dir_for_platform(platform)
@@ -232,11 +242,11 @@ def analyze_cve(req: CVEAnalyzeRequest):
     # this request is answered from disk, the next one benefits.
     _sync_platform = _ANALYZER_SYNC_PLATFORM.get(_data_dir)
     if (_sync_platform and uncovered_family(platform) is None
-            and not ambiguous_release(platform, req.version)):
+            and not ambiguous_release(platform, version)):
         _age = _platform_cache_age_hours(_sync_platform)
         if _age is None or _age * 3600 > PLATFORM_CACHE_TTL:
             _refresh_platform_cache_in_background(_sync_platform)
-    matched_base = base_engine.match(platform, req.version)
+    matched_base = base_engine.match(platform, version)
 
     # KEV-X: stamp live CISA KEV status on the matches. Done on the base run so
     # it applies whether or not NVD enrichment is enabled.
@@ -255,13 +265,13 @@ def analyze_cve(req: CVEAnalyzeRequest):
             ],
         )
         enriched_engine.load_all()
-        matched = _apply_kev_catalog(enriched_engine.match(platform, req.version))
+        matched = _apply_kev_catalog(enriched_engine.match(platform, version))
         summary = enriched_engine.summary(matched)
-        recommendation = enriched_engine.recommended_upgrade(matched, platform, req.version) if req.include_suggestions else None
+        recommendation = enriched_engine.recommended_upgrade(matched, platform, version) if req.include_suggestions else None
     else:
         matched = matched_base
         summary = base_engine.summary(matched)
-        recommendation = base_engine.recommended_upgrade(matched, platform, req.version) if req.include_suggestions else None
+        recommendation = base_engine.recommended_upgrade(matched, platform, version) if req.include_suggestions else None
 
     # v0.3.6 P1.3 + v0.6.16 CVE-007: per-CVE severity transparency map.
     severity_details = {cve.cve_id: severity_info(cve) for cve in matched}
@@ -277,7 +287,7 @@ def analyze_cve(req: CVEAnalyzeRequest):
     # a per-family fix are likely patched in intermediate releases. Flag them
     # as uncertain so the UI can render informationally.
     _base_uncertain = coverage_uncertain_ids(matched)
-    _stale_ids = published_date_demoted_ids(matched, platform, req.version)
+    _stale_ids = published_date_demoted_ids(matched, platform, version)
     # Dedupe while preserving order: base list first, then stale IDs not
     # already present. Deterministic for snapshot tests.
     _seen = set(_base_uncertain)
@@ -292,7 +302,7 @@ def analyze_cve(req: CVEAnalyzeRequest):
     matched = CVEEngine._sort_matched(matched, uncertain_ids=set(coverage_uncertain_list))
     # v0.6.18 CVE-009: EoL platform check (independent of CVE matches —
     # populated even when matched is empty).
-    eol_status = detect_eol(platform, req.version)
+    eol_status = detect_eol(platform, version)
 
     # v0.6.21: when the platform is EoL, the engine's "upgrade to X" output
     # is misleading — there is no patch path. Override the displayed
@@ -309,6 +319,12 @@ def analyze_cve(req: CVEAnalyzeRequest):
             f"end-of-vulnerability-security-support. Software upgrade is not a "
             f"remediation path on this device.{replacement_hint}"
         )
+
+    # UPG-01: check the target on the local dataset (the one the match ran on).
+    upgrade_target_check = None
+    if not (eol_status and eol_status.get("is_eol")):
+        upgrade_target_check = base_engine.check_upgrade_target(
+            platform, version, original_recommendation)
 
     # v0.6.19 XCUT-002: provenance footer.
     provenance = cve_provenance(
@@ -337,9 +353,10 @@ def analyze_cve(req: CVEAnalyzeRequest):
                        else sdwan_coverage_note(base_engine.cves, getattr(base_engine, "cisco_source_conflicts", [])) if _data_dir == "cve_data/sdwan_controllers"
                        else fmc_coverage_note(base_engine.cves)
                        if normalize_user_platform(platform) == ProductFamily.FMC
-                       else platform_coverage_note(platform, req.version)),
+                       else platform_coverage_note(platform, version)),
         dataset_syncing=dataset_is_syncing(_sync_platform),
-        lifecycle_note=ise_lifecycle_note(platform, req.version),
+        lifecycle_note=ise_lifecycle_note(platform, version),
+        upgrade_target_check=upgrade_target_check,
         excluded_not_listed=sorted(base_engine.excluded_by_known_affected),
         matched_on_known_affected=sum(1 for c in matched if any((c.known_affected or {}).values())),
         known_affected_as_of=_known_affected_dates(base_engine.cves),

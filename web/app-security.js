@@ -338,6 +338,11 @@ if (cveForm && cveOutput) {
         }
       }
 
+      // UPG-01: the target re-matched against the same dataset.
+      if (data.upgrade_target_check && data.upgrade_target_check.statement) {
+        out += `${data.upgrade_target_check.statement}\n`;
+      }
+
       if (data.severity_policy) {
         out += `\nNote: ${data.severity_policy}\n`;
       }
@@ -611,6 +616,11 @@ if (cveForm && cveOutput) {
                    ${
                      data.eol_status && data.eol_status.is_eol && data.original_engine_recommendation
                        ? `<div class="summary-upgrade-context">Engine's pre-EoL suggestion would have been: <code>${data.original_engine_recommendation}</code> (not actionable on this hardware).</div>`
+                       : ""
+                   }
+                   ${
+                     data.upgrade_target_check && data.upgrade_target_check.statement
+                       ? `<div class="summary-upgrade-context">${esc(data.upgrade_target_check.statement)}</div>`
                        : ""
                    }
                  </div>`

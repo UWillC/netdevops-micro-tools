@@ -111,6 +111,32 @@ def _ise_key(version: str):
     return (parsed.major, parsed.minor, parsed.maint, parsed.patch)
 
 
+# MATCH-02 (2026-10-22): the version box is free text. "IOS XE 17.9.4" matched
+# 5 CVEs where "17.9.4" matched 71 (the label broke Known Affected membership,
+# so listed CVEs were dropped as "not on Cisco's list"), and the first line of
+# `show version` matched 104 (no family recognised, so no list at all). Both now
+# reduce to the release token before anything else looks at them. Only IOS /
+# IOS XE labels: ISE, NX-OS and SD-WAN have their own parsers, and the SD-WAN
+# platform detection reads the raw text first.
+_IOS_SHOW_VERSION_RE = re.compile(r"\bversion\s*:?\s*(\d[^\s,]*)", re.I)
+_IOS_LABEL_RE = re.compile(r"^(cisco\s+)?ios(?:[\s-]?xe)?(\s+software)?[\s,:]+(?=\d)", re.I)
+_IOS_WORD_RE = re.compile(r"\bios\b|\bios[\s-]?xe\b|iosxe", re.I)
+
+
+def clean_release_input(version: str) -> str:
+    """"IOS XE 17.9.4" / "Cisco IOS XE Software, Version 17.9.4" -> "17.9.4".
+
+    Anything that is not labelled IOS / IOS XE comes back unchanged (stripped).
+    """
+    v = (version or "").strip()
+    if not v or not _IOS_WORD_RE.search(v):
+        return v
+    m = _IOS_SHOW_VERSION_RE.search(v)
+    if m:
+        return m.group(1)
+    return _IOS_LABEL_RE.sub("", v)
+
+
 def version_is_listed(version: str, listed: Iterable[str], family: Optional[str] = None) -> bool:
     """Exact membership of `version` in a Known Affected list.
 
