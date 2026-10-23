@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.7.3] – 2026-10-22 (Cisco's first-fixed path for IOS XE / IOS)
+
+### CVE Analyzer
+- **Safe upgrade path from Cisco itself** (UPG-02). v0.7.2's target check showed on
+  production that the recommended IOS XE target was not safe: 17.9.4 → 17.15.4a, and
+  17.15.4a is still on Cisco's Known Affected list for the August 2026 hardening
+  release and four other Critical/High advisories (none carry `fixed_in` in our data).
+  New `services/cisco_software_checker.py` walks the openVuln per-release query
+  (`/OSType/iosxe|ios?version=`): highest `firstFixed` on the caller's train, query that
+  release, repeat until Cisco lists no Critical/High. Live 22.10: **17.9.4 → 17.9.10**
+  (one Medium left), 17.12.1 → 17.12.8; 17.6.3 → "no release on the 17.6 train clears
+  every Critical/High" (train change); 17.15.4a → "Cisco names 17.15.6, its API has no
+  data for it yet". New field `cisco_upgrade_path`, shown above the dataset check.
+- Network safety: 10 s per call, 12 s for the whole walk, 6 h cache, failures cached
+  10 min, a 404 for one release ("unknown to Cisco") does not block other lookups;
+  `CISCO_CHECKER_OFFLINE=1` set suite-wide. Offline or failed = the v0.7.2 answer.
+- Resolves the backlog note "Cisco API has no firstFixed": the advisory endpoint does
+  not, the per-release query does.
+- 14 tests (`tests/test_cisco_upgrade_path.py`), no network.
+
+---
+
 ## [v0.7.2] – 2026-10-22 (safe upgrade path: the recommended release is checked)
 
 ### CVE Analyzer

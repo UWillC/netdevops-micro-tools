@@ -30,6 +30,9 @@ FROZEN_TODAY = datetime.date(2026, 9, 18)
 @pytest.fixture(autouse=True)
 def _kev_offline(monkeypatch, tmp_path):
     monkeypatch.setenv("KEV_CATALOG_OFFLINE", "1")
+    monkeypatch.setenv("CISCO_CHECKER_OFFLINE", "1")   # UPG-02
+    from services import cisco_software_checker
+    cisco_software_checker.reset_for_tests()
     monkeypatch.setattr(kev_catalog, "KEV_CACHE_DIR", str(tmp_path / "kev"))
     monkeypatch.setattr(kev_catalog, "KEV_CACHE_PATH", str(tmp_path / "kev" / "catalog.json"))
     kev_catalog.reset_for_tests()

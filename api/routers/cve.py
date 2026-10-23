@@ -11,7 +11,8 @@ from pydantic import BaseModel
 
 from services.cve_engine import ambiguous_release, fmc_coverage_note, sdwan_coverage_note, sdwan_effective_platform, nxos_coverage_note, platform_coverage_note, uncovered_family, CVEEngine, CVEEngineConfig, cvss_rating_from_score, data_dir_for_platform, is_bundled_cve, ise_coverage_note, ise_lifecycle_note, severity_info, detect_bundle, data_confidence, coverage_uncertain_ids, published_date_demoted_ids
 from services.eol_registry import detect_eol
-from services.known_affected import clean_release_input
+from services.known_affected import clean_release_input, family_for_version
+from services.cisco_software_checker import first_fixed_path
 from services.provenance import cve_provenance
 
 
@@ -91,6 +92,10 @@ class CVEAnalyzeResponse(BaseModel):
     # called safe) and what else stays matched. None when there is no target
     # (no recommendation, NX-OS, EoL hardware).
     upgrade_target_check: Optional[dict] = None
+    # UPG-02 (2026-10-22): Cisco's own first-fixed path for IOS XE / IOS from
+    # the openVuln per-release query (services/cisco_software_checker.py).
+    # None when offline, failed, or not IOS / IOS XE.
+    cisco_upgrade_path: Optional[dict] = None
     # MATCH-01 (2026-09-18): CVE ids dropped because the queried release is not
     # on Cisco's Known Affected list for that advisory. Reported so the reader
     # can see what was ruled out and on whose authority, instead of the list
@@ -217,6 +222,18 @@ def _apply_kev_catalog(entries: list) -> list:
     return entries
 
 
+def _openvuln_ostype(platform: str, version: str) -> Optional[str]:
+    """openVuln OSType for the per-release query, or None (UPG-02)."""
+    fam = normalize_user_platform(platform)
+    if fam in (ProductFamily.IOS_XE, ProductFamily.IOS_XE_WLC):
+        return "iosxe"
+    if fam == ProductFamily.IOS:
+        return "ios"
+    if fam is None or getattr(fam, "value", "") == "unknown":
+        return {"ios-xe": "iosxe", "ios": "ios"}.get(family_for_version(version) or "")
+    return None
+
+
 @router.post("/cve", response_model=CVEAnalyzeResponse)
 def analyze_cve(req: CVEAnalyzeRequest):
     # 1) Base run (local JSON only) to find which CVE IDs apply.
@@ -325,6 +342,11 @@ def analyze_cve(req: CVEAnalyzeRequest):
     if not (eol_status and eol_status.get("is_eol")):
         upgrade_target_check = base_engine.check_upgrade_target(
             platform, version, original_recommendation)
+    cisco_upgrade_path = None
+    if not (eol_status and eol_status.get("is_eol")) and matched:
+        _ostype = _openvuln_ostype(platform, version)
+        if _ostype:
+            cisco_upgrade_path = first_fixed_path(_ostype, version)
 
     # v0.6.19 XCUT-002: provenance footer.
     provenance = cve_provenance(
@@ -357,6 +379,7 @@ def analyze_cve(req: CVEAnalyzeRequest):
         dataset_syncing=dataset_is_syncing(_sync_platform),
         lifecycle_note=ise_lifecycle_note(platform, version),
         upgrade_target_check=upgrade_target_check,
+        cisco_upgrade_path=cisco_upgrade_path,
         excluded_not_listed=sorted(base_engine.excluded_by_known_affected),
         matched_on_known_affected=sum(1 for c in matched if any((c.known_affected or {}).values())),
         known_affected_as_of=_known_affected_dates(base_engine.cves),
