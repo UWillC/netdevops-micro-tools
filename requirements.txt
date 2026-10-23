@@ -5,3 +5,4 @@ click==8.1.7
 requests==2.32.3
 httpx==0.28.1
 pydantic[email]==2.12.5
+certifi>=2026.10.19
