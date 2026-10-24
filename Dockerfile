@@ -8,6 +8,9 @@ ENV PYTHONUNBUFFERED=1
 # Set working directory inside the container
 WORKDIR /app
 
+# eMudhra CA incident (Oct 2026): force patched Debian ca-certificates and pip>=26.2.2 even if Render reuses a cached base layer
+RUN apt-get update && apt-get install -y --no-install-recommends --only-upgrade ca-certificates && rm -rf /var/lib/apt/lists/* && pip install --no-cache-dir --upgrade "pip>=26.2.2"
+
 # Install dependencies first (better Docker cache usage)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
