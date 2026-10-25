@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.7.5] – 2026-10-25 (DTG labels renamed)
+
+### Network Tools
+- **Visible "Military DTG" labels renamed to "DTG (Zulu)"** (tool list, Timezone Converter
+  badge, DTG section heading and description, timezone-letter tooltip; README tool list).
+  No functional change: API fields and code identifiers unchanged.
+
+---
+
 ## [v0.7.4] – 2026-10-25 ("exact hit" counts only the queried family's list)
 
 ### CVE Analyzer

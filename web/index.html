@@ -24,10 +24,10 @@
   <meta name="twitter:description" content="22 live modules: CVE exposure, hardening audit, config drift, hardened Cisco configs. Browser-based, free, no install." />
   <meta name="twitter:image" content="https://netdevops-tools.thebackroom.ai/static/og-card.jpg" />
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
-  <link rel="stylesheet" href="style-base.css?v=0.7.4" />
-  <link rel="stylesheet" href="style-home.css?v=0.7.4" />
-  <link rel="stylesheet" href="style-tools.css?v=0.7.4" />
-  <link rel="stylesheet" href="style-kev.css?v=0.7.4" />
+  <link rel="stylesheet" href="style-base.css?v=0.7.5" />
+  <link rel="stylesheet" href="style-home.css?v=0.7.5" />
+  <link rel="stylesheet" href="style-tools.css?v=0.7.5" />
+  <link rel="stylesheet" href="style-kev.css?v=0.7.5" />
 
   <!-- Feedback widget -->
   <script async src="https://www.thebackroom.ai/widget.js"></script>
@@ -169,7 +169,7 @@
             </button>
             <button class="quickstart-tool" data-tab="timezone">
               <span class="tool-icon">🕐</span>
-              <span class="tool-name">Timezone + Military DTG</span>
+              <span class="tool-name">Timezone + DTG (Zulu)</span>
               <span class="tool-hint">Convert timestamps across zones</span>
             </button>
             <button class="quickstart-tool" data-tab="mtu">
@@ -303,7 +303,7 @@
               <button class="home-tool-card" data-tab="timezone">
                 <span class="tool-icon">🌍</span>
                 <span class="tool-name">Timezone Converter</span>
-                <span class="tool-desc">Military DTG support</span>
+                <span class="tool-desc">DTG (Zulu) support</span>
               </button>
               <button class="home-tool-card" data-tab="config-parser">
                 <span class="tool-icon">📄</span>
@@ -2439,7 +2439,7 @@ Use with caution on production!">debug ip icmp</code>
       </section>
 
       <section id="tab-timezone" class="tab-content">
-        <h2>Timezone Converter <span class="version-badge">v1.1 + Military DTG</span></h2>
+        <h2>Timezone Converter <span class="version-badge">v1.1 + DTG (Zulu)</span></h2>
 
         <div class="card">
           <p class="form-description">
@@ -2493,9 +2493,9 @@ Use with caution on production!">debug ip icmp</code>
 
         <!-- Military DTG Format -->
         <div class="card">
-          <h3>Military DTG Format <span class="version-badge">v1.3</span></h3>
+          <h3>DTG (Zulu) Format <span class="version-badge">v1.3</span></h3>
           <p class="form-description">
-            Convert military Date-Time Group (DTG) format.
+            Convert Date-Time Group (DTG) format.
           </p>
 
           <!-- Date/Time Picker (Zoltan's request: "like booking a flight") -->
@@ -2535,7 +2535,7 @@ Use with caution on production!">debug ip icmp</code>
                 </div>
                 <div class="dtg-picker-section">
                   <label>Timezone</label>
-                  <select id="dtg-tz-letter" title="Military Timezone">
+                  <select id="dtg-tz-letter" title="Timezone letter">
                   <option value="Z">Z - Zulu (UTC)</option>
                   <option value="A">A - Alpha (+1)</option>
                   <option value="B">B - Bravo (+2)</option>
@@ -3259,24 +3259,24 @@ line vty 0 15
   </footer>
 
   <!-- Gate: email gate for pro tools (must load BEFORE core) -->
-  <script src="app-gate.js?v=0.7.4"></script>
+  <script src="app-gate.js?v=0.7.5"></script>
   <!-- Core: theme, tabs, navigation, utilities -->
-  <script src="app-core.js?v=0.7.4"></script>
+  <script src="app-core.js?v=0.7.5"></script>
   <!-- Config Generators: SNMPv3, NTP, AAA, iPerf3 -->
-  <script src="app-config.js?v=0.7.4"></script>
+  <script src="app-config.js?v=0.7.5"></script>
   <!-- Golden Config form -->
-  <script src="app-golden.js?v=0.7.4"></script>
+  <script src="app-golden.js?v=0.7.5"></script>
   <!-- CVE Analyzer -->
-  <script src="app-security.js?v=0.7.4"></script>
+  <script src="app-security.js?v=0.7.5"></script>
   <!-- Profiles, Vuln Widget, Security Score, Export -->
-  <script src="app-profiles.js?v=0.7.4"></script>
+  <script src="app-profiles.js?v=0.7.5"></script>
   <!-- Hints, Tooltips, Golden Config UI, SNMP Multi-Host -->
-  <script src="app-ui.js?v=0.7.4"></script>
+  <script src="app-ui.js?v=0.7.5"></script>
   <!-- Subnet, MTU, Config Parser, CVE Mitigation, Timezone, Military DTG, IP Path Tracer -->
-  <script src="app-network.js?v=0.7.4"></script>
+  <script src="app-network.js?v=0.7.5"></script>
   <!-- Threat Feed, Port Auditor -->
-  <script src="app-feeds.js?v=0.7.4"></script>
+  <script src="app-feeds.js?v=0.7.5"></script>
   <!-- KEV Watch (KW-01) -->
-  <script src="app-kev.js?v=0.7.4"></script>
+  <script src="app-kev.js?v=0.7.5"></script>
 </body>
 </html>
