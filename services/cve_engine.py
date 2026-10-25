@@ -291,7 +291,7 @@ _BUNDLE_TITLE_RE = re.compile(
 )
 
 
-def data_confidence(cve: "CVEEntry") -> Dict[str, Optional[str]]:
+def data_confidence(cve: "CVEEntry", family: Optional[str] = None) -> Dict[str, Optional[str]]:
     """Return per-CVE data-quality annotation (v0.6.23 CVE-006 transparency).
 
     Indicates how reliable the version-range matching is for this record,
@@ -312,6 +312,11 @@ def data_confidence(cve: "CVEEntry") -> Dict[str, Optional[str]]:
                    is range-unbounded — essentially "CVE touches this
                    platform family at some point in history". Lowest
                    confidence; treat as informational only.
+
+    `family` (MATCH-03) — the Known Affected list the matcher used for the
+    query (CVEEngine.known_affected_family). Only that list can make a match
+    "verified": a record listing classic-IOS releases says nothing about an
+    IOS XE release. None keeps the family-agnostic reading (any list).
     """
     # v0.6.24 (CVE-006 Phase 3) — strongest signal: per-family fixes from
     # PSIRT advisory-detail fetch. Richer than scalar fixed_in because it
@@ -319,6 +324,8 @@ def data_confidence(cve: "CVEEntry") -> Dict[str, Optional[str]]:
     # MATCH-01: an exact hit on Cisco's Known Affected list is the strongest
     # statement available for an imported record — stronger than a range.
     ka = getattr(cve, "known_affected", None) or {}
+    if family:
+        ka = {family: ka.get(family)}
     if any(ka.values()):
         total = sum(len(v) for v in ka.values())
         as_of = getattr(cve, "known_affected_as_of", None)
@@ -375,7 +382,8 @@ def data_confidence(cve: "CVEEntry") -> Dict[str, Optional[str]]:
     }
 
 
-def coverage_uncertain_ids(matched: List["CVEEntry"]) -> List[str]:
+def coverage_uncertain_ids(matched: List["CVEEntry"],
+                           family: Optional[str] = None) -> List[str]:
     """CVE-006 Phase 5: return CVE IDs whose coverage is uncertain.
 
     A CVE is "uncertain" when its data_confidence classification is anything
@@ -387,10 +395,11 @@ def coverage_uncertain_ids(matched: List["CVEEntry"]) -> List[str]:
     which subset deserves lower confidence in the UI.
 
     Order preserved from input (deterministic for snapshot tests).
+    `family` is passed through to data_confidence() (MATCH-03).
     """
     out: List[str] = []
     for cve in matched:
-        dq = data_confidence(cve)
+        dq = data_confidence(cve, family)
         if dq.get("confidence") != "verified":
             out.append(cve.cve_id)
     return out
@@ -1328,6 +1337,9 @@ class CVEEngine:
         # ISE-04: ids where Cisco's release list and Fixed Software table
         # disagreed about the queried release and the table was followed.
         self.cisco_source_conflicts: List[str] = []
+        # MATCH-03: the Known Affected list (family key) the last match() used,
+        # so confidence is judged on that list only. None = no single list.
+        self.known_affected_family: Optional[str] = None
 
     # -------------------------
     # Merge strategy (v0.3.3)
@@ -1433,6 +1445,7 @@ class CVEEngine:
         # (e.g. SSM On-Prem, CUCM, Webex mislabeled as "IOS XE" by the PSIRT
         # importer). Falls back to legacy fuzzy matching when family is UNKNOWN.
         query_family = normalize_user_platform(platform)
+        self.known_affected_family = None
 
         # A recognised platform we hold no data for: answer nothing, and let the
         # report say "not evaluated" (platform_coverage_note).
@@ -1445,6 +1458,7 @@ class CVEEngine:
         # ISE-04: when Cisco's Known Affected list exists it decides, exactly as
         # for IOS XE; the per-train fix logic remains for records without one.
         if query_family == ProductFamily.ISE:
+            self.known_affected_family = "ise"
             self.excluded_by_known_affected = []
             self.cisco_source_conflicts = []
             from services.known_affected import _ise_key
@@ -1478,6 +1492,7 @@ class CVEEngine:
         # No range fallback: "10.2(6)" against a min/max pair is exactly the
         # guesswork this dataset was built to remove.
         if query_family == ProductFamily.NX_OS:
+            self.known_affected_family = "nx-os"
             self.excluded_by_known_affected = []
             self.cisco_source_conflicts = []
             from services.known_affected import _nxos_key
@@ -1525,6 +1540,7 @@ class CVEEngine:
         # The version's own shape picks the list: a device model in the
         # platform box ("ISR4451-X") names no software family.
         ka_family = family_for_version(version)
+        self.known_affected_family = ka_family
         self.excluded_by_known_affected = []
 
         for cve in self.cves:
@@ -1862,11 +1878,13 @@ class CVEEngine:
         the analyzer response reads for the CALLER's release.
         """
         saved = (getattr(self, "excluded_by_known_affected", []),
-                 getattr(self, "cisco_source_conflicts", []))
+                 getattr(self, "cisco_source_conflicts", []),
+                 getattr(self, "known_affected_family", None))
         try:
             return self.match(platform, version)
         finally:
-            self.excluded_by_known_affected, self.cisco_source_conflicts = saved
+            (self.excluded_by_known_affected, self.cisco_source_conflicts,
+             self.known_affected_family) = saved
 
     def check_upgrade_target(self, platform: str, version: str,
                              recommendation: Optional[str]) -> Optional[dict]:

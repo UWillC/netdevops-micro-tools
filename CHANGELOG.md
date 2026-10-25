@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.7.4] – 2026-10-25 ("exact hit" counts only the queried family's list)
+
+### CVE Analyzer
+- **"Exact hit" counts only the queried family's list** (MATCH-03). 15 records with a
+  Known Affected list for classic IOS only (CVE-2012-0384, CVE-2011-3274/3282,
+  CVE-2012-1311, 11× OpenSSL March 2015) were reported as "verified" for IOS XE:
+  17.9.4 on the synced dataset said "102 match(es) are an exact hit", truth 87. Only the
+  published-date heuristic kept them out of the confirmed count. Now 188 / 87 confirmed /
+  101 not confirmed with or without that heuristic; classic-IOS queries still verify on
+  the `ios` list. Golden-numbers test on a frozen synced fixture
+  (`tests/fixtures/match03/`, rebuilt offline by `build_fixture.py`), 8 tests;
+  suite 2326 passed, 1 skipped.
+
+---
+
 ## [v0.7.3] – 2026-10-22 (Cisco's first-fixed path for IOS XE / IOS)
 
 ### CVE Analyzer

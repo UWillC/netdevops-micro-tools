@@ -264,6 +264,9 @@ def analyze_cve(req: CVEAnalyzeRequest):
         if _age is None or _age * 3600 > PLATFORM_CACHE_TTL:
             _refresh_platform_cache_in_background(_sync_platform)
     matched_base = base_engine.match(platform, version)
+    # MATCH-03: judge "verified" / "exact hit" on the list the match used, not
+    # on a Known Affected list for some other family (classic IOS vs IOS XE).
+    ka_family = base_engine.known_affected_family
 
     # KEV-X: stamp live CISA KEV status on the matches. Done on the base run so
     # it applies whether or not NVD enrichment is enabled.
@@ -295,7 +298,7 @@ def analyze_cve(req: CVEAnalyzeRequest):
     # v0.6.16 CVE-010: bundled-publication lookup per CVE.
     bundles = {cve.cve_id: detect_bundle(cve) for cve in matched}
     # v0.6.23: per-CVE data-quality confidence (verified/max-bound/uncertain).
-    data_quality = {cve.cve_id: data_confidence(cve) for cve in matched}
+    data_quality = {cve.cve_id: data_confidence(cve, ka_family) for cve in matched}
     # v0.6.24 CVE-006 Phase 5: flag subset of CVE IDs with uncertain coverage
     # (anything NOT "verified"). Pure post-process, additive, zero impact on
     # `matched` semantics.
@@ -303,7 +306,7 @@ def analyze_cve(req: CVEAnalyzeRequest):
     # published >3 years before the target version release date AND without
     # a per-family fix are likely patched in intermediate releases. Flag them
     # as uncertain so the UI can render informationally.
-    _base_uncertain = coverage_uncertain_ids(matched)
+    _base_uncertain = coverage_uncertain_ids(matched, ka_family)
     _stale_ids = published_date_demoted_ids(matched, platform, version)
     # Dedupe while preserving order: base list first, then stale IDs not
     # already present. Deterministic for snapshot tests.
@@ -381,7 +384,10 @@ def analyze_cve(req: CVEAnalyzeRequest):
         upgrade_target_check=upgrade_target_check,
         cisco_upgrade_path=cisco_upgrade_path,
         excluded_not_listed=sorted(base_engine.excluded_by_known_affected),
-        matched_on_known_affected=sum(1 for c in matched if any((c.known_affected or {}).values())),
+        matched_on_known_affected=sum(
+            1 for c in matched
+            if ((c.known_affected or {}).get(ka_family) if ka_family
+                else any((c.known_affected or {}).values()))),
         known_affected_as_of=_known_affected_dates(base_engine.cves),
         eol_status=eol_status,
         provenance=provenance,
