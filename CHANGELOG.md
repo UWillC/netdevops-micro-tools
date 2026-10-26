@@ -4,6 +4,33 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [Unreleased] – SDWAN-02.2 authbp (branch `fix/sdwan-02-2-authbp`, not deployed; version bump at merge)
+
+### CVE Analyzer
+- **Three more CISA KEV CVEs for Catalyst SD-WAN Manager** (SDWAN-02.2, @ciso review 01.10):
+  CVE-2026-20122, CVE-2026-20128, CVE-2026-20133 from `cisco-sa-sdwan-authbp-qwCX8D4v`
+  (Critical advisory, rev 1.3.0 2026-04-22; the three CVEs are SIR High; KEV dateAdded
+  2026-04-20, ED 26-03, catalog 2026.10.23). Manager only. Per-train table: <20.9 migrate,
+  20.9.8.2, 20.10/20.11 -> 20.12.6.1, 20.12.5.3 / 20.12.6.1, 20.13-20.15 -> 20.15.4.2,
+  20.16/20.18 -> 20.18.2.1; CVE-2026-20128 without the 20.18 row ("20.18 and later are not
+  affected"). CVE-2026-20126 / 20129 (same advisory, not in KEV) stay out.
+- Source conflicts kept visible: CVSS in the advisory's Details text differs from Cisco's
+  CSAF/CNA score for all three (stored: Details text; the other value is in the record
+  description). The CSAF affected list of 20128 names 26.1.1 although the advisory says 20.18+
+  is not affected: 26.1.1 goes to `cisco_source_conflicts` with "Verify".
+- Coverage note: the Cisco rating is counted from the records ("Cisco Security Impact Rating
+  per CVE: 3 Critical, 3 High") instead of the fixed "all rated Critical"; the S1 conflict
+  sentence also covers "the advisory text says not affected".
+- Seed `scripts/seed_sdwan_controllers_cve_data.py` with provenance; the three existing
+  records are byte-identical. Tests: `tests/test_sdwan_authbp.py` (90); suite 2368 -> 2461
+  passed, 1 skipped.
+
+### Next
+- SDWAN-02.2 rest: device profiles for controllers, controller releases 17.2-19.x, "higher
+  number, built before the fix" dates.
+
+---
+
 ## [v0.7.6] – 2026-10-26 (SD-WAN build numbers no longer come out clean)
 
 ### CVE Analyzer

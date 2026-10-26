@@ -52,9 +52,12 @@ def test_seed_matches_disk():
     assert out.returncode == 0, out.stdout + out.stderr
 
 
-def test_dataset_has_the_three_kev_criticals():
+def test_dataset_has_the_kev_records():
+    # SDWAN-02.1: three Critical CVEs; SDWAN-02.2 authbp: three High CVEs of one
+    # Critical advisory (tests/test_sdwan_authbp.py).
     assert {os.path.basename(p) for p in PATHS} == {
-        "cve-2026-76504.json", "cve-2026-20127.json", "cve-2026-20182.json"}
+        "cve-2026-76504.json", "cve-2026-20127.json", "cve-2026-20182.json",
+        "cve-2026-20122.json", "cve-2026-20128.json", "cve-2026-20133.json"}
 
 
 @pytest.mark.parametrize("path", PATHS, ids=[os.path.basename(p) for p in PATHS])
@@ -62,8 +65,8 @@ def test_record_shape(path):
     with open(path, encoding="utf-8") as f:
         e = CVEEntry(**json.load(f))
     assert e.product_families == ["sd-wan-controllers"]
-    assert e.cisco_sir == "Critical" and e.severity == "critical"
-    assert e.kev is not None and e.kev.catalog_version == "2026.09.30"
+    assert (e.cisco_sir, e.severity) in {("Critical", "critical"), ("High", "high")}
+    assert e.kev is not None and e.kev.catalog_version in {"2026.09.30", "2026.10.23"}
     assert "kev" in e.tags
     assert any("/csaf/" in r for r in e.references)
     for key, fix in e.first_fixed_version.fixes.items():

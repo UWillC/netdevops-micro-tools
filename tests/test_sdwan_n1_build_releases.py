@@ -31,6 +31,9 @@ client = TestClient(app)
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(ROOT, "cve_data", "sdwan_controllers")
 KEV3 = ["CVE-2026-20127", "CVE-2026-20182", "CVE-2026-76504"]
+# SDWAN-02.2 authbp (Manager only): a build past their fix (20.12.6.1) is not placeable either.
+AUTHBP = ["CVE-2026-20122", "CVE-2026-20128", "CVE-2026-20133"]
+MANAGER_KEV = sorted(KEV3 + AUTHBP)
 N1_BUILDS = ["20.12.8.2.01", "20.12.401"]
 # Every build the CSAF list of 76504 names (seed docstring).
 CSAF_BUILDS_76504 = ["20.9.10.1.01", "20.12.8.2.01", "20.15.6.1.01", "20.18.4.1.01",
@@ -96,7 +99,7 @@ def test_build_on_a_train_newer_than_the_table_is_unchanged():
 def test_manager_build_is_reported_not_clean(version):
     ids, body = _analyze("Catalyst SD-WAN Manager", version)
     assert ids == []
-    assert body["cisco_source_conflicts"] == KEV3
+    assert body["cisco_source_conflicts"] == MANAGER_KEV
     note = body["coverage_note"]
     assert "build number" in note
     assert "Verify in Cisco Software Checker" in note
@@ -137,15 +140,15 @@ def test_all_forms_and_platform_names_give_one_result(build):
         for form in FORMS[build]:
             ids, body = _analyze(platform, form)
             results.add((tuple(ids), tuple(body["cisco_source_conflicts"])))
-    assert results == {((), tuple(KEV3))}
+    assert results == {((), tuple(MANAGER_KEV))}
 
 
 def test_rematch_keeps_the_callers_build_state():
     eng = CVEEngine(config=CVEEngineConfig(data_dir="cve_data/sdwan_controllers"))
     eng.load_all()
     assert eng.match("Catalyst SD-WAN Manager", "20.12.401") == []
-    assert sorted(eng.sdwan_unplaced_builds) == KEV3
+    assert sorted(eng.sdwan_unplaced_builds) == MANAGER_KEV
     eng._rematch("Catalyst SD-WAN Manager", "20.12.8.2")
-    assert sorted(eng.sdwan_unplaced_builds) == KEV3
+    assert sorted(eng.sdwan_unplaced_builds) == MANAGER_KEV
     eng.match("Catalyst SD-WAN Manager", "20.12.8.2")
     assert eng.sdwan_unplaced_builds == []

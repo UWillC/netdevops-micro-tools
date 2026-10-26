@@ -929,12 +929,28 @@ def sdwan_coverage_note(entries, conflicts=None, unplaced=None) -> str:
     return (
         f"Catalyst SD-WAN Manager/Controller/Validator coverage: only {n} "
         f"{'advisory' if n == 1 else 'advisories'} in the dataset "
-        f"({', '.join(e.cve_id for e in records)}; {kev} in CISA KEV), all rated Critical by "
-        f"Cisco and matched against each advisory's per-train Fixed Software table. Every other "
+        f"({', '.join(e.cve_id for e in records)}; {kev} in CISA KEV"
+        f"{_sdwan_sir_phrase(records)} matched against each advisory's per-train Fixed "
+        f"Software table. Every other "
         f"SD-WAN controller advisory is not evaluated, never assumed clean. For the rest, use "
         f"Cisco Software Checker."
     ) + _sdwan_conflict_sentence(sorted(set(conflicts or []) - set(unplaced or []))) \
       + _sdwan_build_sentence(unplaced)
+
+
+def _sdwan_sir_phrase(records) -> str:
+    """Cisco's per-CVE Security Impact Rating, counted from the records (SDWAN-02.2
+    authbp: the advisory is Critical, its three KEV CVEs are rated High)."""
+    counts: Dict[str, int] = {}
+    for e in records:
+        sir = getattr(e, "cisco_sir", None) or "unrated"
+        counts[sir] = counts.get(sir, 0) + 1
+    if len(counts) == 1:
+        return f"), all rated {next(iter(counts))} by Cisco and"
+    order = ["Critical", "High", "Medium", "Low"]
+    parts = sorted(counts.items(), key=lambda kv: (order.index(kv[0]) if kv[0] in order else 9, kv[0]))
+    return ("; Cisco Security Impact Rating per CVE: "
+            + ", ".join(f"{c} {s}" for s, c in parts) + "),")
 
 
 def _sdwan_conflict_sentence(conflicts) -> str:
@@ -944,8 +960,9 @@ def _sdwan_conflict_sentence(conflicts) -> str:
         return ""
     return (
         f" Cisco's sources disagree for your release on {', '.join(ids)}: the advisory's CSAF "
-        f"affected-product list includes it, the Fixed Software table names it as fixed. The "
-        f"table (the part PSIRT validates) was followed, so {'it is' if len(ids) == 1 else 'they are'} "
+        f"affected-product list includes it, the Fixed Software table (or the advisory text) "
+        f"names it as fixed or not affected. The table and text (the part PSIRT validates) were "
+        f"followed, so {'it is' if len(ids) == 1 else 'they are'} "
         f"not reported as a match. Verify in Cisco Software Checker."
     )
 
