@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ---
 
-## [Unreleased] – SDWAN-02.2 authbp (branch `fix/sdwan-02-2-authbp`, not deployed; version bump at merge)
+## [v0.7.7] – 2026-10-26 (SD-WAN Manager: 3 KEV CVEs from the authbp advisory)
 
 ### CVE Analyzer
 - **Three more CISA KEV CVEs for Catalyst SD-WAN Manager** (SDWAN-02.2, @ciso review 01.10):
