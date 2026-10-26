@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.7.6] – 2026-10-26 (SD-WAN build numbers no longer come out clean)
+
+### CVE Analyzer
+- **Catalyst SD-WAN controller builds are no longer reported clean** (SDWAN-02.2 N1, @ciso
+  review 01.10). Cisco's CSAF affected lists name builds the Fixed Software tables never
+  use: 20.12.8.2.01 (CVE-2026-76504; the table calls 20.12.8.2 fixed) and 20.12.401 (all
+  three KEV CVEs). Compared as numbers they sat past every fix, so Manager 20.12.8.2.01 and
+  20.12.401 got 0 matches and no conflict sentence: 6/6 (release, CVE) pairs silently
+  clean. A build (fifth component, or 100+ after the train) now never gets "not affected"
+  from the table: `match_sdwan_record` returns None, the CVEs go to
+  `cisco_source_conflicts`, and the coverage note says the build cannot be placed before or
+  after the fix, with "Verify in Cisco Software Checker". Builds below a fix still match;
+  ordinary releases (20.12.8.2, 20.18.3, ...) unchanged.
+- Tests: `tests/test_sdwan_n1_build_releases.py` (42), including every build the CSAF list
+  of 76504 names and input forms / platform names giving one result; suite 2326 -> 2368
+  passed, 1 skipped.
+
+### Next
+- SDWAN-02.2 rest: `cisco-sa-sdwan-authbp` (3 KEV CVEs), device profiles for controllers,
+  controller releases 17.2-19.x, "higher number, built before the fix" dates.
+
+---
+
 ## [v0.7.5] – 2026-10-25 (DTG labels renamed)
 
 ### Network Tools

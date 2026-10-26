@@ -375,7 +375,7 @@ def analyze_cve(req: CVEAnalyzeRequest):
         cisco_source_conflicts=sorted(getattr(base_engine, "cisco_source_conflicts", [])),
         coverage_note=(ise_coverage_note(base_engine.cves) if _data_dir == "cve_data/ise"
                        else nxos_coverage_note(base_engine.cves) if _data_dir == "cve_data/nx_os"
-                       else sdwan_coverage_note(base_engine.cves, getattr(base_engine, "cisco_source_conflicts", [])) if _data_dir == "cve_data/sdwan_controllers"
+                       else sdwan_coverage_note(base_engine.cves, getattr(base_engine, "cisco_source_conflicts", []), getattr(base_engine, "sdwan_unplaced_builds", [])) if _data_dir == "cve_data/sdwan_controllers"
                        else fmc_coverage_note(base_engine.cves)
                        if normalize_user_platform(platform) == ProductFamily.FMC
                        else platform_coverage_note(platform, version)),

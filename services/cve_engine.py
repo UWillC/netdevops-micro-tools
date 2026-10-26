@@ -813,6 +813,26 @@ def sdwan_listed_past_fix(cve, version: str) -> bool:
                for v in (getattr(cve, "csaf_listed_past_fix", None) or []))
 
 
+# SDWAN-02.2 N1 (2026-10-26): build numbers the Fixed Software tables never use.
+# Cisco's CSAF affected lists name builds such as 20.12.8.2.01 (CVE-2026-76504,
+# while the table calls 20.12.8.2 fixed) and 20.12.401 (all three KEV CVEs).
+# Compared as numbers, 20.12.8.2.01 > 20.12.8.2 and 20.12.401 > every 20.12.x
+# fix, so both came out "not affected", silently clean. A build cannot be
+# placed before or after a fix from the table, so that answer is withheld.
+_SDWAN_RELEASE_TOKEN = re.compile(r"\d+(?:\.\d+)+")
+
+
+def sdwan_build_release(version: str) -> bool:
+    """`version` carries a build number the per-train tables do not name:
+    a fifth component ("20.12.8.2.01") or a component of 100 or more after
+    the train ("20.12.401"). Ordinary releases (20.12.5, 20.12.8.2) are not."""
+    m = _SDWAN_RELEASE_TOKEN.search(version or "")
+    if not m:
+        return False
+    parts = m.group(0).split(".")
+    return len(parts) >= 5 or any(int(p) >= 100 for p in parts[2:])
+
+
 def is_sdwan_record(cve) -> bool:
     return SDWAN_FAMILY_KEY in (getattr(cve, "product_families", None) or [])
 
@@ -862,6 +882,8 @@ def match_sdwan_record(cve, version: str) -> Optional[bool]:
        train than anything the advisory lists).
     4. Otherwise (a train inside the table's span it does not name) ->
        affected: fail towards "review this", never towards "clean".
+    A build number (sdwan_build_release, N1) keeps every "affected" answer
+    but never gets a "not affected" one from the table: None instead.
     """
     target = _tokenize_version(version)
     if len(target) < 2 or target == (0,):
@@ -873,7 +895,9 @@ def match_sdwan_record(cve, version: str) -> Optional[bool]:
         fix_ver = _extract_version(fix)
         if fix_ver is None:
             return True
-        return _cmp_tuples(target, fix_ver) < 0
+        if _cmp_tuples(target, fix_ver) < 0:
+            return True
+        return None if sdwan_build_release(version) else False
     ff = getattr(cve, "first_fixed_version", None)
     prefix = SDWAN_FAMILY_KEY + "-"
     trains = []
@@ -887,7 +911,7 @@ def match_sdwan_record(cve, version: str) -> Optional[bool]:
     return True
 
 
-def sdwan_coverage_note(entries, conflicts=None) -> str:
+def sdwan_coverage_note(entries, conflicts=None, unplaced=None) -> str:
     """What the SD-WAN controller answer rests on, said in every such report.
 
     The count and the list come from the loaded records, never a constant.
@@ -909,7 +933,8 @@ def sdwan_coverage_note(entries, conflicts=None) -> str:
         f"Cisco and matched against each advisory's per-train Fixed Software table. Every other "
         f"SD-WAN controller advisory is not evaluated, never assumed clean. For the rest, use "
         f"Cisco Software Checker."
-    ) + _sdwan_conflict_sentence(conflicts)
+    ) + _sdwan_conflict_sentence(sorted(set(conflicts or []) - set(unplaced or []))) \
+      + _sdwan_build_sentence(unplaced)
 
 
 def _sdwan_conflict_sentence(conflicts) -> str:
@@ -922,6 +947,20 @@ def _sdwan_conflict_sentence(conflicts) -> str:
         f"affected-product list includes it, the Fixed Software table names it as fixed. The "
         f"table (the part PSIRT validates) was followed, so {'it is' if len(ids) == 1 else 'they are'} "
         f"not reported as a match. Verify in Cisco Software Checker."
+    )
+
+
+def _sdwan_build_sentence(unplaced) -> str:
+    """N1: the release is a build the Fixed Software tables do not name."""
+    ids = sorted(set(unplaced or []))
+    if not ids:
+        return ""
+    return (
+        f" Your release carries a build number (such as .01 or 401) that the Fixed Software "
+        f"tables do not name, so it cannot be placed before or after the fix for "
+        f"{', '.join(ids)}: {'it is' if len(ids) == 1 else 'they are'} not reported as a match "
+        f"and not assumed clean. Cisco's CSAF affected lists name some such builds (for example "
+        f"20.12.8.2.01, 20.12.401) as affected. Verify in Cisco Software Checker."
     )
 
 
@@ -1337,6 +1376,9 @@ class CVEEngine:
         # ISE-04: ids where Cisco's release list and Fixed Software table
         # disagreed about the queried release and the table was followed.
         self.cisco_source_conflicts: List[str] = []
+        # SDWAN-02.2 N1: subset of cisco_source_conflicts where the queried
+        # release is a build the Fixed Software table cannot place.
+        self.sdwan_unplaced_builds: List[str] = []
         # MATCH-03: the Known Affected list (family key) the last match() used,
         # so confidence is judged on that list only. None = no single list.
         self.known_affected_family: Optional[str] = None
@@ -1438,6 +1480,7 @@ class CVEEngine:
     def match(self, platform: str, version: str) -> List[CVEEntry]:
         matched: List[CVEEntry] = []
         target_ver = _tokenize_version(version)
+        self.sdwan_unplaced_builds = []
 
         # v0.3.5 (2026-04-19): product-family taxonomy strict filter.
         # If we can recognize the user's query platform as a canonical family,
@@ -1524,6 +1567,11 @@ class CVEEngine:
                     # S1: Cisco's two sources disagree. The table (validated by
                     # PSIRT) is followed, the case is reported, never silent.
                     self.cisco_source_conflicts.append(cve.cve_id)
+                elif hit is None and sdwan_build_release(version):
+                    # N1: a build the table cannot place at/after the fix.
+                    # Not a match, not clean: reported with "verify".
+                    self.cisco_source_conflicts.append(cve.cve_id)
+                    self.sdwan_unplaced_builds.append(cve.cve_id)
             return self._sort_matched(matched)
 
         # FMC-FREE-TEXT: FMC records only, matched by release range / per-train
@@ -1879,12 +1927,13 @@ class CVEEngine:
         """
         saved = (getattr(self, "excluded_by_known_affected", []),
                  getattr(self, "cisco_source_conflicts", []),
-                 getattr(self, "known_affected_family", None))
+                 getattr(self, "known_affected_family", None),
+                 getattr(self, "sdwan_unplaced_builds", []))
         try:
             return self.match(platform, version)
         finally:
             (self.excluded_by_known_affected, self.cisco_source_conflicts,
-             self.known_affected_family) = saved
+             self.known_affected_family, self.sdwan_unplaced_builds) = saved
 
     def check_upgrade_target(self, platform: str, version: str,
                              recommendation: Optional[str]) -> Optional[dict]:
