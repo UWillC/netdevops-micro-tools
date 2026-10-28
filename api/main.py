@@ -96,7 +96,7 @@ def root():
         headers={"Cache-Control": "no-cache"},
     )
 
-CSS_FILES = ["style", "style-base", "style-home", "style-tools", "style-kev"]
+CSS_FILES = ["style", "style-base", "style-home", "style-tools", "style-kev", "style-acl"]
 
 @app.get("/{filename}.css")
 def serve_css(filename: str):
@@ -105,7 +105,7 @@ def serve_css(filename: str):
         return FileResponse(os.path.join(WEB_DIR, f"{filename}.css"), media_type="text/css")
     return FileResponse(os.path.join(WEB_DIR, "style-base.css"), media_type="text/css")
 
-JS_FILES = ["app-gate", "app-core", "app-config", "app-golden", "app-security", "app-profiles", "app-ui", "app-network", "app-feeds", "app-kev", "app"]
+JS_FILES = ["app-gate", "app-core", "app-config", "app-golden", "app-security", "app-profiles", "app-ui", "app-network", "app-feeds", "app-kev", "app-acl", "app"]
 
 @app.get("/{filename}.js")
 def serve_js(filename: str):
@@ -161,7 +161,7 @@ def meta_version():
     return MetaInfo(
         version=APP_VERSION,
         build_time=datetime.datetime.utcnow().isoformat() + "Z",
-        feature_flags=["cve_engine_v3", "nvd_enrichment", "nvd_cache", "web_ui_v2", "profiles_v2", "profiles_cve", "security_score", "subnet_calc", "mtu_calc", "config_parser", "cloud_deploy", "export_pdf", "cve_mitigation_advisor", "timezone_converter", "ip_path_tracer", "port_auditor", "config_explainer", "config_drift", "cis_audit", "whoami", "ise_coverage", "threat_feed_local", "kev_badges", "ise_analyzer", "bundled_cve", "kev_catalog", "known_affected_match", "ise_full_coverage", "kev_watch"]
+        feature_flags=["cve_engine_v3", "nvd_enrichment", "nvd_cache", "web_ui_v2", "profiles_v2", "profiles_cve", "security_score", "subnet_calc", "mtu_calc", "config_parser", "cloud_deploy", "export_pdf", "cve_mitigation_advisor", "timezone_converter", "ip_path_tracer", "port_auditor", "config_explainer", "config_drift", "cis_audit", "whoami", "ise_coverage", "threat_feed_local", "kev_badges", "ise_analyzer", "bundled_cve", "kev_catalog", "known_affected_match", "ise_full_coverage", "kev_watch", "acl_whatif"]
     )
 
 # Mount static files (CSS, JS) - must be after all API routes

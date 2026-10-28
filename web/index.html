@@ -24,10 +24,11 @@
   <meta name="twitter:description" content="22 live modules: CVE exposure, hardening audit, config drift, hardened Cisco configs. Browser-based, free, no install." />
   <meta name="twitter:image" content="https://netdevops-tools.thebackroom.ai/static/og-card.jpg" />
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
-  <link rel="stylesheet" href="style-base.css?v=0.7.7" />
-  <link rel="stylesheet" href="style-home.css?v=0.7.7" />
-  <link rel="stylesheet" href="style-tools.css?v=0.7.7" />
-  <link rel="stylesheet" href="style-kev.css?v=0.7.7" />
+  <link rel="stylesheet" href="style-base.css?v=0.7.8" />
+  <link rel="stylesheet" href="style-home.css?v=0.7.8" />
+  <link rel="stylesheet" href="style-tools.css?v=0.7.8" />
+  <link rel="stylesheet" href="style-kev.css?v=0.7.8" />
+  <link rel="stylesheet" href="style-acl.css?v=0.7.8" />
 
   <!-- Feedback widget -->
   <script async src="https://www.thebackroom.ai/widget.js"></script>
@@ -110,7 +111,7 @@
           <button class="nav-group-header" data-group="network">
             <span class="nav-group-icon">🔧</span>
             <span class="nav-group-label">Network Tools</span>
-            <span class="nav-group-badge">10</span>
+            <span class="nav-group-badge">11</span>
             <span class="nav-group-arrow">▶</span>
           </button>
           <div class="nav-group-items collapsed" id="group-network">
@@ -123,6 +124,7 @@
             <button class="tab-button" data-tab="ip-path-tracer"><span class="tool-icon">🔀</span> IP Path Tracer</button>
             <button class="tab-button" data-tab="port-auditor"><span class="tool-icon">🔌</span> Port Auditor</button>
             <button class="tab-button" data-tab="config-drift"><span class="tool-icon">🔃</span> Config Drift</button>
+            <button class="tab-button" data-tab="acl-whatif"><span class="tool-icon">🚦</span> ACL What-If</button>
             <button class="tab-button" data-tab="whoami"><span class="tool-icon">📡</span> What's My IP</button>
           </div>
         </div>
@@ -329,6 +331,11 @@
                 <span class="tool-icon">🔃</span>
                 <span class="tool-name">Config Drift</span>
                 <span class="tool-desc">Compare two configs</span>
+              </button>
+              <button class="home-tool-card" data-tab="acl-whatif">
+                <span class="tool-icon">🚦</span>
+                <span class="tool-name">ACL What-If</span>
+                <span class="tool-desc">Dead rules + packet trace</span>
               </button>
             </div>
           </div>
@@ -3075,6 +3082,95 @@ from the device right now..." required></textarea>
         </div>
       </section>
 
+      <!-- ACL WHAT-IF TAB (ACL-01.4). Results are built in web/app-acl.js with
+           textContent only (@ciso N1): never innerHTML for anything from the API. -->
+      <section id="tab-acl-whatif" class="tab-content">
+        <h2>ACL What-If <span class="version-badge">v0 - IOS / IOS-XE IPv4 ACL</span></h2>
+        <p class="tool-description">Paste IPv4 ACLs (numbered or named, standard or extended). The lint shows rules that can never match, duplicates, masks that do not mean what they say and a missing logged deny. The packet table is built from the edges of every rule, rules with a finding first, and shows which line each packet hits. Optionally trace one packet of your own. Object-groups, IPv6, VRF and time-range lines are listed as not evaluated, never skipped silently.</p>
+
+        <form id="acl-form" class="card" style="margin-top:12px;">
+          <div class="form-section-title">ACL (show run, template or change file)</div>
+          <textarea id="acl-config" rows="16" style="width:100%; min-height:280px;" spellcheck="false" placeholder="ip access-list extended EDGE-IN
+ 10 permit tcp 10.1.1.0 0.0.0.255 host 192.0.2.10 eq 22
+ 20 deny tcp any host 192.0.2.10 eq 22 log
+ 30 deny ip any any log" required></textarea>
+          <div class="acl-form-actions">
+            <button type="button" id="acl-example" class="btn-secondary">Load example</button>
+            <span class="acl-limits">Up to 100,000 characters, 1,000 lines, 500 rules, 50 ACLs. Nothing is stored.</span>
+          </div>
+
+          <div class="form-row" style="margin-top: 0.75rem;">
+            <label class="checkbox-label">
+              <input type="checkbox" id="acl-trace-on"> Trace one packet
+            </label>
+          </div>
+          <fieldset id="acl-trace-fields" class="acl-trace-fields" hidden>
+            <div class="acl-trace-grid">
+              <div class="form-row">
+                <label for="acl-trace-acl">ACL name or number</label>
+                <input type="text" id="acl-trace-acl" maxlength="64" placeholder="optional with one ACL">
+              </div>
+              <div class="form-row">
+                <label for="acl-trace-src">Source IP</label>
+                <input type="text" id="acl-trace-src" maxlength="15" placeholder="10.1.1.5">
+              </div>
+              <div class="form-row">
+                <label for="acl-trace-dst">Destination IP</label>
+                <input type="text" id="acl-trace-dst" maxlength="15" placeholder="192.0.2.10 (extended)">
+              </div>
+              <div class="form-row">
+                <label for="acl-trace-proto">Protocol</label>
+                <input type="text" id="acl-trace-proto" maxlength="4" placeholder="tcp | udp | icmp | 0-255">
+              </div>
+              <div class="form-row">
+                <label for="acl-trace-sport">Source port</label>
+                <input type="number" id="acl-trace-sport" min="0" max="65535" placeholder="49152">
+              </div>
+              <div class="form-row">
+                <label for="acl-trace-dport">Destination port</label>
+                <input type="number" id="acl-trace-dport" min="0" max="65535" placeholder="22">
+              </div>
+            </div>
+            <label class="checkbox-label">
+              <input type="checkbox" id="acl-trace-est"> Established TCP session (ACK/RST set)
+            </label>
+          </fieldset>
+
+          <button type="submit" class="btn btn-primary" style="margin-top: 0.75rem;">Analyze ACL</button>
+        </form>
+
+        <div id="acl-status" class="acl-status" role="status" hidden></div>
+
+        <div id="acl-summary" class="card" style="display:none; margin-top:1rem;"></div>
+
+        <div id="acl-lint" class="card" style="display:none; margin-top:1rem;">
+          <div class="output-header"><h3>Lint</h3></div>
+          <div id="acl-lint-content" class="acl-table-wrap"></div>
+        </div>
+
+        <div id="acl-trace" class="card" style="display:none; margin-top:1rem;">
+          <div class="output-header"><h3>Your packet</h3></div>
+          <div id="acl-trace-content" class="acl-table-wrap"></div>
+        </div>
+
+        <div id="acl-packets" class="card" style="display:none; margin-top:1rem;">
+          <div class="output-header"><h3>Edge packets</h3></div>
+          <p class="acl-note">Built from the edges of each rule (exact port, port +/- 1, last address inside the mask, first address outside it), at most 10 per ACL. Placeholders: any = 198.51.100.10 / 203.0.113.10, open ports = 49152 / 443, an ip rule is probed with tcp.</p>
+          <div id="acl-packets-content" class="acl-table-wrap"></div>
+        </div>
+
+        <div id="acl-results" style="display:none; margin-top:1rem;">
+          <div class="output-header">
+            <h3>Report (text)</h3>
+            <div>
+              <button class="btn btn-small copy-btn" data-target="acl-output">Copy</button>
+              <button class="btn btn-small download-btn" data-filename="acl-what-if.txt" data-target="acl-output">Download</button>
+            </div>
+          </div>
+          <textarea id="acl-output" class="output-text" rows="16" readonly></textarea>
+        </div>
+      </section>
+
       <!-- HARDENING AUDIT TAB (legacy ids: cis-*) -->
       <section id="tab-cis-audit" class="tab-content">
         <h2>Hardening Audit <span class="version-badge">v1.4 — Cisco IOS / IOS-XE</span></h2>
@@ -3259,24 +3355,26 @@ line vty 0 15
   </footer>
 
   <!-- Gate: email gate for pro tools (must load BEFORE core) -->
-  <script src="app-gate.js?v=0.7.7"></script>
+  <script src="app-gate.js?v=0.7.8"></script>
   <!-- Core: theme, tabs, navigation, utilities -->
-  <script src="app-core.js?v=0.7.7"></script>
+  <script src="app-core.js?v=0.7.8"></script>
   <!-- Config Generators: SNMPv3, NTP, AAA, iPerf3 -->
-  <script src="app-config.js?v=0.7.7"></script>
+  <script src="app-config.js?v=0.7.8"></script>
   <!-- Golden Config form -->
-  <script src="app-golden.js?v=0.7.7"></script>
+  <script src="app-golden.js?v=0.7.8"></script>
   <!-- CVE Analyzer -->
-  <script src="app-security.js?v=0.7.7"></script>
+  <script src="app-security.js?v=0.7.8"></script>
   <!-- Profiles, Vuln Widget, Security Score, Export -->
-  <script src="app-profiles.js?v=0.7.7"></script>
+  <script src="app-profiles.js?v=0.7.8"></script>
   <!-- Hints, Tooltips, Golden Config UI, SNMP Multi-Host -->
-  <script src="app-ui.js?v=0.7.7"></script>
+  <script src="app-ui.js?v=0.7.8"></script>
   <!-- Subnet, MTU, Config Parser, CVE Mitigation, Timezone, Military DTG, IP Path Tracer -->
-  <script src="app-network.js?v=0.7.7"></script>
+  <script src="app-network.js?v=0.7.8"></script>
   <!-- Threat Feed, Port Auditor -->
-  <script src="app-feeds.js?v=0.7.7"></script>
+  <script src="app-feeds.js?v=0.7.8"></script>
   <!-- KEV Watch (KW-01) -->
-  <script src="app-kev.js?v=0.7.7"></script>
+  <script src="app-kev.js?v=0.7.8"></script>
+  <!-- ACL What-If (ACL-01.4) -->
+  <script src="app-acl.js?v=0.7.8"></script>
 </body>
 </html>
