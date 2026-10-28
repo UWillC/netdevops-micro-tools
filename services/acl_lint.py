@@ -82,10 +82,10 @@ def address_intersects(a: AddressSpec, b: AddressSpec) -> bool:
     return (a.address & fixed) == (b.address & fixed)
 
 
-# Pure function of an immutable tuple, called for every rule pair (O(n^2) in
-# _check_shadow). Cached (ACL-01.3 timing): the worst case of 500 rules that
-# differ only by port went from ~570 ms to the figure in the ACL-01.3 report.
-# Bounded size, so a hostile paste cannot grow it without limit.
+# Pure function of an immutable tuple. Cached since ACL-01.3, when _check_shadow
+# still called it for every rule pair; since W4 (2026-10-28) the shadow index
+# calls it once per rule and field, the pairwise helpers remain for tests and
+# single comparisons. Bounded size, so a hostile paste cannot grow it without limit.
 @lru_cache(maxsize=4096)
 def _merge(intervals: Tuple[Tuple[int, int], ...]) -> Tuple[Tuple[int, int], ...]:
     out: List[List[int]] = []
@@ -160,6 +160,199 @@ def rules_identical(a: Rule, b: Rule) -> bool:
     return a.action == b.action and rule_contains(a, b) and rule_contains(b, a)
 
 
+# ---------------------------------------------------------------- shadow index
+#
+# _check_shadow needs, for every rule b, the FIRST earlier rule that contains b
+# (L01/L02/L03) and, if there is none, the first earlier rule with the other
+# action that overlaps b without being inside it (L11). Comparing every pair is
+# O(n^2) calls of rule_contains: ~350 ms locally (~1.6-1.8 s on Render) for 500
+# rules that differ only in the last field (@ciso W4, 2026-10-28).
+#
+# The index answers the same three questions for all earlier rules at once, as
+# Python ints used as bitsets over rule positions (bit i = rules[i]):
+#   contain(b) = rules a with rule_contains(a, b)
+#   overlap(b) = rules a with rules_intersect(a, b)
+#   inside(b)  = rules a with rule_contains(b, a)
+# Each field is answered separately and the answers are ANDed; the lowest set bit
+# below b's position is the first such earlier rule. Exact, not a heuristic: the
+# same set algebra as the pairwise functions above (tests/test_acl_lint_index.py
+# compares both on fixtures and random ACLs).
+#   protocol, established: a handful of masks.
+#   addresses: bit-sliced, 32 bit positions x (wildcard / fixed 0 / fixed 1)
+#     masks, so non-contiguous wildcards cost the same as prefixes.
+#   ports: the port line is cut into segments at every interval edge used by any
+#     rule; per segment, the mask of rules covering it; range AND / range OR over
+#     segments from sparse tables in O(1) per interval.
+# Cost: O(n * 32) for addresses, O(S log S) for S <= 4n + 2 port segments, plus
+# a few int operations per rule; answers are cached per distinct field value.
+
+
+def _low_index(mask: int) -> int:
+    return (mask & -mask).bit_length() - 1
+
+
+class _PortIndex:
+    """Interval sets of one port field (src or dst) of every rule, as bitsets.
+
+    ``masks`` accepts only sets whose edges were known at build time: the sets
+    themselves plus ``queries`` (a segment must lie wholly inside or outside).
+    """
+
+    def __init__(self, sets: List[Tuple[Tuple[int, int], ...]], all_mask: int,
+                 queries: Tuple[Tuple[Tuple[int, int], ...], ...] = ()):
+        self.all = all_mask
+        edges = [iv for s in list(sets) + list(queries) for iv in s]
+        points = sorted({0, 65536} | {lo for lo, _ in edges} | {hi + 1 for _, hi in edges})
+        self.pos = {p: k for k, p in enumerate(points)}
+        nseg = len(points) - 1  # segment k = ports points[k] .. points[k + 1] - 1
+        self.nseg = nseg
+        toggle = [0] * (nseg + 1)
+        for i, s in enumerate(sets):  # merged intervals are disjoint: XOR on/off per rule
+            bit = 1 << i
+            for lo, hi in s:
+                toggle[self.pos[lo]] ^= bit
+                toggle[self.pos[hi + 1]] ^= bit
+        cover: List[int] = []
+        acc = 0
+        for k in range(nseg):
+            acc ^= toggle[k]
+            cover.append(acc)
+        self.and_t = [cover]
+        self.or_t = [cover]
+        width = 1
+        while width * 2 <= nseg:
+            pa, po = self.and_t[-1], self.or_t[-1]
+            self.and_t.append([pa[k] & pa[k + width] for k in range(nseg - 2 * width + 1)])
+            self.or_t.append([po[k] | po[k + width] for k in range(nseg - 2 * width + 1)])
+            width *= 2
+        self.cache: Dict[Tuple[Tuple[int, int], ...], Tuple[int, int, int]] = {}
+
+    def _and(self, lo: int, hi: int) -> int:
+        j = (hi - lo + 1).bit_length() - 1
+        t = self.and_t[j]
+        return t[lo] & t[hi - (1 << j) + 1]
+
+    def _or(self, lo: int, hi: int) -> int:
+        j = (hi - lo + 1).bit_length() - 1
+        t = self.or_t[j]
+        return t[lo] | t[hi - (1 << j) + 1]
+
+    def masks(self, s: Tuple[Tuple[int, int], ...]) -> Tuple[int, int, int]:
+        """(rules whose set contains s, rules whose set meets s, rules whose set is inside s)."""
+        hit = self.cache.get(s)
+        if hit is not None:
+            return hit
+        contain, overlap, outside = self.all, 0, 0
+        start = 0
+        for lo, hi in s:
+            a, b = self.pos[lo], self.pos[hi + 1] - 1
+            contain &= self._and(a, b)
+            overlap |= self._or(a, b)
+            if a > start:
+                outside |= self._or(start, a - 1)
+            start = b + 1
+        if start < self.nseg:
+            outside |= self._or(start, self.nseg - 1)
+        hit = (contain, overlap, self.all & ~outside)
+        self.cache[s] = hit
+        return hit
+
+
+class _AddrIndex:
+    """Address/wildcard of one field (src or dst) of every rule, bit-sliced."""
+
+    def __init__(self, specs: List[AddressSpec], all_mask: int):
+        self.all = all_mask
+        wild = [0] * 32
+        zero = [0] * 32
+        one = [0] * 32
+        for i, a in enumerate(specs):
+            bit = 1 << i
+            for k in range(32):
+                b = 1 << k
+                if a.wildcard & b:
+                    wild[k] |= bit
+                elif a.address & b:
+                    one[k] |= bit
+                else:
+                    zero[k] |= bit
+        self.wild, self.zero, self.one = wild, zero, one
+        self.cache: Dict[Tuple[int, int], Tuple[int, int, int]] = {}
+
+    def masks(self, a: AddressSpec) -> Tuple[int, int, int]:
+        """(rules containing a, rules meeting a, rules inside a); same algebra as address_contains/intersects."""
+        key = (a.address, a.wildcard)
+        hit = self.cache.get(key)
+        if hit is not None:
+            return hit
+        contain = overlap = inside = self.all
+        for k in range(32):
+            b = 1 << k
+            w = self.wild[k]
+            if a.wildcard & b:
+                contain &= w  # a leaves the bit open: a container must leave it open too
+            else:
+                same = self.one[k] if a.address & b else self.zero[k]
+                contain &= w | same
+                overlap &= w | same
+                inside &= same
+        hit = (contain, overlap, inside)
+        self.cache[key] = hit
+        return hit
+
+
+class _ShadowIndex:
+    """Bitset answers of rule_contains / rules_intersect against every rule of one ACL."""
+
+    def __init__(self, rules: List[Rule]):
+        n = len(rules)
+        self.all = full = (1 << n) - 1
+        self.by_proto: Dict[Optional[int], int] = {}
+        self.port_proto = 0
+        self.established = 0
+        self.by_action: Dict[str, int] = {}
+        for i, r in enumerate(rules):
+            bit = 1 << i
+            self.by_proto[r.protocol_number] = self.by_proto.get(r.protocol_number, 0) | bit
+            self.by_action[r.action] = self.by_action.get(r.action, 0) | bit
+            if r.protocol_number in _PORT_PROTOCOLS:
+                self.port_proto |= bit
+            if r.established:
+                self.established |= bit
+        self.ip = self.by_proto.get(None, 0)
+        self.src = _AddrIndex([r.src for r in rules], full)
+        self.dst = _AddrIndex([r.dst for r in rules], full)
+        self.src_ports = _PortIndex([_ports(r.src_ports) for r in rules], full)
+        self.dst_ports = _PortIndex([_ports(r.dst_ports) for r in rules], full)
+
+    def masks(self, r: Rule) -> Tuple[int, int, int]:
+        """(contain, overlap, inside) bitsets for rule r; see the section comment."""
+        full = self.all
+        p = r.protocol_number
+        if p is None:
+            contain, overlap, inside = self.ip, full, full
+        else:
+            same = self.by_proto.get(p, 0)
+            contain, overlap, inside = self.ip | same, self.ip | same, same
+        if r.established:
+            inside &= self.established
+        else:
+            contain &= full & ~self.established
+        for index, value in ((self.src, r.src), (self.dst, r.dst)):
+            c, o, i = index.masks(value)
+            contain &= c
+            overlap &= o
+            inside &= i
+        # Ports matter only for pairs where one side is tcp/udp (_ports_relevant).
+        ignore = 0 if p in _PORT_PROTOCOLS else full & ~self.port_proto
+        for index, spec in ((self.src_ports, r.src_ports), (self.dst_ports, r.dst_ports)):
+            c, o, i = index.masks(_ports(spec))
+            contain &= c | ignore
+            overlap &= o | ignore
+            inside &= i | ignore
+        return contain, overlap, inside
+
+
 # ---------------------------------------------------------------- helpers
 
 
@@ -196,10 +389,18 @@ def _verb(action: str) -> str:
 
 
 def _check_shadow(rules: List[Any], findings: List[Dict[str, Any]]) -> None:
-    """L01 / L02 / L03 (first containing earlier rule decides) and L11."""
+    """L01 / L02 / L03 (first containing earlier rule decides) and L11.
+
+    Same result as comparing b with every earlier rule in order (see the shadow
+    index section above), without the O(n^2) pairwise calls.
+    """
+    index = _ShadowIndex([e.rule for e in rules])
     for j, b in enumerate(rules):
         rb = b.rule
-        container = next((a for a in rules[:j] if rule_contains(a.rule, rb)), None)
+        earlier = (1 << j) - 1
+        contain, overlap, inside = index.masks(rb)
+        hit = contain & earlier
+        container = rules[_low_index(hit)] if hit else None
         if container is not None:
             ra = container.rule
             if rules_identical(ra, rb):
@@ -228,15 +429,15 @@ def _check_shadow(rules: List[Any], findings: List[Dict[str, Any]]) -> None:
                 proposal = "Remove line %d; it changes nothing." % b.line
                 findings.append(_finding("L02", [b, container], effect, proposal))
             continue
-        for a in rules[:j]:
+        # First earlier rule with the other action that overlaps b and is not inside b.
+        hit = overlap & ~inside & earlier & ~index.by_action.get(rb.action, 0)
+        if hit:
+            a = rules[_low_index(hit)]
             ra = a.rule
-            if ra.action == rb.action or not rules_intersect(ra, rb) or rule_contains(rb, ra):
-                continue
             effect = ("Lines %d and %d overlap partially with different actions: for the shared traffic line %d wins (%s), the rest reaches line %d (%s)."
                       % (a.line, b.line, a.line, ra.action, b.line, rb.action))
             proposal = "Confirm the order is intended; split the rules if it is not."
             findings.append(_finding("L11", [b, a], effect, proposal))
-            break
 
 
 def _check_addresses(entry: Any, acl_type: str, findings: List[Dict[str, Any]]) -> None:
@@ -328,21 +529,35 @@ def _check_established_pairs(parsed: ParseResult, findings_by_acl: Dict[str, Lis
     acls = list(parsed.acls.values())
     if len(acls) < 2:
         return
+    # A rule is paired when a permit (ip or tcp) rule of ANOTHER ACL has dst ports
+    # that meet its src ports. Instead of scanning every other rule per candidate
+    # (O(n * m), ~120 ms locally for 2 x 250 rules), one port index over all
+    # possible partners of all ACLs; bit i = partners[i], acl_bits = their ACL.
+    partners: List[Rule] = []
+    acl_bits: Dict[str, int] = {}
+    wanted = set()
     for acl in acls:
-        others = [e for o in acls if o is not acl for e in o.entries
-                  if e.kind == "rule" and e.status == STATUS_OK and e.rule is not None]
+        for e in acl.entries:
+            if e.kind != "rule" or e.status != STATUS_OK or e.rule is None:
+                continue
+            if e.rule.action == "permit" and e.rule.protocol_number in (None, 6):
+                acl_bits[acl.name] = acl_bits.get(acl.name, 0) | (1 << len(partners))
+                partners.append(e.rule)
+            if e.rule.established and e.rule.src_ports is not None:
+                wanted.add(_ports(e.rule.src_ports))
+    if not wanted:
+        return
+    index = _PortIndex([_ports(r.dst_ports) for r in partners], (1 << len(partners)) - 1,
+                       tuple(sorted(wanted)))
+    for acl in acls:
         for e in acl.entries:
             if e.kind != "rule" or e.status != STATUS_OK or e.rule is None:
                 continue
             rule = e.rule
             if not rule.established or rule.src_ports is None:
                 continue
-            want = _ports(rule.src_ports)
-            paired = any(
-                o.rule.action == "permit" and o.rule.protocol_number in (None, 6) and
-                ports_intersect(_ports(o.rule.dst_ports), want)
-                for o in others)
-            if paired:
+            _, overlap, _ = index.masks(_ports(rule.src_ports))
+            if overlap & ~acl_bits.get(acl.name, 0):
                 continue
             effect = ("Heuristic: line %d lets return TCP traffic from src %s (established), but no other ACL in this paste "
                       "permits that port as destination; the outgoing half may be missing, or sit in an ACL that was not pasted."
