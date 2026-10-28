@@ -65,6 +65,7 @@ const toolIcons = {
   "ip-path-tracer": "🔀",
   "port-auditor": "🔌",
   "config-drift": "🔃",
+  "acl-whatif": "🚦",
   "cis-audit": "📋",
   "kev-watch": "🎯",
   "profiles": "💾"
@@ -87,6 +88,7 @@ const toolNames = {
   "ip-path-tracer": "Path Tracer",
   "port-auditor": "Port Auditor",
   "config-drift": "Config Drift",
+  "acl-whatif": "ACL What-If",
   "cis-audit": "Hardening Audit",
   "kev-watch": "KEV Watch",
   "profiles": "Profiles"

@@ -15,8 +15,8 @@ How packets are chosen (deterministic, no randomness):
    port condition, ``src`` / ``dst`` first address outside the wildcard set,
    ``src`` / ``dst`` last address inside the set (boundary), src port edges,
    and a non-established packet for an ``established`` rule.
-2. Candidates are taken round-robin: first the ``hit`` of every rule in ACL
-   order, then the next edge type for every rule, and so on, skipping a packet
+2. Candidates are taken round-robin: first the ``hit`` of every rule, then
+   the next edge type for every rule, and so on, skipping a packet
    that is already in the table, until ``MAX_PACKETS_PER_ACL`` (10). A packet
    that another rule's edge produces again gets that rule in ``also_built_for``
    (only for rows already in the table): the ``hit`` packet of a shadowed rule
@@ -24,6 +24,12 @@ How packets are chosen (deterministic, no randomness):
    A small ACL can give fewer than 5 distinct packets (a one-line standard ACL
    has at most 4 edges); the module never pads the table with packets that do
    not come from a rule edge.
+   Rule order inside every round (decision of the user, 28.10, ACL-01.4): rules
+   with a lint finding first, then the rest, each group in ACL order. "Rule with
+   a finding" = the line a finding is about (``finding["line"]``, not its
+   context lines). Without that, an ACL longer than 10 rules filled the table
+   with the ``hit`` packets of its first 10 rules and a shadowed rule further
+   down never got a row. The cap (10) is unchanged.
 3. Every packet is traced with ``services.acl_engine.trace``. Each row keeps
    the rule it was built from (``from_line``) and whether it was built inside
    or outside that rule (``relation``): a ``hit`` packet that lands on another
@@ -41,7 +47,7 @@ packet is what the single trace in the API returns.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from services.acl_engine import (
     STATUS_OK,
@@ -228,12 +234,25 @@ def _packet_out(fields: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def flagged_lines(lint_result: Dict[str, Any]) -> Dict[str, Set[int]]:
+    """ACL name -> lines that a lint finding is about (``services.acl_lint.lint`` output)."""
+    return {a["acl"]: {f["line"] for f in a["findings"]} for a in lint_result.get("acls", [])}
+
+
 def auto_packets_for_acl(parsed: ParseResult, acl: Acl,
-                         limit: int = MAX_PACKETS_PER_ACL) -> List[Dict[str, Any]]:
-    """Up to ``limit`` edge packets for one ACL, each with its trace verdict."""
+                         limit: int = MAX_PACKETS_PER_ACL,
+                         priority: Optional[Set[int]] = None) -> List[Dict[str, Any]]:
+    """Up to ``limit`` edge packets for one ACL, each with its trace verdict.
+
+    ``priority``: lines with a lint finding; their rules go first in every round.
+    """
     per_rule = [(e.line, _rule_candidates(e.rule, acl.acl_type))
                 for e in acl.entries
                 if e.kind == "rule" and e.status == STATUS_OK and e.rule is not None]
+    if priority:
+        # Stable: flagged rules keep their ACL order, then the unflagged ones.
+        per_rule = ([r for r in per_rule if r[0] in priority] +
+                    [r for r in per_rule if r[0] not in priority])
     rows: List[Dict[str, Any]] = []
     seen: Dict[Tuple[Any, ...], Dict[str, Any]] = {}
     for edge in EDGE_ORDER:
@@ -267,7 +286,14 @@ def auto_packets_for_acl(parsed: ParseResult, acl: Acl,
     return rows
 
 
-def auto_packets(parsed: ParseResult, limit: int = MAX_PACKETS_PER_ACL) -> List[Dict[str, Any]]:
-    """``[{acl, packets:[...]}]`` for every ACL in the paste, in paste order."""
-    return [{"acl": acl.name, "packets": auto_packets_for_acl(parsed, acl, limit)}
+def auto_packets(parsed: ParseResult, limit: int = MAX_PACKETS_PER_ACL,
+                 lint_result: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    """``[{acl, packets:[...]}]`` for every ACL in the paste, in paste order.
+
+    With ``lint_result`` (the lint of the same paste), rules with a finding come
+    first when the table is filled.
+    """
+    flagged = flagged_lines(lint_result) if lint_result else {}
+    return [{"acl": acl.name,
+             "packets": auto_packets_for_acl(parsed, acl, limit, flagged.get(acl.name))}
             for acl in parsed.acls.values()]

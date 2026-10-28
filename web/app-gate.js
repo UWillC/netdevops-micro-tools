@@ -19,7 +19,7 @@ const BETA_DEV_API_ORIGIN = "http://127.0.0.1:8000";
 
 // Tools that are FREE (no email required)
 // Threat Feed is on home page, always visible. KEV Watch (KW-01) is free like it.
-const FREE_TOOLS = ["home", "iperf", "subnet", "mtu", "timezone", "kev-watch"];
+const FREE_TOOLS = ["home", "iperf", "subnet", "mtu", "timezone", "kev-watch", "acl-whatif"];
 
 
 // -----------------------------
@@ -285,7 +285,7 @@ function addGateBanner() {
       <span class="gate-notice-icon">🔓</span>
       <div class="gate-notice-text">
         <strong>Public beta: every tool is free.</strong>
-        <span>6 tools are open now. Enter your email to unlock the other 15.</span>
+        <span>7 tools are open now. Enter your email to unlock the other 15.</span>
       </div>
       <button class="btn-primary gate-notice-btn" id="gate-notice-btn">Unlock beta tools</button>
     </div>
@@ -309,7 +309,7 @@ function updateHomeFooter() {
   if (isGateUnlocked()) {
     footer.textContent = "All tools unlocked. Thanks for testing.";
   } else {
-    footer.textContent = "Public beta. 6 tools open, 15 more with your email.";
+    footer.textContent = "Public beta. 7 tools open, 15 more with your email.";
   }
 }
 

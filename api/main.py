@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.exception_handlers import request_validation_exception_handler
 from api.routers import snmpv3, ntp, golden_config, aaa, cve, profiles, iperf, subnet, mtu, config_parser, export, mitigation, timezone, ip_path_tracer, port_auditor, config_explainer, config_drift, cis_audit, subscribe, whoami, kev_watch, acl
 from models.meta import MetaInfo
 import datetime
@@ -49,6 +51,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.exception_handler(RequestValidationError)
+async def _validation_error(request, exc):
+    """ACL What-If (@ciso N2): its 422 carries no ``input`` echo; other tools keep FastAPI's default."""
+    if request.url.path == acl.ANALYZE_PATH:
+        return JSONResponse(status_code=422, content=acl.validation_error_body(exc.errors()))
+    return await request_validation_exception_handler(request, exc)
+
+
 app.include_router(snmpv3.router, prefix="/generate", tags=["SNMPv3"])
 app.include_router(ntp.router, prefix="/generate", tags=["NTP"])
 app.include_router(golden_config.router, prefix="/generate", tags=["Golden Config"])
@@ -86,7 +96,7 @@ def root():
         headers={"Cache-Control": "no-cache"},
     )
 
-CSS_FILES = ["style", "style-base", "style-home", "style-tools", "style-kev"]
+CSS_FILES = ["style", "style-base", "style-home", "style-tools", "style-kev", "style-acl"]
 
 @app.get("/{filename}.css")
 def serve_css(filename: str):
@@ -95,7 +105,7 @@ def serve_css(filename: str):
         return FileResponse(os.path.join(WEB_DIR, f"{filename}.css"), media_type="text/css")
     return FileResponse(os.path.join(WEB_DIR, "style-base.css"), media_type="text/css")
 
-JS_FILES = ["app-gate", "app-core", "app-config", "app-golden", "app-security", "app-profiles", "app-ui", "app-network", "app-feeds", "app-kev", "app"]
+JS_FILES = ["app-gate", "app-core", "app-config", "app-golden", "app-security", "app-profiles", "app-ui", "app-network", "app-feeds", "app-kev", "app-acl", "app"]
 
 @app.get("/{filename}.js")
 def serve_js(filename: str):
@@ -151,7 +161,7 @@ def meta_version():
     return MetaInfo(
         version=APP_VERSION,
         build_time=datetime.datetime.utcnow().isoformat() + "Z",
-        feature_flags=["cve_engine_v3", "nvd_enrichment", "nvd_cache", "web_ui_v2", "profiles_v2", "profiles_cve", "security_score", "subnet_calc", "mtu_calc", "config_parser", "cloud_deploy", "export_pdf", "cve_mitigation_advisor", "timezone_converter", "ip_path_tracer", "port_auditor", "config_explainer", "config_drift", "cis_audit", "whoami", "ise_coverage", "threat_feed_local", "kev_badges", "ise_analyzer", "bundled_cve", "kev_catalog", "known_affected_match", "ise_full_coverage", "kev_watch"]
+        feature_flags=["cve_engine_v3", "nvd_enrichment", "nvd_cache", "web_ui_v2", "profiles_v2", "profiles_cve", "security_score", "subnet_calc", "mtu_calc", "config_parser", "cloud_deploy", "export_pdf", "cve_mitigation_advisor", "timezone_converter", "ip_path_tracer", "port_auditor", "config_explainer", "config_drift", "cis_audit", "whoami", "ise_coverage", "threat_feed_local", "kev_badges", "ise_analyzer", "bundled_cve", "kev_catalog", "known_affected_match", "ise_full_coverage", "kev_watch", "acl_whatif"]
     )
 
 # Mount static files (CSS, JS) - must be after all API routes

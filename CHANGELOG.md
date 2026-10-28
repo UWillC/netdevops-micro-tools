@@ -4,6 +4,41 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.7.8] – 2026-10-28 (ACL What-If: lint, edge packets and packet trace in the UI)
+
+### Network Tools
+- **New tab "ACL What-If"** (ACL-01.4, module 21 of the sidebar; with the Threat Feed widget
+  the public "22 live modules" is now true). Paste IPv4 ACLs (IOS / IOS-XE, numbered or
+  named, standard or extended): lint table (L01-L11, P01, NOT EVALUATED lines), edge-packet
+  table per ACL (up to 10, with the line each packet hits) and an optional trace of one
+  packet with the full path. Text report with Copy / Download. 413 / 422 / 429 / 503 get a
+  readable sentence (with Retry-After where the API sends it). Engine: ACL-01.1-3
+  (`POST /tools/acl/analyze`, live since the ACL-01.3 merge). Free without signup, like
+  KEV Watch (user decision 2026-10-28: ACL-01 is a pull magnet): 7 tools open, 15 behind
+  the email gate.
+- **@ciso N1:** `web/app-acl.js` builds every node with `createElement` + `textContent` /
+  `createTextNode`; no markup API in the module. The API echoes the paste (ACL names,
+  quoted lines, tokens in the lint sentences), so this is enforced by a static test and by
+  running the renderers in Node on an answer with `<img src=x onerror=alert(1)>` in every
+  string (`tests/test_acl_ui.py`).
+- **Edge packets: rules with a lint finding first** (decision of the user, 28.10), then ACL
+  order; cap of 10 unchanged. A shadowed rule past the first 10 now gets its row. Engine
+  label `acl-01.4`.
+
+### API
+- **@ciso N2:** a schema error (422) on `/tools/acl/analyze` no longer echoes the offending
+  value: only `type`, `loc`, `msg`, at most 10 entries, short strings. A 50 000-character
+  `trace.src` came back whole (50 KB); now < 1 KB. Other endpoints keep FastAPI's default.
+- `app-acl.js` / `style-acl.css` added to the `JS_FILES` / `CSS_FILES` whitelist.
+
+### Docs
+- README roadmap: module count and grouping as in the UI (22 = 21 tools + Threat Feed).
+
+### Next
+- Dogfooding on one real ACL of the user after deploy (ACL-01 acceptance).
+
+---
+
 ## [v0.7.7] – 2026-10-26 (SD-WAN Manager: 3 KEV CVEs from the authbp advisory)
 
 ### CVE Analyzer
