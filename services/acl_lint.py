@@ -35,6 +35,7 @@ Deterministic: the same input gives byte-identical JSON.
 from __future__ import annotations
 
 import json
+from functools import lru_cache
 from typing import Any, Dict, List, Optional, Tuple
 
 from services.acl_engine import (
@@ -81,6 +82,11 @@ def address_intersects(a: AddressSpec, b: AddressSpec) -> bool:
     return (a.address & fixed) == (b.address & fixed)
 
 
+# Pure function of an immutable tuple, called for every rule pair (O(n^2) in
+# _check_shadow). Cached (ACL-01.3 timing): the worst case of 500 rules that
+# differ only by port went from ~570 ms to the figure in the ACL-01.3 report.
+# Bounded size, so a hostile paste cannot grow it without limit.
+@lru_cache(maxsize=4096)
 def _merge(intervals: Tuple[Tuple[int, int], ...]) -> Tuple[Tuple[int, int], ...]:
     out: List[List[int]] = []
     for lo, hi in sorted(intervals):
