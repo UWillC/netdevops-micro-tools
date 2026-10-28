@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.7.9] – 2026-10-28 (ACL What-If: multi-line remarks are no longer a finding)
+
+### Network Tools
+- **ACL What-If, L09:** a block of remarks above a rule (heading + description) is a
+  multi-line comment and is no longer reported. L09 now flags only remarks with no rule
+  after them (the end of the ACL). Found in dogfooding on production v0.7.8.
+
 ## [v0.7.8] – 2026-10-28 (ACL What-If: lint, edge packets and packet trace in the UI)
 
 ### Network Tools

@@ -508,18 +508,19 @@ def _check_order(acl: Acl, rule_entries: List[Any], findings: List[Dict[str, Any
 
 
 def _check_remarks(acl: Acl, findings: List[Dict[str, Any]]) -> None:
-    """L09: remark at the end, or followed by another remark before any rule."""
+    """L09: remark with no rule after it (at the end of the ACL).
+
+    A block of consecutive remarks above a rule is a multi-line comment, not a
+    finding (dogfooding 2026-10-28: the old "remark followed by remark" case
+    flagged every heading above its description).
+    """
     entries = acl.entries
     for i, e in enumerate(entries):
         if e.kind != "remark":
             continue
-        nxt = next((x for x in entries[i + 1:] if x.kind in ("rule", "remark")), None)
-        if nxt is None:
-            effect = "Remark at the end of the ACL describes no rule; it has no effect on traffic."
-        elif nxt.kind == "remark":
-            effect = "Remark is followed by another remark (line %d), not by a rule; it has no effect on traffic." % nxt.line
-        else:
+        if any(x.kind == "rule" for x in entries[i + 1:]):
             continue
+        effect = "Remark at the end of the ACL describes no rule; it has no effect on traffic."
         proposal = "Remove it, or move it above the rule it describes."
         findings.append(_finding("L09", [e], effect, proposal))
 
