@@ -13,7 +13,9 @@ All notable changes to this project will be documented in this file.
   table per ACL (up to 10, with the line each packet hits) and an optional trace of one
   packet with the full path. Text report with Copy / Download. 413 / 422 / 429 / 503 get a
   readable sentence (with Retry-After where the API sends it). Engine: ACL-01.1-3
-  (`POST /tools/acl/analyze`, live since the ACL-01.3 merge). Gated like Config Drift.
+  (`POST /tools/acl/analyze`, live since the ACL-01.3 merge). Free without signup, like
+  KEV Watch (user decision 2026-10-28: ACL-01 is a pull magnet): 7 tools open, 15 behind
+  the email gate.
 - **@ciso N1:** `web/app-acl.js` builds every node with `createElement` + `textContent` /
   `createTextNode`; no markup API in the module. The API echoes the paste (ACL names,
   quoted lines, tokens in the lint sentences), so this is enforced by a static test and by

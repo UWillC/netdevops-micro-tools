@@ -41,6 +41,13 @@ def _tab(html):
 
 
 class TestWiring:
+    def test_tab_is_free_and_counts_match(self):
+        """User decision 2026-10-28: ACL What-If is a pull magnet, open without signup."""
+        gate = _web("app-gate.js")
+        assert '"acl-whatif"' in gate.split("FREE_TOOLS", 1)[1].split("]", 1)[0]
+        assert "7 tools are open now" in gate and "7 tools open, 15 more" in gate
+        assert "6 tools" not in gate
+
     def test_assets_are_whitelisted_and_served(self):
         assert "app-acl" in api_main.JS_FILES
         assert "style-acl" in api_main.CSS_FILES
