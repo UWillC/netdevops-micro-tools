@@ -272,10 +272,18 @@ def test_l07_standard_uses_deny_any_log():
     assert "`deny any log`" in res["acls"][0]["findings"][0]["proposal"]
 
 
-def test_l09_remark_followed_by_remark():
+def test_l09_remark_block_above_rule_is_not_a_finding():
+    # Dogfooding 2026-10-28: a heading remark over a description remark is a
+    # multi-line comment for the rule below, not a dead remark.
     paste = ("ip access-list extended X\n remark one\n remark two\n"
              " permit tcp 10.0.0.0 0.0.0.255 any eq 22\n deny ip any any log\n")
-    assert _found(lint(parse_acls(paste))) == {"X": {("L09", 2)}}
+    assert _found(lint(parse_acls(paste))) == {"X": set()}
+
+
+def test_l09_trailing_remark_block_is_flagged():
+    paste = ("ip access-list extended X\n permit tcp 10.0.0.0 0.0.0.255 any eq 22\n"
+             " deny ip any any log\n remark one\n remark two\n")
+    assert _found(lint(parse_acls(paste))) == {"X": {("L09", 4), ("L09", 5)}}
 
 
 def test_l06_standard_any_not_last():
