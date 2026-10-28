@@ -13,7 +13,7 @@ Endpoint:
 The paste is untrusted text. The endpoint reads it as data only: no eval, no
 regex built from the input, nothing written to disk, nothing logged. Size is
 capped BEFORE parsing (characters and lines) and the rule count right after
-parsing, before the lint, which compares rule pairs (O(n^2)). A rejected paste is not echoed back (pydantic's own
+parsing, before the lint (indexed, near-linear up to MAX_RULES). A rejected paste is not echoed back (pydantic's own
 max_length error would return the whole input, hence the manual check).
 Errors are short sentences, never a stack trace. The per-IP POST limit in
 api/rate_limit.py applies, with a stricter path limit for this endpoint
@@ -55,8 +55,10 @@ ENGINE_VERSION = "acl-01.3"
 # so a `show run` excerpt with some non-ACL lines around the ACL still fits.
 MAX_CHARS = 100_000
 MAX_LINES = 1_000
-# The lint compares every rule with the rules above it (O(n^2) in rules), so the
-# rule count is capped on its own: 500 = the size the spec's timing target names.
+# The lint finds overlapping earlier rules through a per-ACL index (near-linear
+# up to this cap; the cost grows faster above ~1000 rules), so the rule count is
+# capped on its own: 500 = the size the spec's timing target names. Raising it
+# needs a new worst-case measurement on Render (@ciso W4b, 2026-10-28).
 MAX_RULES = 500
 # Response size grows with the ACL count (auto-packets per ACL, names repeated in
 # every row): 50 ACLs cut the 500-ACL worst case (~1.1 MB) early, before the lint.
