@@ -16,12 +16,31 @@ capped BEFORE parsing (characters and lines) and the rule count right after
 parsing, before the lint, which compares rule pairs (O(n^2)). A rejected paste is not echoed back (pydantic's own
 max_length error would return the whole input, hence the manual check).
 Errors are short sentences, never a stack trace. The per-IP POST limit in
-api/rate_limit.py applies like on every other tool.
+api/rate_limit.py applies, with a stricter path limit for this endpoint
+(10/min and 120/h, @ciso W1 2026-10-28).
+
+Concurrency (@ciso W2, 2026-10-28): one analysis costs ~0.4 s of CPU locally
+(~1 s on Render), in the single uvicorn process every tool shares. A per-IP
+limit does not stop a few addresses at once, so at most MAX_CONCURRENT analyses
+run at a time; a request that finds no free slot is refused at once with 503,
+Retry-After and a fixed sentence, never queued. The handler is a plain ``def``:
+FastAPI runs it in the anyio worker thread pool, not on the event loop, so the
+slot is a ``threading.BoundedSemaphore`` (an ``asyncio.Semaphore`` is bound to
+the loop and not thread-safe). ``acquire(blocking=False)`` never waits, and the
+slot is released in ``finally`` on every exit (200, 413, 422). Pydantic's own
+422 fires before the handler runs, so it never takes a slot.
+
+Response size (@ciso W3, 2026-10-28): every ACL adds up to MAX_PACKETS_PER_ACL
+auto-packets plus its own summary and lint lines, so the ACL count is capped
+together with the rule count (MAX_ACLS). The lint findings still scale with the
+rules, so the serialized response is also capped (MAX_RESPONSE_BYTES, 413).
 """
+
+import threading
 
 from typing import Any, Dict, List, Optional, Union
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, Field
 
 from services.acl_engine import STATUS_OK, Packet, parse_acls, trace
@@ -39,6 +58,21 @@ MAX_LINES = 1_000
 # The lint compares every rule with the rules above it (O(n^2) in rules), so the
 # rule count is capped on its own: 500 = the size the spec's timing target names.
 MAX_RULES = 500
+# Response size grows with the ACL count (auto-packets per ACL, names repeated in
+# every row): 50 ACLs cut the 500-ACL worst case (~1.1 MB) early, before the lint.
+MAX_ACLS = 50
+# Measured 2026-10-28: 50 ACLs x 10 overlapping rules with long names still give
+# ~0.7 MB (lint findings ~0.4 KB each, up to ~1.6 per rule), so the ACL cap alone
+# does not hold the @ciso W3 bound. Backstop: the serialized response is refused
+# with 413 above this size. Clients that omit Accept-Encoding would get any
+# compression undone, so a hard cap is the only bound on transfer.
+MAX_RESPONSE_BYTES = 300_000
+
+# At most this many analyses at once, process-wide (@ciso W2). Non-blocking.
+MAX_CONCURRENT = 2
+BUSY_RETRY_AFTER = 5  # seconds
+BUSY_MESSAGE = "ACL analysis is busy right now. Try again in a few seconds."
+_slots = threading.BoundedSemaphore(MAX_CONCURRENT)
 
 
 class TraceRequest(BaseModel):
@@ -121,8 +155,21 @@ def _run_trace(parsed, req: TraceRequest) -> Dict[str, Any]:
 @router.post("/acl/analyze", response_model=AclAnalyzeResponse)
 def analyze_acl(req: AclAnalyzeRequest):
     """Lint a pasted IPv4 ACL, trace edge packets, optionally trace one packet."""
+    if not _slots.acquire(blocking=False):
+        raise HTTPException(status_code=503, detail=BUSY_MESSAGE,
+                            headers={"Retry-After": str(BUSY_RETRY_AFTER)})
+    try:
+        return _analyze(req)
+    finally:
+        _slots.release()
+
+
+def _analyze(req: AclAnalyzeRequest) -> Response:
     _check_size(req.config_text)
     parsed = parse_acls(req.config_text)
+    if len(parsed.acls) > MAX_ACLS:
+        raise HTTPException(status_code=413,
+                            detail="Too many ACLs: at most %d per request (the paste has %d)." % (MAX_ACLS, len(parsed.acls)))
     rule_count = sum(1 for acl in parsed.acls.values() for e in acl.entries if e.kind == "rule")
     if rule_count > MAX_RULES:
         raise HTTPException(status_code=413,
@@ -134,10 +181,14 @@ def analyze_acl(req: AclAnalyzeRequest):
             acl=acl.name, type=acl.acl_type, forms=list(acl.forms), rules=len(rules),
             evaluated_rules=sum(1 for e in rules if e.status == STATUS_OK and e.rule is not None)))
     traced = _run_trace(parsed, req.trace) if req.trace is not None else None
-    return AclAnalyzeResponse(
+    payload = AclAnalyzeResponse(
         engine=ENGINE_VERSION,
         acls=summaries,
         lint=lint(parsed),
         auto_packets=auto_packets(parsed) if req.auto_packets else [],
         trace=traced,
-    )
+    ).model_dump_json().encode("utf-8")
+    if len(payload) > MAX_RESPONSE_BYTES:
+        raise HTTPException(status_code=413,
+                            detail="Result too large: split the paste into fewer ACLs or rules per request.")
+    return Response(content=payload, media_type="application/json")

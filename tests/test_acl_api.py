@@ -330,16 +330,197 @@ class TestLimitsAndErrors:
         assert "49" not in json.dumps(b["lint"])
 
 
+class _Clock:
+    def __init__(self):
+        self.t = 1000.0
+
+    def __call__(self):
+        return self.t
+
+
 class TestRateLimit:
-    def test_endpoint_is_under_the_post_limit(self, monkeypatch):
+    """@ciso W1 (2026-10-28): 10/min and 120/h per IP on top of the POST default."""
+
+    HEADERS = {"X-Forwarded-For": "70.0.0.9, 172.71.0.1"}
+    OK = {"config_text": "access-list 1 permit any\n"}
+
+    @pytest.fixture
+    def clock(self, monkeypatch):
         from api import rate_limit as rl
+        c = _Clock()
         monkeypatch.setattr(rl, "ENABLED", True)
-        monkeypatch.setattr(rl, "limiter", rl.SlidingWindowLimiter())
-        headers = {"X-Forwarded-For": "70.0.0.9, 172.71.0.1"}
-        codes = [client.post(URL, json={"config_text": "access-list 1 permit any\n"},
-                             headers=headers).status_code for _ in range(61)]
-        assert codes[:60] == [200] * 60
-        assert codes[60] == 429
+        monkeypatch.setattr(rl, "limiter", rl.SlidingWindowLimiter(clock=c))
+        return c
+
+    def test_path_limit_line(self):
+        from api import rate_limit as rl
+        assert rl.PATH_LIMITS[URL] == ((10, 60), (120, 3600))
+
+    def test_eleventh_in_a_minute_is_429_other_tool_still_200(self, clock):
+        from api import rate_limit as rl
+        codes = [client.post(URL, json=self.OK, headers=self.HEADERS).status_code for _ in range(11)]
+        assert codes == [200] * 10 + [429]
+        r = client.post(URL, json=self.OK, headers=self.HEADERS)
+        assert r.status_code == 429
+        assert r.json() == {"detail": rl.LIMIT_MESSAGE}
+        assert r.headers["retry-after"] == "60"
+        # Same IP, another tool: only the ACL path is throttled.
+        other = client.post("/tools/subnet/info", json={"ip_cidr": "10.0.0.0/24"}, headers=self.HEADERS)
+        assert other.status_code == 200
+        # Another IP is not affected.
+        assert client.post(URL, json=self.OK,
+                           headers={"X-Forwarded-For": "70.0.0.10, 172.71.0.1"}).status_code == 200
+
+    def test_hourly_cap(self, clock):
+        for minute in range(12):
+            for _ in range(10):
+                assert client.post(URL, json=self.OK, headers=self.HEADERS).status_code == 200
+            clock.t += 61
+        r = client.post(URL, json=self.OK, headers=self.HEADERS)
+        assert r.status_code == 429
+        assert r.headers["retry-after"] == "3600"
+
+
+class TestConcurrency:
+    """@ciso W2 (2026-10-28): at most MAX_CONCURRENT analyses at once, no queue."""
+
+    def _blocking_parser(self, monkeypatch):
+        import threading
+        entered = threading.Semaphore(0)
+        release = threading.Event()
+        real = acl_router.parse_acls
+
+        def slow_parse(text):
+            entered.release()
+            assert release.wait(10)
+            return real(text)
+
+        monkeypatch.setattr(acl_router, "parse_acls", slow_parse)
+        return entered, release
+
+    def test_third_parallel_request_is_refused(self, monkeypatch):
+        import threading
+        assert acl_router.MAX_CONCURRENT == 2
+        entered, release = self._blocking_parser(monkeypatch)
+        results = []
+
+        def worker():
+            results.append(_post("access-list 1 permit any\n").status_code)
+
+        threads = [threading.Thread(target=worker) for _ in range(2)]
+        for t in threads:
+            t.start()
+        try:
+            for _ in range(2):
+                assert entered.acquire(timeout=10)  # both slots taken, both parked in the parser
+            r = _post("access-list 1 permit any\n")
+            assert r.status_code == 503
+            assert r.json() == {"detail": acl_router.BUSY_MESSAGE}
+            assert r.headers["retry-after"] == str(acl_router.BUSY_RETRY_AFTER)
+        finally:
+            release.set()
+            for t in threads:
+                t.join(10)
+        assert results == [200, 200]
+        assert acl_router._slots._value == acl_router.MAX_CONCURRENT
+        assert _post("access-list 1 permit any\n").status_code == 200
+
+    def test_slot_released_on_413_and_422(self):
+        too_many_lines = "!\n" * (acl_router.MAX_LINES + 1)
+        too_many_rules = "".join("access-list 1 permit 10.0.%d.%d\n" % divmod(i, 250)
+                                 for i in range(acl_router.MAX_RULES + 1))
+        for _ in range(acl_router.MAX_CONCURRENT + 1):
+            assert _post(too_many_lines).status_code == 413
+            assert _post(too_many_rules).status_code == 413
+            assert _post("   ").status_code == 422
+            assert _post(EDGE_IN, trace={"acl": "NOPE", "src": "10.0.0.1"}).status_code == 422
+        assert acl_router._slots._value == acl_router.MAX_CONCURRENT
+        assert _post("access-list 1 permit any\n").status_code == 200
+
+    def test_slot_released_on_unexpected_error(self, monkeypatch):
+        def boom(text):
+            raise RuntimeError("x")
+
+        monkeypatch.setattr(acl_router, "parse_acls", boom)
+        for _ in range(acl_router.MAX_CONCURRENT + 1):
+            with pytest.raises(RuntimeError):
+                _post("access-list 1 permit any\n")
+        assert acl_router._slots._value == acl_router.MAX_CONCURRENT
+
+
+def _many_acls(n_acls, per, rule, name_len=3):
+    out = []
+    for a in range(n_acls):
+        out.append("ip access-list extended %s" % (("N%02d" % a) + "X" * (name_len - 3)))
+        out += [" " + rule(a, r) for r in range(per)]
+    return "\n".join(out) + "\n"
+
+
+# Hostile shapes measured 2026-10-28 (@ciso W3): alternating actions on overlapping
+# rules maximise lint findings, `established` and ranges maximise auto-packets.
+_WORST_RULES = {
+    "neq_established": lambda a, r: "%s tcp any neq %d any neq %d established" % (
+        "permit" if r % 2 else "deny", 5 + r, 7 + r),
+    "range_overlap": lambda a, r: "%s tcp any any range %d %d established" % (
+        "permit" if r % 2 else "deny", 1000 + r, 60000 - r),
+    "same_host_alt": lambda a, r: "%s tcp host 10.0.0.1 eq %d any eq 22 established log" % (
+        "permit" if r % 2 else "deny", 1000 + r),
+    "shadow_chain": lambda a, r: "permit tcp any any established" if r == 0 else
+        "permit tcp host 10.%d.%d.1 eq %d host 192.0.2.%d eq %d established log" % (
+            a % 250, r % 250, 100 + r, r % 250, 2000 + r),
+}
+
+
+class TestResponseSize:
+    """@ciso W3 (2026-10-28): MAX_ACLS next to MAX_RULES, response <= 300 KB."""
+
+    def test_too_many_acls(self):
+        text = "".join("access-list %d permit any\n" % n for n in range(1, acl_router.MAX_ACLS + 2))
+        r = _post(text)
+        assert r.status_code == 413
+        assert r.json() == {"detail": "Too many ACLs: at most %d per request (the paste has %d)."
+                                      % (acl_router.MAX_ACLS, acl_router.MAX_ACLS + 1)}
+
+    def test_acl_cap_is_inclusive(self):
+        text = "".join("access-list %d permit any\n" % n for n in range(1, acl_router.MAX_ACLS + 1))
+        r = _post(text)
+        assert r.status_code == 200
+        assert len(r.json()["acls"]) == acl_router.MAX_ACLS
+
+    def test_acl_cap_checked_before_lint(self, monkeypatch):
+        monkeypatch.setattr(acl_router, "lint", lambda parsed: pytest.fail("lint ran"))
+        text = "".join("access-list %d permit any\n" % n for n in range(1, acl_router.MAX_ACLS + 2))
+        assert _post(text).status_code == 413
+
+    @pytest.mark.parametrize("shape", sorted(_WORST_RULES))
+    @pytest.mark.parametrize("layout", [(1, 500), (10, 50), (50, 10)])
+    @pytest.mark.parametrize("name_len", [3, 64, 1000])
+    def test_worst_paste_in_limits_stays_under_300_kb(self, shape, layout, name_len):
+        n_acls, per = layout
+        text = _many_acls(n_acls, per, _WORST_RULES[shape], name_len)
+        if len(text) > acl_router.MAX_CHARS:
+            pytest.skip("outside the character limit")
+        r = _post(text)
+        assert r.status_code in (200, 413)
+        assert len(r.content) <= acl_router.MAX_RESPONSE_BYTES == 300_000
+        if r.status_code == 413:
+            assert r.json() == {"detail": "Result too large: split the paste into fewer "
+                                          "ACLs or rules per request."}
+
+    def test_ciso_example_50_long_named_established_acls(self):
+        # @ciso's example: 50 ACLs with long names and `established` (was 1.09 MB at 500 ACLs).
+        text = _many_acls(50, 1, lambda a, r: "permit tcp any any eq 22 established", name_len=1000)
+        r = _post(text)
+        assert r.status_code == 200
+        assert len(r.content) <= 300_000
+
+    def test_largest_accepted_response_is_valid_json(self):
+        text = _many_acls(10, 50, _WORST_RULES["neq_established"], name_len=1000)
+        r = _post(text)
+        assert r.status_code == 200
+        assert 200_000 < len(r.content) <= 300_000
+        assert r.headers["content-type"] == "application/json"
+        assert r.json()["engine"] == acl_router.ENGINE_VERSION
 
 
 def _typical_acl(n_lines):

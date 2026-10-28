@@ -48,6 +48,9 @@ DEFAULT_LIMITS = (
 PATH_LIMITS = {
     "/api/subscribe": ((5, 15 * 60),),  # each call hits MailerLite
     "/api/beta/token": ((5, 15 * 60),),  # read-only backfill lookup (BETA-A)
+    # ACL-01.3 (@ciso W1, 2026-10-28): ~0.4 s CPU locally (~1 s on Render) and
+    # up to ~30x response amplification per call; the hourly cap bounds transfer.
+    "/tools/acl/analyze": ((10, 60), (120, 3600)),
 }
 MAX_KEYS_BEFORE_SWEEP = 10_000
 SWEEP_INTERVAL = 5 * 60  # seconds between retention sweeps of inactive addresses
