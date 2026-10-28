@@ -15,7 +15,16 @@ regex built from the input, nothing written to disk, nothing logged. Size is
 capped BEFORE parsing (characters and lines) and the rule count right after
 parsing, before the lint (indexed, near-linear up to MAX_RULES). A rejected paste is not echoed back (pydantic's own
 max_length error would return the whole input, hence the manual check).
-Errors are short sentences, never a stack trace. The per-IP POST limit in
+Errors are short sentences, never a stack trace.
+
+Schema errors (@ciso N2, ACL-01.4, 2026-10-28): FastAPI's default 422 copies
+each offending value into an ``input`` field, so a 50 000-character
+``trace.src`` (or a non-string ``config_text``) came back whole. For this path
+api/main.py routes RequestValidationError to ``validation_error_body`` below,
+which keeps only ``type``, ``loc`` and ``msg`` (no ``input``, no ``ctx``, no
+``url``), at most MAX_SCHEMA_ERRORS entries with short strings. The ACL-01.3
+report said the pydantic 422 carried "short fields, no config_text": that was
+wrong before this change. The per-IP POST limit in
 api/rate_limit.py applies, with a stricter path limit for this endpoint
 (10/min and 120/h, @ciso W1 2026-10-28).
 
@@ -49,7 +58,13 @@ from services.acl_packets import auto_packets
 
 router = APIRouter()
 
-ENGINE_VERSION = "acl-01.3"
+ENGINE_VERSION = "acl-01.4"
+ANALYZE_PATH = "/tools/acl/analyze"
+
+# Schema-error body (@ciso N2): bounded whatever the request holds.
+MAX_SCHEMA_ERRORS = 10
+_MAX_LOC_PART = 40
+_MAX_MSG = 160
 
 # Spec section 5: < 200 ms for an ACL of up to 500 lines. The cap is twice that,
 # so a `show run` excerpt with some non-ACL lines around the ACL still fits.
@@ -110,6 +125,23 @@ class AclAnalyzeResponse(BaseModel):
     lint: Dict[str, Any]
     auto_packets: List[Dict[str, Any]]
     trace: Optional[Dict[str, Any]] = None
+
+
+def validation_error_body(errors: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """422 body for a schema error on this endpoint, without the offending value.
+
+    ``errors`` is ``RequestValidationError.errors()``. Every entry loses
+    ``input`` / ``ctx`` / ``url``; ``loc`` parts and ``msg`` are cut short, and
+    the list is capped, so the body stays small for any request.
+    """
+    out = []
+    for err in errors[:MAX_SCHEMA_ERRORS]:
+        loc = [part if isinstance(part, int) else str(part)[:_MAX_LOC_PART]
+               for part in err.get("loc", ())][:6]
+        out.append({"type": str(err.get("type", ""))[:_MAX_LOC_PART],
+                    "loc": loc,
+                    "msg": str(err.get("msg", ""))[:_MAX_MSG]})
+    return {"detail": out}
 
 
 def _check_size(text: str) -> None:
@@ -183,11 +215,13 @@ def _analyze(req: AclAnalyzeRequest) -> Response:
             acl=acl.name, type=acl.acl_type, forms=list(acl.forms), rules=len(rules),
             evaluated_rules=sum(1 for e in rules if e.status == STATUS_OK and e.rule is not None)))
     traced = _run_trace(parsed, req.trace) if req.trace is not None else None
+    linted = lint(parsed)
     payload = AclAnalyzeResponse(
         engine=ENGINE_VERSION,
         acls=summaries,
-        lint=lint(parsed),
-        auto_packets=auto_packets(parsed) if req.auto_packets else [],
+        lint=linted,
+        # Rules with a lint finding get their edge packets first (user, 28.10).
+        auto_packets=auto_packets(parsed, lint_result=linted) if req.auto_packets else [],
         trace=traced,
     ).model_dump_json().encode("utf-8")
     if len(payload) > MAX_RESPONSE_BYTES:

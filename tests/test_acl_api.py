@@ -138,7 +138,7 @@ class TestContract:
         assert r.status_code == 200
         b = r.json()
         assert set(b) == {"engine", "acls", "lint", "auto_packets", "trace"}
-        assert b["engine"] == "acl-01.3"
+        assert b["engine"] == "acl-01.4"
         assert b["acls"] == [{"acl": "EDGE-IN", "type": "extended", "forms": ["named"],
                               "rules": 9, "evaluated_rules": 9}]
         assert b["lint"]["engine"] == "acl-01.2"
@@ -185,28 +185,42 @@ class TestAutoPackets:
               " 30 deny ip any any log\n")
 
     def test_edges_of_a_small_acl(self):
-        # Hand-built expectation. Round 1 = hit of each rule (line 3's hit equals
-        # line 2's, so no new row), then dst port +1, src outside, dst outside,
-        # src last address, dst port -1. Line 4 (ip any any) has only its hit.
+        # Hand-built expectation. Line 3 has the only lint finding (L01, shadowed
+        # by line 2), so its edges come first in every round (user, 28.10).
+        # Round 1 = hit of line 3 (the same packet as line 2's hit, which lands
+        # on line 2), line 2's hit is that packet again (no new row), hit of
+        # line 4; then dst port +1, src outside, dst outside, src last address,
+        # dst port -1 of line 3. Line 2's edges repeat line 3's (identical rule
+        # body), so they only add to also_built_for. Line 4 (ip any any) has
+        # only its hit.
         rows = _post(self.SHADOW).json()["auto_packets"][0]["packets"]
         got = [(r["from_line"], r["edge"], r["packet"]["src"], r["packet"]["dst"],
                 r["packet"]["dst_port"], r["verdict"], r["matched_line"]) for r in rows]
         assert got == [
-            (2, "hit", "10.1.1.0", "192.0.2.10", 22, "permit", 2),
+            (3, "hit", "10.1.1.0", "192.0.2.10", 22, "permit", 2),
             (4, "hit", "198.51.100.10", "203.0.113.10", 443, "deny", 4),
-            (2, "dst_port_above", "10.1.1.0", "192.0.2.10", 23, "deny", 4),
-            (2, "src_outside", "10.1.2.0", "192.0.2.10", 22, "deny", 4),
-            (2, "dst_outside", "10.1.1.0", "192.0.2.11", 22, "deny", 4),
-            (2, "src_last", "10.1.1.255", "192.0.2.10", 22, "permit", 2),
-            (2, "dst_port_below", "10.1.1.0", "192.0.2.10", 21, "deny", 4),
+            (3, "dst_port_above", "10.1.1.0", "192.0.2.10", 23, "deny", 4),
+            (3, "src_outside", "10.1.2.0", "192.0.2.10", 22, "deny", 4),
+            (3, "dst_outside", "10.1.1.0", "192.0.2.11", 22, "deny", 4),
+            (3, "src_last", "10.1.1.255", "192.0.2.10", 22, "permit", 2),
+            (3, "dst_port_below", "10.1.1.0", "192.0.2.10", 21, "deny", 4),
         ]
 
-    def test_shadowed_rule_is_linked_to_the_row(self):
-        # The hit packet built for line 3 is line 2's packet and lands on line 2:
-        # the row says so, which shows the shadowing (L01) without reading the lint.
+    def test_edges_without_lint_keep_acl_order(self):
+        # The library without a lint result keeps the ACL-01.3 order (round
+        # robin in ACL order): line 2 first, line 3 only in also_built_for.
+        rows = auto_packets(parse_acls(self.SHADOW))[0]["packets"]
+        assert [(r["from_line"], r["edge"]) for r in rows] == [
+            (2, "hit"), (4, "hit"), (2, "dst_port_above"), (2, "src_outside"),
+            (2, "dst_outside"), (2, "src_last"), (2, "dst_port_below")]
+
+    def test_shadowed_rule_is_the_row_source(self):
+        # The hit packet of the shadowed line 3 lands on line 2: the row is built
+        # for line 3 and says where it went, which shows the shadowing (L01)
+        # without reading the lint. Line 2 built the same packet.
         rows = _post(self.SHADOW).json()["auto_packets"][0]["packets"]
-        assert {"line": 3, "edge": "hit", "relation": "inside"} in rows[0]["also_built_for"]
-        assert rows[0]["matched_line"] == 2
+        assert (rows[0]["from_line"], rows[0]["relation"], rows[0]["matched_line"]) == (3, "inside", 2)
+        assert {"line": 2, "edge": "hit", "relation": "inside"} in rows[0]["also_built_for"]
 
     def test_standard_acl(self):
         rows = _post("access-list 10 permit 10.2.0.0 0.0.255.255\n").json()["auto_packets"][0]["packets"]
@@ -550,3 +564,127 @@ class TestTiming:
             times.append((time.perf_counter() - start) * 1000)
             assert r.status_code == 200
         assert statistics.median(times) < 200, times
+
+
+class TestPacketPriority:
+    """ACL-01.4, decision of the user 28.10: rules with a lint finding get their
+    edge packets first, then ACL order; the cap of 10 is unchanged."""
+
+    # 11 distinct permits, then line 12 = line 1 with the opposite action (L01,
+    # shadowed by line 1), then an explicit logged catch-all (no L07). The only
+    # finding is about line 12, far past the first 10 rules.
+    LONG = ("".join("access-list 101 permit tcp host 10.0.0.%d any eq 22\n" % n for n in range(1, 12))
+            + "access-list 101 deny tcp host 10.0.0.1 any eq 22\n"
+            + "access-list 101 deny ip any any log\n")
+
+    def test_only_finding_is_line_12(self):
+        findings = _post(self.LONG).json()["lint"]["acls"][0]["findings"]
+        assert [(f["id"], f["line"]) for f in findings] == [("L01", 12)]
+
+    def test_flagged_rule_comes_first(self):
+        rows = _post(self.LONG).json()["auto_packets"][0]["packets"]
+        assert len(rows) == MAX_PACKETS_PER_ACL
+        assert (rows[0]["from_line"], rows[0]["edge"], rows[0]["matched_line"]) == (12, "hit", 1)
+        assert {"line": 1, "edge": "hit", "relation": "inside"} in rows[0]["also_built_for"]
+        # Then ACL order for the unflagged rules (line 1's hit is the same packet).
+        assert [r["from_line"] for r in rows[1:]] == list(range(2, 11))
+
+    def test_without_priority_line_12_had_no_row(self):
+        # ACL-01.3 behaviour (library without lint): the first 10 hits fill the table.
+        rows = auto_packets(parse_acls(self.LONG))[0]["packets"]
+        assert [r["from_line"] for r in rows] == list(range(1, 11))
+
+    def test_flagged_rules_keep_acl_order_between_them(self):
+        text = ("".join("access-list 102 permit tcp host 10.0.1.%d any eq 22\n" % n for n in range(1, 12))
+                + "access-list 102 deny tcp host 10.0.1.9 any eq 22\n"   # line 12: L01 by line 9
+                + "access-list 102 deny tcp host 10.0.1.2 any eq 22\n"   # line 13: L01 by line 2
+                + "access-list 102 deny ip any any log\n")
+        b = _post(text).json()
+        assert sorted(f["line"] for f in b["lint"]["acls"][0]["findings"]) == [12, 13]
+        rows = b["auto_packets"][0]["packets"]
+        assert [r["from_line"] for r in rows[:2]] == [12, 13]
+        assert len(rows) == MAX_PACKETS_PER_ACL
+
+    def test_priority_is_per_acl(self):
+        # A finding in ACL 101 does not reorder ACL 103 (no findings there).
+        other = ("".join("access-list 103 permit tcp host 10.0.2.%d any eq 22\n" % n for n in range(1, 12))
+                 + "access-list 103 deny ip any any log\n")
+        b = _post(self.LONG + other).json()
+        by_acl = {a["acl"]: a["packets"] for a in b["auto_packets"]}
+        assert by_acl["101"][0]["from_line"] == 12
+        assert [r["from_line"] for r in by_acl["103"]] == list(range(14, 24))
+
+
+class TestSchemaErrorsWithoutEcho:
+    """@ciso N2 (ACL-01.4): pydantic's 422 for this endpoint carries no `input`."""
+
+    def test_long_trace_src_is_not_echoed(self):
+        r = _post(EDGE_IN, trace={"acl": "EDGE-IN", "src": "9" * 50_000})
+        assert r.status_code == 422
+        assert len(r.content) < 1024, len(r.content)
+        assert "99999" not in r.text
+        detail = r.json()["detail"]
+        assert detail and all(set(d) == {"type", "loc", "msg"} for d in detail)
+        assert detail[0]["loc"] == ["body", "trace", "src"]
+
+    def test_non_string_paste_is_not_echoed(self):
+        r = client.post(URL, json={"config_text": {"x": "Q" * 50_000}})
+        assert r.status_code == 422
+        assert len(r.content) < 1024 and "QQQQ" not in r.text
+
+    def test_many_bad_fields_stay_small(self):
+        bad = {"acl": "A" * 50_000, "src": "B" * 50_000, "dst": "C" * 50_000,
+               "protocol": ["D" * 50_000], "src_port": "E" * 50_000,
+               "dst_port": "F" * 50_000, "established": "G" * 50_000}
+        r = client.post(URL, json={"config_text": "H" * 50_000, "trace": bad,
+                                   "auto_packets": "I" * 50_000})
+        assert r.status_code == 422
+        assert len(r.content) < 2048, len(r.content)
+        for ch in "ABCDEFGHI":
+            assert ch * 100 not in r.text
+        assert len(r.json()["detail"]) <= acl_router.MAX_SCHEMA_ERRORS
+
+    def test_broken_json_is_not_echoed(self):
+        r = client.post(URL, content=b'{"config_text": "' + b"Z" * 50_000,
+                        headers={"Content-Type": "application/json"})
+        assert r.status_code == 422
+        assert len(r.content) < 1024 and "ZZZZ" not in r.text
+
+    def test_other_tools_keep_the_default_422(self):
+        # Scope: only this path changes. Config Drift still gets FastAPI's body.
+        r = client.post("/tools/config-drift/compare", json={"config_a": 1})
+        assert r.status_code == 422
+        assert any("input" in d for d in r.json()["detail"])
+
+
+class TestHostileStringsComeBackAsData:
+    """@ciso N1 (API half): markup in the paste returns as plain JSON strings.
+    The UI half (textContent only) is tests/test_acl_ui.py."""
+
+    XSS = "<img src=x onerror=alert(1)>"
+    # IOS names hold no spaces, so the parser reads the ACL name and the port
+    # token up to the first space; this form is the same payload in one token.
+    XSS_TOKEN = "<img/src=x/onerror=alert(1)>"
+
+    def test_markup_in_acl_name_and_token(self):
+        X = self.XSS_TOKEN
+        text = ("ip access-list extended %s\n"
+                " 10 permit tcp any any eq %s\n"
+                " 20 permit tcp any any eq 22\n" % (X, X))
+        r = _post(text, trace={"src": "10.0.0.1", "dst": "10.0.0.2",
+                               "protocol": "tcp", "src_port": 1, "dst_port": 22})
+        assert r.status_code == 200
+        assert r.headers["content-type"].startswith("application/json")
+        b = r.json()
+        assert {b["acls"][0]["acl"], b["lint"]["acls"][0]["acl"], b["trace"]["acl"],
+                b["auto_packets"][0]["acl"]} == {X}
+        # The token comes back verbatim inside the P01 sentence and the quote.
+        p01 = [f for f in b["lint"]["acls"][0]["findings"] if f["id"] == "P01"]
+        assert p01 and X in p01[0]["effect"] and X in p01[0]["quote"][0]
+
+    def test_markup_with_spaces_returns_in_not_evaluated(self):
+        text = "ip access-list extended %s\n 10 permit tcp any any eq %s\n" % (self.XSS, self.XSS)
+        b = _post(text).json()
+        assert b["acls"] == []
+        assert [n["text"] for n in b["lint"]["not_evaluated"]][:2] == [
+            "ip access-list extended " + self.XSS, "10 permit tcp any any eq " + self.XSS]

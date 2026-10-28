@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.exception_handlers import request_validation_exception_handler
 from api.routers import snmpv3, ntp, golden_config, aaa, cve, profiles, iperf, subnet, mtu, config_parser, export, mitigation, timezone, ip_path_tracer, port_auditor, config_explainer, config_drift, cis_audit, subscribe, whoami, kev_watch, acl
 from models.meta import MetaInfo
 import datetime
@@ -48,6 +50,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.exception_handler(RequestValidationError)
+async def _validation_error(request, exc):
+    """ACL What-If (@ciso N2): its 422 carries no ``input`` echo; other tools keep FastAPI's default."""
+    if request.url.path == acl.ANALYZE_PATH:
+        return JSONResponse(status_code=422, content=acl.validation_error_body(exc.errors()))
+    return await request_validation_exception_handler(request, exc)
+
 
 app.include_router(snmpv3.router, prefix="/generate", tags=["SNMPv3"])
 app.include_router(ntp.router, prefix="/generate", tags=["NTP"])
