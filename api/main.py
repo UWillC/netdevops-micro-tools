@@ -82,6 +82,11 @@ app.include_router(whoami.router, prefix="/tools", tags=["Whoami"])
 app.include_router(subscribe.router, prefix="/api", tags=["Subscribe"])
 app.include_router(kev_watch.router, prefix="/api", tags=["KEV Watch"])
 
+# CLI Cheat Sheet (reference page, outside the module count): byte-for-byte file from
+# cheatsheet/, strict CSP with the script hash computed at startup (api/cheatsheet.py).
+from api import cheatsheet  # noqa: E402
+app.include_router(cheatsheet.router)
+
 
 # Determine base path for static files
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -161,7 +166,7 @@ def meta_version():
     return MetaInfo(
         version=APP_VERSION,
         build_time=datetime.datetime.utcnow().isoformat() + "Z",
-        feature_flags=["cve_engine_v3", "nvd_enrichment", "nvd_cache", "web_ui_v2", "profiles_v2", "profiles_cve", "security_score", "subnet_calc", "mtu_calc", "config_parser", "cloud_deploy", "export_pdf", "cve_mitigation_advisor", "timezone_converter", "ip_path_tracer", "port_auditor", "config_explainer", "config_drift", "cis_audit", "whoami", "ise_coverage", "threat_feed_local", "kev_badges", "ise_analyzer", "bundled_cve", "kev_catalog", "known_affected_match", "ise_full_coverage", "kev_watch", "acl_whatif"]
+        feature_flags=["cve_engine_v3", "nvd_enrichment", "nvd_cache", "web_ui_v2", "profiles_v2", "profiles_cve", "security_score", "subnet_calc", "mtu_calc", "config_parser", "cloud_deploy", "export_pdf", "cve_mitigation_advisor", "timezone_converter", "ip_path_tracer", "port_auditor", "config_explainer", "config_drift", "cis_audit", "whoami", "ise_coverage", "threat_feed_local", "kev_badges", "ise_analyzer", "bundled_cve", "kev_catalog", "known_affected_match", "ise_full_coverage", "kev_watch", "acl_whatif", "cli_cheat_sheet"]
     )
 
 # Mount static files (CSS, JS) - must be after all API routes

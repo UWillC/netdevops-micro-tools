@@ -762,3 +762,94 @@
   box-shadow: 0 0 12px rgba(59, 130, 246, 0.2);
 }
 
+
+/* ----------------------------- */
+/* Reference: CLI Cheat Sheet (outside the module count) */
+/* ----------------------------- */
+.sidebar-reference {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.sidebar-reference-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 6px 4px;
+}
+
+.sidebar-reference .tab-button {
+  width: 100%;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.82rem;
+  border: 1px dashed rgba(148, 163, 184, 0.45);
+  background: rgba(15, 23, 42, 0.5);
+}
+
+.sidebar-reference .tab-button.active {
+  border-style: solid;
+  border-color: var(--accent);
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--text);
+}
+
+[data-theme="light"] .sidebar-reference .tab-button {
+  background: rgba(248, 250, 252, 0.9);
+  color: var(--text);
+}
+
+.home-reference {
+  margin-top: 16px;
+}
+
+.home-reference-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px dashed rgba(148, 163, 184, 0.45);
+  border-radius: 8px;
+}
+
+.home-reference-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 260px;
+}
+
+.home-reference-text .tool-name {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.home-reference-text .tool-desc {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.home-reference-actions,
+.cheatsheet-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.home-reference-actions a,
+.cheatsheet-actions a {
+  text-decoration: none;
+  margin-top: 0;
+}
+
+.cheatsheet-sha code {
+  word-break: break-all;
+  font-size: 0.8rem;
+}

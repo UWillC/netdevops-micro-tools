@@ -4,6 +4,34 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.7.10] – 2026-10-29 (Reference: Cisco CLI Cheat Sheet)
+
+### Reference (outside the "22 live modules" count)
+- **Cisco CLI Cheat Sheet** at `/cli-cheat-sheet`: an offline, searchable reference of
+  troubleshooting and operations commands (IOS-XE and NX-OS side by side, plus C9800, ISE,
+  ASA / FTD, PAN-OS, SD-WAN, CUBE / CUCM, Windows, Linux (RHEL family), NetDevOps tooling). One
+  self-contained HTML file in `cheatsheet/`, served byte for byte. Free without signup.
+- **Download offline copy** at `/cli-cheat-sheet/download` (attachment, same bytes), SHA-256
+  at `/cli-cheat-sheet/sha256` and next to the link in the SPA.
+- SPA: "Reference" entry under the sidebar groups, a Reference card on Home and a tab with
+  Open / Download. Not a module: the sidebar badges, the 21 tool cards and "22 live modules"
+  are unchanged.
+
+### Security
+- Strict CSP on the cheat sheet routes only: `default-src 'none'`, `script-src` with the
+  hash of the page's one inline script (computed from the file at startup),
+  `connect-src 'none'`, `frame-ancestors 'none'`, plus `nosniff`, `no-referrer`, `no-cache, no-transform`.
+  `style-src 'unsafe-inline'` is needed by the per-category colour attributes. Site-wide
+  headers stay in WEBSEC-01(a).
+- The file lives outside `web/`, so it is not reachable under `/static/` without these headers.
+
+### Tests
+- `tests/test_cheatsheet.py`: routes, headers, byte-for-byte download, CSP hash = file,
+  offline guard, no environment data, not under `/static/`, Reference outside the module count.
+- `tools/cheatsheet/run.mjs`: Node + headless Chrome runner for the page's own 58 UX tests and
+  data audit (no npm packages); `check` is run by pytest when a
+  browser is present and is required in CI.
+
 ## [v0.7.9] – 2026-10-28 (ACL What-If: multi-line remarks are no longer a finding)
 
 ### Network Tools

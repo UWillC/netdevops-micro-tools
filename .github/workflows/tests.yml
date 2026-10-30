@@ -15,6 +15,9 @@ jobs:
       PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION: python
       # No background PSIRT sync in tests: the runner has no cache and no credentials.
       CVE_WARMUP_SYNC: '0'
+      # CLI cheat sheet: tests/test_cheatsheet.py runs the page's own UX tests and audit in
+      # headless Chrome (preinstalled with Node on ubuntu-latest, no secrets). Fail, don't skip.
+      CHEATSHEET_BROWSER_REQUIRED: '1'
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
