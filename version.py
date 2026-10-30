@@ -1,3 +1,3 @@
 """Single source of the application version (OpenAPI, /meta/version, report provenance, asset cache-buster)."""
 
-APP_VERSION = "0.7.10"
+APP_VERSION = "0.7.11"
