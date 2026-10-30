@@ -24,11 +24,11 @@
   <meta name="twitter:description" content="22 live modules: CVE exposure, hardening audit, config drift, hardened Cisco configs. Browser-based, free, no install." />
   <meta name="twitter:image" content="https://netdevops-tools.thebackroom.ai/static/og-card.jpg" />
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
-  <link rel="stylesheet" href="style-base.css?v=0.7.9" />
-  <link rel="stylesheet" href="style-home.css?v=0.7.9" />
-  <link rel="stylesheet" href="style-tools.css?v=0.7.9" />
-  <link rel="stylesheet" href="style-kev.css?v=0.7.9" />
-  <link rel="stylesheet" href="style-acl.css?v=0.7.9" />
+  <link rel="stylesheet" href="style-base.css?v=0.7.10" />
+  <link rel="stylesheet" href="style-home.css?v=0.7.10" />
+  <link rel="stylesheet" href="style-tools.css?v=0.7.10" />
+  <link rel="stylesheet" href="style-kev.css?v=0.7.10" />
+  <link rel="stylesheet" href="style-acl.css?v=0.7.10" />
 
   <!-- Feedback widget -->
   <script async src="https://www.thebackroom.ai/widget.js"></script>
@@ -143,6 +143,13 @@
         </div>
 
       </nav>
+
+      <!-- REFERENCE: a document, not a tool, so it sits outside the nav groups and the
+           "22 live modules" count (user decision 29.10). Served by api/cheatsheet.py. -->
+      <div class="sidebar-reference">
+        <div class="sidebar-reference-label">Reference</div>
+        <button class="tab-button tab-button-reference" data-tab="cli-cheat-sheet"><span class="tool-icon">📖</span> CLI Cheat Sheet</button>
+      </div>
     </aside>
 
     <!-- Main panel -->
@@ -352,6 +359,24 @@
                 <span class="tool-name">Device Profiles</span>
                 <span class="tool-desc">Save & load configurations</span>
               </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Reference (outside the module count) -->
+        <div class="home-category home-reference" data-category="reference">
+          <div class="home-category-header">
+            <span class="home-category-icon">📖</span>
+            <h2>Reference</h2>
+          </div>
+          <div class="home-reference-card">
+            <div class="home-reference-text">
+              <span class="tool-name">Cisco CLI Cheat Sheet</span>
+              <span class="tool-desc">Troubleshooting and operations commands, IOS-XE and NX-OS side by side. One HTML file that also works offline.</span>
+            </div>
+            <div class="home-reference-actions">
+              <a class="btn-primary" href="/cli-cheat-sheet" target="_blank" rel="noopener">Open</a>
+              <a class="btn-secondary" href="/cli-cheat-sheet/download" download>Download offline copy</a>
             </div>
           </div>
         </div>
@@ -2445,6 +2470,23 @@ Use with caution on production!">debug ip icmp</code>
         </div>
       </section>
 
+      <!-- CLI CHEAT SHEET (Reference, outside the module count) -->
+      <section id="tab-cli-cheat-sheet" class="tab-content">
+        <h2>Cisco CLI Cheat Sheet <span class="version-badge">Reference</span></h2>
+        <p class="tool-description">An offline, searchable reference of troubleshooting and operations commands for network engineers: IOS-XE and NX-OS side by side, plus C9800 / AP, ISE, ASA / FTD, PAN-OS, Catalyst SD-WAN, CUBE / CUCM, Windows, Linux, Wireshark and NetDevOps tooling. Disruptive commands carry a ⚠ warning and unconfirmed syntax is badged UNVERIFIED.</p>
+
+        <div class="card cheatsheet-card">
+          <div class="cheatsheet-actions">
+            <a class="btn-primary" href="/cli-cheat-sheet" target="_blank" rel="noopener">Open cheat sheet</a>
+            <a class="btn-secondary" href="/cli-cheat-sheet/download" download>Download offline copy</a>
+          </div>
+          <p class="cheatsheet-sha">SHA-256 of the file: <code id="cheatsheet-sha256">see the <a href="/cli-cheat-sheet/sha256" target="_blank" rel="noopener">checksum file</a></code></p>
+          <p class="summary-muted">One self-contained HTML file: no install, no network calls, opens from disk in any current browser. After you move it to an offline PC, compare the hash: <code>sha256sum Cisco_CLI_Cheat_Sheet.html</code> (Linux) or <code>Get-FileHash Cisco_CLI_Cheat_Sheet.html</code> (PowerShell).</p>
+          <p class="summary-muted">Favorites and recent copies stay in the browser that saved them. To move them between this site and an offline copy, use Favorites › Export and Import.</p>
+          <p class="summary-muted">Inside the page: search needs all words (<code>sh ip int br</code> works), Ctrl+K opens the palette, <code>?</code> lists the keys. Print the current view, your favorites or a two-column A4 Quick card.</p>
+        </div>
+      </section>
+
       <section id="tab-timezone" class="tab-content">
         <h2>Timezone Converter <span class="version-badge">v1.1 + DTG (Zulu)</span></h2>
 
@@ -3355,26 +3397,26 @@ line vty 0 15
   </footer>
 
   <!-- Gate: email gate for pro tools (must load BEFORE core) -->
-  <script src="app-gate.js?v=0.7.9"></script>
+  <script src="app-gate.js?v=0.7.10"></script>
   <!-- Core: theme, tabs, navigation, utilities -->
-  <script src="app-core.js?v=0.7.9"></script>
+  <script src="app-core.js?v=0.7.10"></script>
   <!-- Config Generators: SNMPv3, NTP, AAA, iPerf3 -->
-  <script src="app-config.js?v=0.7.9"></script>
+  <script src="app-config.js?v=0.7.10"></script>
   <!-- Golden Config form -->
-  <script src="app-golden.js?v=0.7.9"></script>
+  <script src="app-golden.js?v=0.7.10"></script>
   <!-- CVE Analyzer -->
-  <script src="app-security.js?v=0.7.9"></script>
+  <script src="app-security.js?v=0.7.10"></script>
   <!-- Profiles, Vuln Widget, Security Score, Export -->
-  <script src="app-profiles.js?v=0.7.9"></script>
+  <script src="app-profiles.js?v=0.7.10"></script>
   <!-- Hints, Tooltips, Golden Config UI, SNMP Multi-Host -->
-  <script src="app-ui.js?v=0.7.9"></script>
+  <script src="app-ui.js?v=0.7.10"></script>
   <!-- Subnet, MTU, Config Parser, CVE Mitigation, Timezone, Military DTG, IP Path Tracer -->
-  <script src="app-network.js?v=0.7.9"></script>
+  <script src="app-network.js?v=0.7.10"></script>
   <!-- Threat Feed, Port Auditor -->
-  <script src="app-feeds.js?v=0.7.9"></script>
+  <script src="app-feeds.js?v=0.7.10"></script>
   <!-- KEV Watch (KW-01) -->
-  <script src="app-kev.js?v=0.7.9"></script>
+  <script src="app-kev.js?v=0.7.10"></script>
   <!-- ACL What-If (ACL-01.4) -->
-  <script src="app-acl.js?v=0.7.9"></script>
+  <script src="app-acl.js?v=0.7.10"></script>
 </body>
 </html>

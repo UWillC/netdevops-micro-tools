@@ -19,7 +19,7 @@ const BETA_DEV_API_ORIGIN = "http://127.0.0.1:8000";
 
 // Tools that are FREE (no email required)
 // Threat Feed is on home page, always visible. KEV Watch (KW-01) is free like it.
-const FREE_TOOLS = ["home", "iperf", "subnet", "mtu", "timezone", "kev-watch", "acl-whatif"];
+const FREE_TOOLS = ["home", "iperf", "subnet", "mtu", "timezone", "kev-watch", "acl-whatif", "cli-cheat-sheet"];
 
 
 // -----------------------------

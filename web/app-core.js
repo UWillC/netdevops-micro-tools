@@ -68,6 +68,7 @@ const toolIcons = {
   "acl-whatif": "🚦",
   "cis-audit": "📋",
   "kev-watch": "🎯",
+  "cli-cheat-sheet": "📖",
   "profiles": "💾"
 };
 
@@ -91,6 +92,7 @@ const toolNames = {
   "acl-whatif": "ACL What-If",
   "cis-audit": "Hardening Audit",
   "kev-watch": "KEV Watch",
+  "cli-cheat-sheet": "Cheat Sheet",
   "profiles": "Profiles"
 };
 
@@ -181,6 +183,23 @@ document.querySelectorAll(".home-tool-card, .quickstart-tool").forEach(card => {
     if (tabBtn) tabBtn.click();
   });
 });
+
+// -----------------------------
+// CLI Cheat Sheet (Reference): SHA-256 of the offline copy next to the download link.
+// Plain text from our own endpoint, written with textContent; the static link to the
+// checksum file stays if the request fails.
+// -----------------------------
+(function loadCheatSheetHash() {
+  const el = document.getElementById("cheatsheet-sha256");
+  if (!el) return;
+  fetch(`${API_BASE_URL}/cli-cheat-sheet/sha256`)
+    .then(r => (r.ok ? r.text() : ""))
+    .then(text => {
+      const hex = (text || "").trim().split(/\s+/)[0];
+      if (/^[0-9a-f]{64}$/.test(hex)) el.textContent = hex;
+    })
+    .catch(() => {});
+})();
 
 // -----------------------------
 // Quickstart banner — auto-hide for returning users
