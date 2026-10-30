@@ -391,7 +391,7 @@ are persisted across container restarts.
 
 ## 🛣 Roadmap (high level)
 
-**v0.7.10 (current):** 22 live modules (21 tools in the sidebar + the Cisco Threat Feed widget on the home page), plus one Reference page outside the count
+**v0.7.11 (current):** 22 live modules (21 tools in the sidebar + the Cisco Threat Feed widget on the home page), plus one Reference page outside the count
 - **Config Generators** (5): SNMPv3, SNMP Multi-Host, NTP, AAA / TACACS+, Golden Config
 - **Security Tools** (4): CVE Analyzer, CVE Mitigation, Hardening Audit, KEV Watch
 - **Network Tools** (11): iPerf3, Subnet, MTU, Timezone/DTG (Zulu), Config Parser, Config Explainer, IP Path Tracer, Port Auditor, Config Drift, ACL What-If, What's My IP

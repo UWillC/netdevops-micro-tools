@@ -12,8 +12,8 @@ import re
 
 router = APIRouter(prefix="/tools/timezone", tags=["Timezone Converter"])
 
-# Military Timezone Letters (phonetic alphabet)
-# https://en.wikipedia.org/wiki/List_of_military_time_zones
+# DTG time zone letters (phonetic alphabet, Z = Zulu = UTC)
+# https://en.wikipedia.org/wiki/Date-time_group
 MILITARY_TIMEZONES = {
     "A": ("Alpha", +1), "B": ("Bravo", +2), "C": ("Charlie", +3),
     "D": ("Delta", +4), "E": ("Echo", +5), "F": ("Foxtrot", +6),
@@ -95,7 +95,7 @@ class NowResponse(BaseModel):
 
 
 class DTGResult(BaseModel):
-    """Military Date-Time Group result."""
+    """DTG (Zulu) Date-Time Group result."""
     timezone: str
     label: str
     military_letter: str
@@ -108,12 +108,12 @@ class DTGResult(BaseModel):
 
 
 class DTGConvertRequest(BaseModel):
-    """Request to convert Military DTG."""
-    dtg: str = Field(..., description="Military DTG format (e.g., 051100Z, 181430ZFeb26)")
+    """Request to convert a DTG (Zulu)."""
+    dtg: str = Field(..., description="DTG (Zulu) format (e.g., 051100Z, 181430ZFeb26)")
 
 
 class DTGConvertResponse(BaseModel):
-    """Response with parsed Military DTG."""
+    """Response with the parsed DTG (Zulu)."""
     original_input: str
     parsed_utc: str
     dtg_zulu: str
@@ -121,7 +121,7 @@ class DTGConvertResponse(BaseModel):
 
 
 class DTGNowResponse(BaseModel):
-    """Current time in Military DTG format."""
+    """Current time in DTG (Zulu) format."""
     generated_at_utc: str
     dtg_zulu: str
     dtg_zulu_full: str
@@ -130,7 +130,7 @@ class DTGNowResponse(BaseModel):
 
 def parse_dtg(dtg_str: str) -> datetime:
     """
-    Parse Military Date-Time Group format.
+    Parse DTG (Zulu) Date-Time Group format.
 
     Formats supported:
     - DDHHMMZ (e.g., 051100Z) - day, hour, minute, timezone letter
@@ -180,7 +180,7 @@ def parse_dtg(dtg_str: str) -> datetime:
 
 
 def apply_military_offset(dt: datetime, tz_letter: str) -> datetime:
-    """Apply military timezone offset to convert to UTC."""
+    """Apply the DTG time zone letter offset to convert to UTC."""
     if tz_letter not in MILITARY_TIMEZONES:
         raise ValueError(f"Invalid military timezone letter: {tz_letter}")
 
@@ -192,7 +192,7 @@ def apply_military_offset(dt: datetime, tz_letter: str) -> datetime:
 
 def format_dtg(dt: datetime, include_date: bool = True, include_seconds: bool = False) -> tuple:
     """
-    Format datetime to Military DTG format.
+    Format datetime to DTG (Zulu) format.
 
     Returns tuple of (dtg_short, dtg_full, dtg_seconds, military_letter, military_name)
     """
@@ -203,7 +203,7 @@ def format_dtg(dt: datetime, include_date: bool = True, include_seconds: bool = 
     else:
         offset_hours = int(offset.total_seconds() / 3600)
 
-    # Find military letter for this offset
+    # Find the DTG letter for this offset
     military_letter = OFFSET_TO_MILITARY.get(offset_hours, "Z")
     military_name = MILITARY_TIMEZONES.get(military_letter, ("Zulu", 0))[0]
 
@@ -409,12 +409,12 @@ async def get_current_time() -> NowResponse:
 @router.post(
     "/dtg/convert",
     response_model=DTGConvertResponse,
-    summary="Convert Military DTG to timezones",
-    description="Parse Military Date-Time Group and convert to multiple timezones"
+    summary="Convert DTG (Zulu) to timezones",
+    description="Parse a DTG (Zulu) Date-Time Group and convert to multiple timezones"
 )
 async def convert_dtg(request: DTGConvertRequest) -> DTGConvertResponse:
     """
-    Convert Military Date-Time Group format to multiple timezones.
+    Convert DTG (Zulu) Date-Time Group format to multiple timezones.
 
     Supported DTG formats:
     - 051100Z (day, time, Zulu)
@@ -458,11 +458,11 @@ async def convert_dtg(request: DTGConvertRequest) -> DTGConvertResponse:
 @router.get(
     "/dtg/now",
     response_model=DTGNowResponse,
-    summary="Current time in Military DTG format",
-    description="Get current time as Military Date-Time Group in all common timezones"
+    summary="Current time in DTG (Zulu) format",
+    description="Get current time as a DTG (Zulu) Date-Time Group in all common timezones"
 )
 async def get_dtg_now() -> DTGNowResponse:
-    """Get current time in Military DTG format for all common timezones."""
+    """Get current time in DTG (Zulu) format for all common timezones."""
     now_utc = datetime.now(ZoneInfo("UTC"))
     dtg_short, dtg_full, _, _, _ = format_dtg(now_utc)
 

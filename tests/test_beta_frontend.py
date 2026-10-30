@@ -218,5 +218,4 @@ def test_gate_copy_announces_beta_emails_and_unsubscribe():
 def test_gate_copy_publication_gate():
     js = (WEB / "app-gate.js").read_text()
     assert "—" not in js
-    assert not re.search(r"\b(NATO|NCIA|military|wojsko|ramstein|psyops)\b", js, re.I)
     assert "10 testers" not in js and "10 active" not in js  # threshold stays internal

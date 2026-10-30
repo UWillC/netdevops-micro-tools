@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.7.11] – 2026-10-29 (API docs: DTG wording)
+
+### Docs
+- Timezone Converter API docs (`/docs`, OpenAPI): DTG endpoints and models described as
+  "DTG (Zulu)". Paths, field names and responses are unchanged.
+
+---
+
 ## [v0.7.10] – 2026-10-29 (Reference: Cisco CLI Cheat Sheet)
 
 ### Reference (outside the "22 live modules" count)
