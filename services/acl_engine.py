@@ -102,7 +102,10 @@ OUT_OF_V0_KEYWORDS = {
 # typo and gets "did you mean" (edit distance <= 2, word length >= 3).
 ENTRY_KEYWORDS = ("permit", "deny", "remark")
 # Real IOS words that may start an ACL entry or sub-command: never "corrected".
-KNOWN_ENTRY_WORDS = frozenset(("dynamic", "evaluate", "default", "no", "exit", "statistics", "end"))
+# `key`, `dns`, `ddns`: real top-level IOS command words within edit distance 2 of
+# `deny` (@ciso W1 2026-10-31, from a check of ~90 global-config words).
+KNOWN_ENTRY_WORDS = frozenset(("dynamic", "evaluate", "default", "no", "exit", "statistics", "end",
+                               "key", "dns", "ddns"))
 SUGGEST_MAX_DISTANCE = 2
 SUGGEST_MIN_LENGTH = 3
 
@@ -328,6 +331,28 @@ def suggest_keyword(word: str) -> Optional[str]:
         if d <= SUGGEST_MAX_DISTANCE and (best is None or d < best[0]):
             best = (d, kw)
     return best[1] if best else None
+
+
+# Tokens that may follow `permit` / `deny` in v0 rule syntax (or the
+# out-of-v0 forms the parser reports as NOT_EVALUATED).
+_RULE_TAIL_WORDS = frozenset(("any", "host", "ip", "tcp", "udp", "icmp", "object-group"))
+
+
+def _looks_like_rule_tail(token: str) -> bool:
+    """Second token of a permit/deny line: address, any, host, protocol or protocol number."""
+    t = token.lower()
+    return t in _RULE_TAIL_WORDS or _looks_ipv4(t) or (t.isdigit() and len(t) <= 3)
+
+
+def _flush_left_rule_typo(tokens: List[str]) -> bool:
+    """@ciso W1: a flush-left line counts as a mistyped rule only when its first word
+    is close to permit/deny AND the second token is rule syntax. `key chain X`,
+    `dns ...`, `ddns ...` and any other top-level IOS command end the block as before.
+    A flush-left mistyped remark is not recognised (its text is free); indented or
+    numbered remark typos still are."""
+    if len(tokens) < 2:
+        return False
+    return suggest_keyword(tokens[0]) in ("permit", "deny") and _looks_like_rule_tail(tokens[1])
 
 
 def _numbered_type(number: int) -> Optional[str]:
@@ -583,8 +608,12 @@ class _Parser:
         if self.ctx is not None:
             # A flush-left `permin ...` inside a named block is a typo of an entry
             # (ACL-01.5a), not the end of the block: never let it vanish into other_lines.
+            # A flush-left line is a real IOS command far more often than a typo
+            # (@ciso W1 2026-10-31: `key chain X` after an ACL without `!` was read
+            # as "deny" and pulled `key-string` into the ACL), so it stays in the
+            # block only when the next token is rule syntax (_looks_like_rule_tail).
             is_entry = (indented or first.isdigit() or first in ENTRY_KEYWORDS
-                        or suggest_keyword(first) is not None)
+                        or _flush_left_rule_typo(tokens))
             if first == "exit" and not indented:
                 self.ctx = None
                 return

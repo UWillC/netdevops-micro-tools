@@ -93,6 +93,7 @@ def test_suggest_keyword_typos(word, expected):
 @pytest.mark.parametrize("word", [
     "permit", "deny", "remark",                     # correct keywords: nothing to suggest
     "no", "pe", "de",                               # shorter than 3
+    "key", "dns", "ddns",                           # top-level IOS words (@ciso W1)
     "dynamic", "evaluate", "default", "exit", "statistics", "end",  # real IOS words
     "object-group", "fragments", "reflect",         # known out-of-v0 keywords
     "interface", "hostname", "router", "banner", "xyzzy",
@@ -303,3 +304,52 @@ class TestUi015:
     def test_no_em_dash_in_new_texts(self, ui):
         for v in ui.values():
             assert EM_DASH not in v["text"] and EM_DASH not in v["output"]
+
+
+# ---------------------------------------------------------------- @ciso W1 (2026-10-31)
+
+# Probe from the @ciso review: a `show run` excerpt without `!` between sections.
+CISO_W1_PROBE = """ip access-list extended B
+ permit ip any any
+key chain X
+ key 1
+  key-string cisco123
+"""
+
+
+def test_w1_key_chain_after_acl_is_not_pulled_in():
+    b = _analyze(CISO_W1_PROBE)
+    assert b["lint"]["not_evaluated_count"] == 0
+    assert "key-string" not in json.dumps(b)
+    acl = b["acls"][0]
+    assert acl["acl"] == "B" and acl["rules"] == acl["evaluated_rules"] == 1
+    assert [x["line"] for x in acl["lines"]] == [2]
+    assert parse_acls(CISO_W1_PROBE).other_lines == [3, 4, 5]
+
+
+@pytest.mark.parametrize("line", [
+    "key chain X", "dns-server 10.0.0.1", "dns 10.0.0.1", "ddns update method X",
+    "deny-list X", "pemit", "permix chain", "deni interface Gi1/0/1",
+])
+def test_w1_flush_left_ios_command_ends_the_block(line):
+    parsed = parse_acls("ip access-list standard S\n permit any\n%s\n  key-string cisco123\n" % line)
+    assert [e.line for e in parsed.acls["S"].entries] == [2]
+    assert parsed.other_lines == [3, 4]
+    assert lint(parsed)["not_evaluated_count"] == 0
+
+
+@pytest.mark.parametrize("acl_type,line,expected", [
+    ("standard", "permin host 10.1.1.1", "permit"),
+    ("standard", "permin 10.1.1.1", "permit"),
+    ("standard", "pemrit any", "permit"),
+    ("extended", "dney tcp any any eq 22", "deny"),
+    ("extended", "deyn ip any any log", "deny"),
+    ("extended", "permin 6 any any", "permit"),
+])
+def test_w1_flush_left_rule_typo_still_gets_did_you_mean(acl_type, line, expected):
+    b = _analyze("ip access-list %s T\n 10 permit %s\n%s\n" % (
+        acl_type, "any" if acl_type == "standard" else "ip any any", line))
+    ne = b["lint"]["acls"][0]["not_evaluated"]
+    assert [n["line"] for n in ne] == [3]
+    assert ne[0]["proposal"].startswith("Did you mean '%s'?" % expected)
+    assert b["lint"]["not_evaluated_count"] == 1
