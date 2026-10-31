@@ -97,6 +97,15 @@ OUT_OF_V0_KEYWORDS = {
     "vrf": "VRF is outside v0",
 }
 
+# ACL-01.5a (dogfooding 2026-10-29): `10 permin host ...` was NOT_EVALUATED with no
+# hint. The first word of an entry close to one of these keywords is a likely
+# typo and gets "did you mean" (edit distance <= 2, word length >= 3).
+ENTRY_KEYWORDS = ("permit", "deny", "remark")
+# Real IOS words that may start an ACL entry or sub-command: never "corrected".
+KNOWN_ENTRY_WORDS = frozenset(("dynamic", "evaluate", "default", "no", "exit", "statistics", "end"))
+SUGGEST_MAX_DISTANCE = 2
+SUGGEST_MIN_LENGTH = 3
+
 STANDARD_RANGES = ((1, 99), (1300, 1999))
 EXTENDED_RANGES = ((100, 199), (2000, 2699))
 
@@ -211,6 +220,7 @@ class Entry:
     rule: Optional[Rule] = None
     remark: Optional[str] = None
     reason: Optional[str] = None
+    suggestion: Optional[str] = None  # ACL-01.5a: likely keyword for a typo in the first word
     _block: int = 0
     _order: int = 0
 
@@ -225,6 +235,7 @@ class Entry:
             "rule": self.rule.to_dict() if self.rule else None,
             "remark": self.remark,
             "reason": self.reason,
+            "suggestion": self.suggestion,
         }
 
 
@@ -281,6 +292,42 @@ def _parse_ipv4(token: str) -> Optional[int]:
 
 def _looks_ipv4(token: str) -> bool:
     return token.count(".") == 3 and all(p.isdigit() for p in token.split("."))
+
+
+def _edit_distance(a: str, b: str) -> int:
+    """Optimal string alignment distance (insert, delete, substitute, swap of neighbours)."""
+    prev2: Optional[List[int]] = None
+    prev = list(range(len(b) + 1))
+    for i in range(1, len(a) + 1):
+        cur = [i] + [0] * len(b)
+        for j in range(1, len(b) + 1):
+            cost = 0 if a[i - 1] == b[j - 1] else 1
+            cur[j] = min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost)
+            if prev2 is not None and i > 1 and j > 1 and a[i - 1] == b[j - 2] and a[i - 2] == b[j - 1]:
+                cur[j] = min(cur[j], prev2[j - 2] + 1)
+        prev2, prev = prev, cur
+    return prev[len(b)]
+
+
+def suggest_keyword(word: str) -> Optional[str]:
+    """ACL-01.5a: ``permin`` -> ``permit``. None when the word is not a likely typo.
+
+    Only the first word of an entry is checked. Ties go to the order of
+    ENTRY_KEYWORDS (permit, deny, remark), so the result is deterministic.
+    """
+    w = word.lower()
+    if w in ENTRY_KEYWORDS:
+        return w if word != w else None  # `Permit`: the parser reads keywords in lower case
+    if len(w) < SUGGEST_MIN_LENGTH or len(w) > 20:
+        return None
+    if w in KNOWN_ENTRY_WORDS or w in OUT_OF_V0_KEYWORDS:
+        return None
+    best: Optional[Tuple[int, str]] = None
+    for kw in ENTRY_KEYWORDS:
+        d = _edit_distance(w, kw)
+        if d <= SUGGEST_MAX_DISTANCE and (best is None or d < best[0]):
+            best = (d, kw)
+    return best[1] if best else None
 
 
 def _numbered_type(number: int) -> Optional[str]:
@@ -492,7 +539,16 @@ class _Parser:
                 entry.status, entry.reason = STATUS_NOT_EVALUATED, OUT_OF_V0_KEYWORDS[head]
             else:
                 entry.status = STATUS_NOT_EVALUATED
-                entry.reason = "entry '%s' is outside the v0 grammar" % head
+                entry.suggestion = suggest_keyword(head)
+                if entry.suggestion is not None:
+                    entry.reason = "'%s' is not an ACL keyword" % head
+                    if entry.suggestion in ("permit", "deny"):
+                        # A mistyped rule is still a rule of the ACL: it counts in
+                        # "rules" (not in "evaluated") and a trace lists it in
+                        # unevaluated_lines, so the verdict is never shown as certain.
+                        entry.kind = "rule"
+                else:
+                    entry.reason = "entry '%s' is outside the v0 grammar" % head
             return entry
         try:
             entry.rule = parse_rule(body, acl_type)
@@ -525,7 +581,10 @@ class _Parser:
             return
 
         if self.ctx is not None:
-            is_entry = indented or first.isdigit() or first in ("permit", "deny", "remark")
+            # A flush-left `permin ...` inside a named block is a typo of an entry
+            # (ACL-01.5a), not the end of the block: never let it vanish into other_lines.
+            is_entry = (indented or first.isdigit() or first in ENTRY_KEYWORDS
+                        or suggest_keyword(first) is not None)
             if first == "exit" and not indented:
                 self.ctx = None
                 return

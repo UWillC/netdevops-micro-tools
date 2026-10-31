@@ -76,12 +76,80 @@ function aclTable(headers, rows, className) {
   return table;
 }
 
-function aclVerdictNode(verdict, matchedLine, implicitDeny) {
+// ---------------------------------------------------------------- line + seq (ACL-01.5e)
+
+// "line N" is the line of the paste; in a named ACL with sequence numbers that
+// alone misleads, so every reference shows both: "line 4 · seq 11". A seq the
+// paste did not have (Q2 assigns 10, 20, ...) is marked "(assigned)".
+// Index: ACL name -> line -> {seq, seq_assigned}, from data.acls[].lines.
+function aclSeqIndex(data) {
+  const idx = new Map();
+  (data.acls || []).forEach(a => {
+    const m = new Map();
+    (a.lines || []).forEach(x => { if (x && typeof x.line === "number") m.set(x.line, x); });
+    idx.set(a.acl, m);
+  });
+  return idx;
+}
+
+function aclLineRef(idx, acl, line) {
+  if (line === null || line === undefined) return "";
+  const m = idx && acl !== null && acl !== undefined ? idx.get(acl) : null;
+  const x = m ? m.get(line) : null;
+  if (!x || x.seq === null || x.seq === undefined) return "line " + line;
+  return "line " + line + " \u00b7 seq " + x.seq + (x.seq_assigned ? " (assigned)" : "");
+}
+
+function aclLineRefs(idx, acl, lines) {
+  return (lines || []).map(l => aclLineRef(idx, acl, l)).join(", ");
+}
+
+// ACL-01.5d: which edge of the other rule built the same packet.
+const ACL_EDGE_LABELS = {
+  hit: "inside on every field",
+  dst_port_above: "dst port just above",
+  dst_port_below: "dst port just below",
+  dst_port_high: "top of the dst port range",
+  src_port_above: "src port just above",
+  src_port_below: "src port just below",
+  src_outside: "first src address outside",
+  dst_outside: "first dst address outside",
+  src_last: "last src address inside",
+  dst_last: "last dst address inside",
+  not_established: "same packet without established",
+};
+
+// One sentence per other rule edge that built the same packet, e.g.
+// "also the outside edge of line 5 · seq 50 (first src address outside)".
+function aclAlsoTexts(idx, acl, alsoBuiltFor) {
+  const seen = new Set();
+  const out = [];
+  (alsoBuiltFor || []).forEach(x => {
+    if (!x) return;
+    const key = x.line + "|" + x.edge;
+    if (seen.has(key)) return;
+    seen.add(key);
+    const relation = x.relation === "outside" ? "outside" : "inside";
+    const label = Object.prototype.hasOwnProperty.call(ACL_EDGE_LABELS, x.edge) ? ACL_EDGE_LABELS[x.edge] : String(x.edge);
+    out.push("also the " + relation + " edge of " + aclLineRef(idx, acl, x.line) + " (" + label + ")");
+  });
+  return out;
+}
+
+function aclNotEvaluatedCount(data) {
+  const lint = data.lint || {};
+  if (typeof lint.not_evaluated_count === "number") return lint.not_evaluated_count;
+  let n = (lint.not_evaluated || []).length;
+  (lint.acls || []).forEach(a => { n += (a.not_evaluated || []).length; });
+  return n;
+}
+
+function aclVerdictNode(verdict, matchedLine, implicitDeny, matchedRef) {
   const span = aclEl("span", "acl-verdict acl-verdict-" + (verdict === "permit" ? "permit" : "deny"),
     verdict === "permit" ? "PERMIT" : "DENY");
   const wrap = aclEl("span");
   wrap.appendChild(span);
-  const where = implicitDeny ? " implicit deny" : (matchedLine !== null && matchedLine !== undefined ? " line " + matchedLine : "");
+  const where = implicitDeny ? " implicit deny" : (matchedLine !== null && matchedLine !== undefined ? " " + (matchedRef || "line " + matchedLine) : "");
   wrap.appendChild(document.createTextNode(where));
   return wrap;
 }
@@ -119,7 +187,19 @@ function aclRenderSummary(container, data) {
     box.appendChild(aclEl("div", "acl-count-label", lvl));
     head.appendChild(box);
   });
+  // ACL-01.5a: lines the lint could not check. Without this tile "0 / 0 / 0"
+  // read as "clean" while a line like `10 permin ...` was never evaluated.
+  const ne = aclNotEvaluatedCount(data);
+  const neBox = aclEl("div", "acl-count acl-count-ne" + (ne > 0 ? " acl-count-alert" : ""));
+  neBox.appendChild(aclEl("div", "acl-count-num", ne));
+  neBox.appendChild(aclEl("div", "acl-count-label", "NOT EVALUATED"));
+  head.appendChild(neBox);
   container.appendChild(head);
+  if (ne > 0) {
+    container.appendChild(aclEl("p", "acl-note acl-note-alert",
+      ne + " not evaluated: " + (ne === 1 ? "this line is" : "these lines are") +
+      " not covered by the counts above and not used in any trace. See the lint table."));
+  }
 
   const acls = data.acls || [];
   if (!acls.length) {
@@ -139,6 +219,7 @@ function aclRenderLint(container, data) {
   aclClear(container);
   const rows = [];
   const lint = data.lint || {};
+  const idx = aclSeqIndex(data);
   (lint.acls || []).forEach(a => {
     const findings = (a.findings || []).slice().sort((x, y) =>
       (ACL_LEVEL_ORDER[x.level] ?? 9) - (ACL_LEVEL_ORDER[y.level] ?? 9) || x.line - y.line);
@@ -146,11 +227,11 @@ function aclRenderLint(container, data) {
       const quote = aclEl("div", "acl-quote");
       (f.quote || []).forEach((q, i) => {
         const lineNo = (f.lines || [])[i];
-        quote.appendChild(aclEl("div", null, (lineNo !== undefined ? lineNo + ": " : "") + q));
+        quote.appendChild(aclEl("div", null, (lineNo !== undefined ? aclLineRef(idx, a.acl, lineNo) + ": " : "") + q));
       });
       rows.push({ className: "acl-level-" + String(f.level || "").toLowerCase(), cells: [
         { text: a.acl, className: "acl-mono" },
-        f.line,
+        aclLineRef(idx, a.acl, f.line),
         { node: aclEl("span", "acl-badge acl-badge-" + String(f.level || "").toLowerCase(), f.level) },
         { text: f.id, className: "acl-mono" },
         { node: quote },
@@ -160,16 +241,16 @@ function aclRenderLint(container, data) {
     });
     (a.not_evaluated || []).forEach(n => {
       rows.push({ className: "acl-level-ne", cells: [
-        { text: a.acl, className: "acl-mono" }, n.line,
+        { text: a.acl, className: "acl-mono" }, aclLineRef(idx, a.acl, n.line),
         { node: aclEl("span", "acl-badge acl-badge-ne", "NOT EVALUATED") }, "",
-        { text: n.text, className: "acl-mono" }, n.reason, "",
+        { text: n.text, className: "acl-mono" }, n.reason, n.proposal || "",
       ] });
     });
   });
   (lint.not_evaluated || []).forEach(n => {
     rows.push({ className: "acl-level-ne", cells: [
-      "", n.line, { node: aclEl("span", "acl-badge acl-badge-ne", "NOT EVALUATED") }, "",
-      { text: n.text, className: "acl-mono" }, n.reason, "",
+      "", "line " + n.line, { node: aclEl("span", "acl-badge acl-badge-ne", "NOT EVALUATED") }, "",
+      { text: n.text, className: "acl-mono" }, n.reason, n.proposal || "",
     ] });
   });
   if (!rows.length) {
@@ -181,6 +262,7 @@ function aclRenderLint(container, data) {
 
 function aclRenderPackets(container, data, pasteLines) {
   aclClear(container);
+  const idx = aclSeqIndex(data);
   const groups = data.auto_packets || [];
   if (!groups.length) {
     container.appendChild(aclEl("p", "acl-note", "No packets: the paste has no evaluated rule."));
@@ -195,10 +277,9 @@ function aclRenderPackets(container, data, pasteLines) {
     }
     const rows = packets.map((r, i) => {
       const from = aclEl("div");
-      from.appendChild(aclEl("div", null, "line " + r.from_line + " (" + r.relation + ")"));
+      from.appendChild(aclEl("div", null, aclLineRef(idx, g.acl, r.from_line) + " (" + r.relation + ")"));
       from.appendChild(aclEl("div", "acl-dim acl-mono", aclLineText(pasteLines, r.from_line)));
-      const also = (r.also_built_for || []).map(x => x.line).filter((v, k, arr) => arr.indexOf(v) === k);
-      if (also.length) from.appendChild(aclEl("div", "acl-dim", "same packet from line " + also.join(", ")));
+      aclAlsoTexts(idx, g.acl, r.also_built_for).forEach(t => from.appendChild(aclEl("div", "acl-dim", t)));
       // A packet built inside a rule that lands on another line = that rule is shadowed.
       const lands = r.relation === "inside" && r.matched_line !== r.from_line;
       return { className: lands ? "acl-row-shadow" : null, cells: [
@@ -206,24 +287,24 @@ function aclRenderPackets(container, data, pasteLines) {
         { node: from },
         { text: aclPacketText(r.packet), className: "acl-mono" },
         r.why,
-        { node: aclVerdictNode(r.verdict, r.matched_line, r.implicit_deny) },
-        lands ? "built inside line " + r.from_line + ", decided by " + (r.implicit_deny ? "implicit deny" : "line " + r.matched_line) : "",
+        { node: aclVerdictNode(r.verdict, r.matched_line, r.implicit_deny, aclLineRef(idx, g.acl, r.matched_line)) },
+        lands ? "built inside " + aclLineRef(idx, g.acl, r.from_line) + ", decided by " + (r.implicit_deny ? "implicit deny" : aclLineRef(idx, g.acl, r.matched_line)) : "",
       ] };
     });
     container.appendChild(aclTable(["#", "Built from", "Packet", "Edge", "Result", "Note"], rows));
   });
 }
 
-function aclRenderTrace(container, t, pasteLines) {
+function aclRenderTrace(container, t, pasteLines, idx) {
   aclClear(container);
   const head = aclEl("div", "acl-trace-head");
   head.appendChild(aclEl("span", "acl-dim", "ACL " + t.acl + ": "));
-  head.appendChild(aclVerdictNode(t.verdict, t.matched_line, t.implicit_deny));
+  head.appendChild(aclVerdictNode(t.verdict, t.matched_line, t.implicit_deny, aclLineRef(idx, t.acl, t.matched_line)));
   container.appendChild(head);
   const rows = (t.path || []).map(step => ({
     className: step.matched ? "acl-row-match" : null,
     cells: [
-      step.line,
+      aclLineRef(idx, t.acl, step.line),
       { text: aclLineText(pasteLines, step.line), className: "acl-mono" },
       step.matched ? "yes" : "no",
       step.reason,
@@ -232,7 +313,7 @@ function aclRenderTrace(container, t, pasteLines) {
   if (rows.length) container.appendChild(aclTable(["Line", "Rule", "Matched", "Why"], rows));
   if ((t.unevaluated_lines || []).length) {
     container.appendChild(aclEl("p", "acl-note",
-      "Not evaluated on the way (the result may differ on the device): line " + t.unevaluated_lines.join(", ") + "."));
+      "Not evaluated on the way (the result may differ on the device): " + aclLineRefs(idx, t.acl, t.unevaluated_lines) + "."));
   }
 }
 
@@ -240,30 +321,42 @@ function aclRenderTrace(container, t, pasteLines) {
 function aclFormatText(data, pasteLines) {
   const out = ["ACL WHAT-IF REPORT", "=".repeat(60)];
   const totals = (data.lint && data.lint.totals) || {};
-  out.push("Findings: " + (totals.ERROR || 0) + " error, " + (totals.WARN || 0) + " warn, " + (totals.INFO || 0) + " info");
+  const idx = aclSeqIndex(data);
+  const ne = aclNotEvaluatedCount(data);
+  out.push("Findings: " + (totals.ERROR || 0) + " error, " + (totals.WARN || 0) + " warn, " + (totals.INFO || 0) + " info, " +
+    ne + " not evaluated" + (ne > 0 ? " (not covered by the findings, see LINT)" : ""));
   (data.acls || []).forEach(a => out.push("ACL " + a.acl + " (" + a.type + "): " + a.evaluated_rules + "/" + a.rules + " rules evaluated"));
   out.push("", "LINT", "-".repeat(60));
   ((data.lint && data.lint.acls) || []).forEach(a => {
     (a.findings || []).forEach(f => {
-      out.push("[" + f.level + "] " + f.id + " " + a.acl + " line " + f.line);
-      (f.quote || []).forEach((q, i) => out.push("    " + ((f.lines || [])[i] ?? "") + ": " + q));
+      out.push("[" + f.level + "] " + f.id + " " + a.acl + " " + aclLineRef(idx, a.acl, f.line));
+      (f.quote || []).forEach((q, i) => out.push("    " + aclLineRef(idx, a.acl, (f.lines || [])[i]) + ": " + q));
       out.push("    " + f.effect, "    -> " + f.proposal);
     });
-    (a.not_evaluated || []).forEach(n => out.push("[NOT EVALUATED] " + a.acl + " line " + n.line + ": " + n.text + " (" + n.reason + ")"));
+    (a.not_evaluated || []).forEach(n => {
+      out.push("[NOT EVALUATED] " + a.acl + " " + aclLineRef(idx, a.acl, n.line) + ": " + n.text + " (" + n.reason + ")");
+      if (n.proposal) out.push("    -> " + n.proposal);
+    });
   });
-  ((data.lint && data.lint.not_evaluated) || []).forEach(n => out.push("[NOT EVALUATED] line " + n.line + ": " + n.text + " (" + n.reason + ")"));
+  ((data.lint && data.lint.not_evaluated) || []).forEach(n => {
+    out.push("[NOT EVALUATED] line " + n.line + ": " + n.text + " (" + n.reason + ")");
+    if (n.proposal) out.push("    -> " + n.proposal);
+  });
   if (data.trace) {
     const t = data.trace;
     out.push("", "YOUR PACKET", "-".repeat(60));
-    out.push("ACL " + t.acl + ": " + String(t.verdict).toUpperCase() + (t.implicit_deny ? " (implicit deny)" : " (line " + t.matched_line + ")"));
-    (t.path || []).forEach(s => out.push("  line " + s.line + " " + (s.matched ? "MATCH" : "no   ") + "  " + aclLineText(pasteLines, s.line) + (s.reason ? "  [" + s.reason + "]" : "")));
+    out.push("ACL " + t.acl + ": " + String(t.verdict).toUpperCase() + (t.implicit_deny ? " (implicit deny)" : " (" + aclLineRef(idx, t.acl, t.matched_line) + ")"));
+    (t.path || []).forEach(s => out.push("  " + aclLineRef(idx, t.acl, s.line) + " " + (s.matched ? "MATCH" : "no   ") + "  " + aclLineText(pasteLines, s.line) + (s.reason ? "  [" + s.reason + "]" : "")));
   }
   out.push("", "EDGE PACKETS", "-".repeat(60));
   (data.auto_packets || []).forEach(g => {
     out.push("ACL " + g.acl);
-    (g.packets || []).forEach((r, i) => out.push("  " + (i + 1) + ". " + aclPacketText(r.packet) + " -> " +
-      String(r.verdict).toUpperCase() + (r.implicit_deny ? " implicit deny" : " line " + r.matched_line) +
-      "  (from line " + r.from_line + ", " + r.why + ")"));
+    (g.packets || []).forEach((r, i) => {
+      out.push("  " + (i + 1) + ". " + aclPacketText(r.packet) + " -> " +
+        String(r.verdict).toUpperCase() + (r.implicit_deny ? " implicit deny" : " " + aclLineRef(idx, g.acl, r.matched_line)) +
+        "  (from " + aclLineRef(idx, g.acl, r.from_line) + ", " + r.why + ")");
+      aclAlsoTexts(idx, g.acl, r.also_built_for).forEach(t => out.push("     " + t));
+    });
   });
   return out.join("\n");
 }
@@ -274,7 +367,7 @@ function aclRenderAll(data, pasteText, ui) {
   aclRenderLint(ui.lint, data);
   aclRenderPackets(ui.packets, data, lines);
   if (ui.trace) {
-    if (data.trace) aclRenderTrace(ui.trace, data.trace, lines);
+    if (data.trace) aclRenderTrace(ui.trace, data.trace, lines, aclSeqIndex(data));
     else aclClear(ui.trace);
   }
   if (ui.output) ui.output.value = aclFormatText(data, lines);

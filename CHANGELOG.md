@@ -4,6 +4,30 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.7.12] – 2026-10-31 (ACL What-If: no false "clean", line and seq, edge relation)
+
+### Network Tools
+- **ACL What-If, not evaluated lines:** the summary has a fourth tile, NOT EVALUATED,
+  highlighted when at least one line could not be checked, with a sentence that those
+  lines are outside the counts and every trace. The text report header reads
+  "Findings: N error, N warn, N info, N not evaluated". Before, a paste with a mistyped
+  keyword showed "0 error, 0 warn, 0 info" and looked clean. API: `lint.not_evaluated_count`.
+- **ACL What-If, "did you mean":** a line whose first word is close to `permit`, `deny`
+  or `remark` (edit distance up to 2, word of 3+ letters) gets "Did you mean 'permit'?"
+  in the Proposal column. A mistyped `permit` / `deny` counts as a rule that was not
+  evaluated (Rules vs Evaluated), and a trace lists it on the way. Lines outside v0
+  (for example `object-group`) are counted, with no suggestion. API: `proposal` on every
+  `not_evaluated` item, `suggestion` on parsed entries.
+- **ACL What-If, line and seq:** every line reference (lint, packet table, trace, text
+  report) shows the paste line and the ACL sequence number, e.g. "line 4 · seq 11"; a
+  sequence number the paste did not have is marked "(assigned)". API: `acls[].lines`
+  (`line`, `seq`, `seq_assigned`). The trace contract is unchanged.
+- **ACL What-If, same packet:** "same packet from line N" now names the relation, e.g.
+  "also the outside edge of line 5 · seq 20 (first src address outside)".
+- Found in dogfooding on production v0.7.8 (2026-10-29).
+
+---
+
 ## [v0.7.11] – 2026-10-29 (API docs: DTG wording)
 
 ### Docs
