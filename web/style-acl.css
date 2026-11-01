@@ -16,6 +16,10 @@
 .acl-count-error .acl-count-num { color: #ef4444; }
 .acl-count-warn .acl-count-num { color: #eab308; }
 .acl-count-info .acl-count-num { color: var(--accent); }
+/* ACL-01.5a: lines the lint could not check; highlighted when there is at least one. */
+.acl-count-ne .acl-count-num { color: var(--muted); }
+.acl-count-alert { border-color: rgba(234, 179, 8, 0.7); background: rgba(234, 179, 8, 0.08); }
+.acl-count-alert .acl-count-num { color: #eab308; }
 
 .acl-table-wrap { overflow-x: auto; }
 .acl-table { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
@@ -44,6 +48,7 @@
 .acl-trace-head { margin-bottom: 0.5rem; font-size: 0.95rem; }
 .acl-group-title { margin: 0.75rem 0 0.35rem; font-size: 0.9rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .acl-note { font-size: 0.8rem; color: var(--muted); margin: 0.25rem 0 0.5rem; }
+.acl-note-alert { color: #eab308; }
 .acl-clean { color: #22c55e; font-size: 0.9rem; }
 
 /* Number inputs get no dark-theme rule in style-base.css; match the text inputs here only. */

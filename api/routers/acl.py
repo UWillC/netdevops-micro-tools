@@ -58,7 +58,7 @@ from services.acl_packets import auto_packets
 
 router = APIRouter()
 
-ENGINE_VERSION = "acl-01.4"
+ENGINE_VERSION = "acl-01.5"
 ANALYZE_PATH = "/tools/acl/analyze"
 
 # Schema-error body (@ciso N2): bounded whatever the request holds.
@@ -111,12 +111,21 @@ class AclAnalyzeRequest(BaseModel):
     auto_packets: bool = Field(default=True, description="Build the auto-packet table from rule edges")
 
 
+class LineRef(BaseModel):
+    """ACL-01.5e: paste line -> ACL sequence number, so the UI can show "line 4 · seq 11"."""
+    line: int
+    seq: Optional[int] = Field(default=None, description="Sequence number; None for a remark without one")
+    seq_assigned: bool = Field(default=False,
+                               description="True when the paste had no seq and the tool assigned 10, 20, ... (Q2)")
+
+
 class AclSummary(BaseModel):
     acl: str
     type: str
     forms: List[str]
     rules: int
     evaluated_rules: int
+    lines: List[LineRef] = Field(default_factory=list, description="Every entry of the ACL in evaluation order")
 
 
 class AclAnalyzeResponse(BaseModel):
@@ -213,7 +222,9 @@ def _analyze(req: AclAnalyzeRequest) -> Response:
         rules = [e for e in acl.entries if e.kind == "rule"]
         summaries.append(AclSummary(
             acl=acl.name, type=acl.acl_type, forms=list(acl.forms), rules=len(rules),
-            evaluated_rules=sum(1 for e in rules if e.status == STATUS_OK and e.rule is not None)))
+            evaluated_rules=sum(1 for e in rules if e.status == STATUS_OK and e.rule is not None),
+            lines=[LineRef(line=e.line, seq=e.seq, seq_assigned=e.seq is not None and not e.explicit_seq)
+                   for e in acl.entries]))
     traced = _run_trace(parsed, req.trace) if req.trace is not None else None
     linted = lint(parsed)
     payload = AclAnalyzeResponse(

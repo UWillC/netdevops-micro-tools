@@ -381,6 +381,13 @@ def _finding(fid: str, entries: List[Any], effect: str, proposal: str) -> Dict[s
     }
 
 
+def _did_you_mean(suggestion: Optional[str]) -> Optional[str]:
+    """ACL-01.5a proposal for a NOT_EVALUATED line whose first word looks like a typo."""
+    if suggestion is None:
+        return None
+    return "Did you mean '%s'? The line is not evaluated until the keyword is fixed." % suggestion
+
+
 def _verb(action: str) -> str:
     return "permits" if action == "permit" else "denies"
 
@@ -584,7 +591,8 @@ def lint(parsed: ParseResult) -> Dict[str, Any]:
                                          "Fix the line; the trace and the lint skip it until then."))
                 continue
             if e.status != STATUS_OK:
-                not_eval.append({"line": e.line, "text": e.text, "reason": e.reason})
+                not_eval.append({"line": e.line, "text": e.text, "reason": e.reason,
+                                 "proposal": _did_you_mean(e.suggestion)})
                 continue
             if e.kind == "rule" and e.rule is not None:
                 rules.append(e)
@@ -606,11 +614,15 @@ def lint(parsed: ParseResult) -> Dict[str, Any]:
             totals[f["level"]] += 1
         out_acls.append({"acl": acl.name, "type": acl.acl_type, "findings": fs,
                          "not_evaluated": not_evaluated_by_acl[acl.name]})
+    top_not_eval = [dict(n, proposal=None) for n in parsed.not_evaluated]
     return {
         "engine": LINT_VERSION,
         "acls": out_acls,
-        "not_evaluated": list(parsed.not_evaluated),
+        "not_evaluated": top_not_eval,
         "totals": totals,
+        # ACL-01.5a: lines the lint could not check, so "0 error, 0 warn, 0 info"
+        # never reads as "clean" when some lines were not evaluated at all.
+        "not_evaluated_count": len(top_not_eval) + sum(len(v) for v in not_evaluated_by_acl.values()),
     }
 
 

@@ -138,9 +138,15 @@ class TestContract:
         assert r.status_code == 200
         b = r.json()
         assert set(b) == {"engine", "acls", "lint", "auto_packets", "trace"}
-        assert b["engine"] == "acl-01.4"
+        assert b["engine"] == "acl-01.5"
+        lines = b["acls"][0].pop("lines")
         assert b["acls"] == [{"acl": "EDGE-IN", "type": "extended", "forms": ["named"],
                               "rules": 9, "evaluated_rules": 9}]
+        # ACL-01.5e: every entry in evaluation order with its seq (remark without seq = None).
+        assert lines[0] == {"line": 2, "seq": None, "seq_assigned": False}
+        assert [x["line"] for x in lines[1:]] == ORDER
+        assert [x["seq"] for x in lines[1:]] == [10, 20, 30, 40, 50, 60, 70, 80, 90]
+        assert not any(x["seq_assigned"] for x in lines)
         assert b["lint"]["engine"] == "acl-01.2"
         assert b["trace"] is None
         assert [a["acl"] for a in b["auto_packets"]] == ["EDGE-IN"]
