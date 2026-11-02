@@ -107,6 +107,8 @@ ENTRY_KEYWORDS = ("permit", "deny", "remark")
 KNOWN_ENTRY_WORDS = frozenset(("dynamic", "evaluate", "default", "no", "exit", "statistics", "end",
                                "key", "dns", "ddns"))
 SUGGEST_MAX_DISTANCE = 2
+# Longest piece of an unknown first word quoted in a reason sentence.
+REASON_ECHO_MAX = 20
 SUGGEST_MIN_LENGTH = 3
 
 STANDARD_RANGES = ((1, 99), (1300, 1999))
@@ -573,7 +575,9 @@ class _Parser:
                         # unevaluated_lines, so the verdict is never shown as certain.
                         entry.kind = "rule"
                 else:
-                    entry.reason = "entry '%s' is outside the v0 grammar" % head
+                    # Echo bounded (WEBSEC-01 b2, @ciso): the word can be the whole paste.
+                    cut = "..." if len(head) > REASON_ECHO_MAX else ""
+                    entry.reason = "entry '%s'%s is outside the v0 grammar" % (head[:REASON_ECHO_MAX], cut)
             return entry
         try:
             entry.rule = parse_rule(body, acl_type)

@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from starlette.routing import Route
 
 from api.main import NO_ECHO_422_PATHS, app
+from services.acl_engine import STATUS_NOT_EVALUATED, parse_acls
 
 client = TestClient(app)
 
@@ -67,3 +68,37 @@ class TestNoEchoIn422:
 
     def test_every_paste_endpoint_in_this_file_is_listed(self):
         assert {p for p, _, _ in PASTE_ENDPOINTS} == set(NO_ECHO_422_PATHS)
+
+
+class TestAclReasonEcho:
+    """(b2) @ciso, ACL-01.5 review: the first word of a line came back without a limit."""
+
+    WORD = "Z" * 10_000
+    PASTE = "ip access-list extended E\n permit ip any any\n %s tail\n" % WORD
+
+    def _reason(self):
+        r = client.post("/tools/acl/analyze", json={"config_text": self.PASTE})
+        assert r.status_code == 200
+        items = r.json()["lint"]["acls"][0]["not_evaluated"]
+        assert len(items) == 1
+        return items[0]["reason"]
+
+    def test_long_first_word_echo_is_at_most_20_characters(self):
+        reason = self._reason()
+        assert reason == "entry '%s'... is outside the v0 grammar" % ("Z" * 20)
+        assert reason.split("'")[1] == "Z" * 20
+
+    def test_engine_sentence_is_bounded_too(self):
+        parsed = parse_acls(self.PASTE)
+        entry = parsed.acls["E"].entries[-1]
+        assert entry.status == STATUS_NOT_EVALUATED
+        assert "Z" * 21 not in entry.reason
+
+    def test_short_word_stays_whole_without_dots(self):
+        parsed = parse_acls("ip access-list extended E\n frobnicate tail\n")
+        assert parsed.acls["E"].entries[-1].reason == "entry 'frobnicate' is outside the v0 grammar"
+
+    def test_exactly_20_characters_has_no_dots(self):
+        word = "x" * 20
+        parsed = parse_acls("ip access-list extended E\n %s tail\n" % word)
+        assert parsed.acls["E"].entries[-1].reason == "entry '%s' is outside the v0 grammar" % word
