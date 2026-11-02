@@ -23,6 +23,11 @@ app = FastAPI(
     version=APP_VERSION,
 )
 
+# Request body limit (WEBSEC-01d). Added first, so it runs inside the limiter:
+# an oversized request still counts against the sender and a 413 has CORS headers.
+from api.body_limit import BodyLimitMiddleware  # noqa: E402
+app.add_middleware(BodyLimitMiddleware)
+
 # Per-IP limit on every POST (fix 2026-09-30). Added before CORS so CORS stays
 # the outer layer and a 429 still carries the CORS headers the landing needs.
 from api.rate_limit import RateLimitMiddleware, start_sweeper  # noqa: E402

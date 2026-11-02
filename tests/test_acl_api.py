@@ -639,11 +639,12 @@ class TestSchemaErrorsWithoutEcho:
         assert len(r.content) < 1024 and "QQQQ" not in r.text
 
     def test_many_bad_fields_stay_small(self):
-        bad = {"acl": "A" * 50_000, "src": "B" * 50_000, "dst": "C" * 50_000,
-               "protocol": ["D" * 50_000], "src_port": "E" * 50_000,
-               "dst_port": "F" * 50_000, "established": "G" * 50_000}
-        r = client.post(URL, json={"config_text": "H" * 50_000, "trace": bad,
-                                   "auto_packets": "I" * 50_000})
+        # 25 000 per field: nine fields of 50 000 now stop at the body limit (WEBSEC-01d).
+        bad = {"acl": "A" * 25_000, "src": "B" * 25_000, "dst": "C" * 25_000,
+               "protocol": ["D" * 25_000], "src_port": "E" * 25_000,
+               "dst_port": "F" * 25_000, "established": "G" * 25_000}
+        r = client.post(URL, json={"config_text": "H" * 25_000, "trace": bad,
+                                   "auto_packets": "I" * 25_000})
         assert r.status_code == 422
         assert len(r.content) < 2048, len(r.content)
         for ch in "ABCDEFGHI":
