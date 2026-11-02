@@ -12,6 +12,10 @@ so the first entry is attacker-controlled and the second-to-last is the
 address Cloudflare saw. We key on that one; with a single entry we use it,
 with no header we fall back to the socket peer.
 
+Key (WEBSEC-01c, @ciso N3): an IPv6 client is counted per /64, because a single
+subscriber usually holds a whole /64 and could otherwise mint a new counter for
+every request. IPv4 stays per address.
+
 Mechanism: in-process sliding windows (dict of deques, one lock), same as the
 The Backroom magic-link limiter. Counters reset on deploy and are not shared
 between instances - acceptable while Render runs one instance.
@@ -27,6 +31,7 @@ address stays in memory for 1 h + SWEEP_INTERVAL after its last request.
 """
 
 import hashlib
+import ipaddress
 import threading
 import time
 from collections import deque
@@ -76,6 +81,24 @@ def client_ip(request: Request) -> str:
     if request.client:
         return request.client.host
     return "unknown"
+
+
+def limit_key(ip: str) -> str:
+    """What the limiter counts: an IPv4 address as is, an IPv6 address as its /64.
+
+    An IPv4-mapped address counts as that IPv4 address (the /64 of ::ffff:0:0/96
+    would put every such client on one counter). Anything that does not parse,
+    like "unknown", stays as it is.
+    """
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return ip
+    if addr.version == 4:
+        return ip
+    if addr.ipv4_mapped is not None:
+        return str(addr.ipv4_mapped)
+    return "%s/64" % ipaddress.IPv6Address(int(addr) >> 64 << 64)
 
 
 class SlidingWindowLimiter:
@@ -175,7 +198,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         path = request.url.path
         try:
-            ip = client_ip(request)
+            ip = limit_key(client_ip(request))
             keys = [("ip:" + ip, DEFAULT_LIMITS)]
             if path in PATH_LIMITS:
                 keys.append(("ip:" + ip + "|" + path, PATH_LIMITS[path]))
