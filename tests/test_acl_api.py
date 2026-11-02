@@ -657,8 +657,9 @@ class TestSchemaErrorsWithoutEcho:
         assert len(r.content) < 1024 and "ZZZZ" not in r.text
 
     def test_other_tools_keep_the_default_422(self):
-        # Scope: only this path changes. Config Drift still gets FastAPI's body.
-        r = client.post("/tools/config-drift/compare", json={"config_a": 1})
+        # Scope: the paste endpoints change (WEBSEC-01b, tests/test_websec_01.py).
+        # A short-form tool still gets FastAPI's body.
+        r = client.post("/tools/subnet/info", json={"cidr": 1})
         assert r.status_code == 422
         assert any("input" in d for d in r.json()["detail"])
 
