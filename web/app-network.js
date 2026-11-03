@@ -351,7 +351,7 @@ if (configParserForm && configParserOutput) {
 
       configParserOutput.value = formatParsedConfig(data, summaryOnly);
     } catch (err) {
-      configParserOutput.value = `Error: ${err.message}`;
+      configParserOutput.value = errorText(err);
     }
   });
 }
@@ -707,6 +707,9 @@ async function batchConvert(timestamps, fromTz, toTz) {
     });
 
     const results = await response.json();
+    if (!response.ok) {
+      throw new Error(typeof results.detail === "string" ? results.detail : `Request failed (${response.status})`);
+    }
 
     let output = `# Batch conversion: ${fromTz} → ${toTz}\n`;
     output += "# Original → Converted\n\n";
@@ -1314,7 +1317,7 @@ if (ceForm && ceOutput) {
       });
       ceOutput.value = formatExplanation(data);
     } catch (err) {
-      ceOutput.value = `Error: ${err.message}`;
+      ceOutput.value = errorText(err);
     }
   });
 }
@@ -1574,7 +1577,8 @@ function formatDriftSummary(data) {
   data.summary.forEach(s => {
     const cls = s.includes("CRITICAL") ? "color:#ef4444" : s.includes("WARNING") ? "color:#eab308" :
       s.startsWith("Direction:") ? "color:#f97316" : "";
-    html += `<div style="${cls}; font-size:0.85rem;">${s}</div>`;
+    // Section titles in the summary come from the pasted config (@ciso W21).
+    html += `<div style="${cls}; font-size:0.85rem;">${esc(s)}</div>`;
   });
   html += `</div></div>`;
   return html;
@@ -1618,7 +1622,7 @@ if (cdForm) {
       if (cdResults) cdResults.style.display = "block";
       if (cdOutput) cdOutput.value = formatDrift(data);
     } catch (err) {
-      if (cdOutput) cdOutput.value = `Error: ${err.message}`;
+      if (cdOutput) cdOutput.value = errorText(err);
     }
   });
 }
@@ -1737,7 +1741,7 @@ if (cisForm) {
       if (cisResults) cisResults.style.display = "block";
       if (cisOutput) cisOutput.value = formatCisAudit(data);
     } catch (err) {
-      if (cisOutput) cisOutput.value = `Error: ${err.message}`;
+      if (cisOutput) cisOutput.value = errorText(err);
     }
   });
 }

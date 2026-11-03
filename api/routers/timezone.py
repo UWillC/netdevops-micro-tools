@@ -73,6 +73,9 @@ class TimezoneConvertResponse(BaseModel):
     results: List[TimezoneResult]
 
 
+MAX_BATCH_TIMESTAMPS = 1000
+
+
 class BatchConvertRequest(BaseModel):
     """Request to convert multiple timestamps."""
     timestamps: List[str] = Field(..., description="List of timestamps to convert")
@@ -345,11 +348,20 @@ async def convert_timestamp(request: TimezoneConvertRequest) -> TimezoneConvertR
     summary="Batch convert timestamps",
     description="Convert multiple timestamps from one timezone to another"
 )
-async def batch_convert(request: BatchConvertRequest) -> List[BatchResult]:
+def batch_convert(request: BatchConvertRequest) -> List[BatchResult]:
     """
     Convert multiple timestamps at once.
     Useful for correlating logs from different sources.
+
+    A plain def runs in the thread pool: as async, a long list stopped every other
+    request for its whole duration (@ciso W20).
     """
+    if len(request.timestamps) > MAX_BATCH_TIMESTAMPS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Too many timestamps: at most {MAX_BATCH_TIMESTAMPS} per request.",
+        )
+
     try:
         from_tz = ZoneInfo(request.from_timezone)
         to_tz = ZoneInfo(request.to_timezone)

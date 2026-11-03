@@ -23,7 +23,12 @@ app = FastAPI(
     version=APP_VERSION,
 )
 
-# Request body limit (WEBSEC-01d). Added first, so it runs inside the limiter:
+# One heavy request at a time (@ciso W19). Added first, so it runs inside the body
+# limit: the body it reads before taking the slot is already counted.
+from api.heavy_gate import HeavyGateMiddleware  # noqa: E402
+app.add_middleware(HeavyGateMiddleware)
+
+# Request body limit (WEBSEC-01d). Added before the limiter, so it runs inside it:
 # an oversized request still counts against the sender and a 413 has CORS headers.
 from api.body_limit import BodyLimitMiddleware  # noqa: E402
 app.add_middleware(BodyLimitMiddleware)

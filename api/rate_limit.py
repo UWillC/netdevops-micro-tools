@@ -41,6 +41,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from api.body_limit import PASTE_PATHS
+
 # Tests switch this off suite-wide (tests/conftest.py); limiter tests turn it on.
 ENABLED = True
 
@@ -56,6 +58,11 @@ PATH_LIMITS = {
     # ACL-01.3 (@ciso W1, 2026-10-28): ~0.4 s CPU locally (~1 s on Render) and
     # up to ~30x response amplification per call; the hourly cap bounds transfer.
     "/tools/acl/analyze": ((10, 60), (120, 3600)),
+    # WEBSEC-01 (@ciso W11): the tools that accept a 960 KB body, same cap as ACL.
+    # Each path has its own counter; DEFAULT_LIMITS is what they share.
+    **{path: ((10, 60), (120, 3600)) for path in PASTE_PATHS},
+    # @ciso W20: a list of up to 1000 timestamps, 5 MB of response before that cap.
+    "/tools/timezone/batch": ((10, 60), (120, 3600)),
 }
 MAX_KEYS_BEFORE_SWEEP = 10_000
 SWEEP_INTERVAL = 5 * 60  # seconds between retention sweeps of inactive addresses
@@ -196,7 +203,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         if not ENABLED or request.method != "POST":
             return await call_next(request)
-        path = request.url.path
+        # Not request.url.path: Starlette builds the URL from the Host header, so
+        # `Host: x/y` would change the path here while the router still sees the real
+        # one (@ciso W22).
+        path = request.scope["path"]
         try:
             ip = limit_key(client_ip(request))
             keys = [("ip:" + ip, DEFAULT_LIMITS)]

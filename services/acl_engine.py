@@ -465,9 +465,10 @@ def _parse_flags(tokens: List[str], i: int, proto: Optional[str], standard: bool
             raise _p01("port in a standard ACL")
         else:
             # e.g. `log <cookie>`, ICMP type, multi-port `eq 80 443`: not in v0 grammar.
+            cut = "..." if len(tok) > REASON_ECHO_MAX else ""
             if proto == "icmp":
-                raise _not_eval("ICMP type/code '%s' is outside v0" % tok)
-            raise _not_eval("token '%s' is outside the v0 grammar" % tok)
+                raise _not_eval("ICMP type/code '%s'%s is outside v0" % (tok[:REASON_ECHO_MAX], cut))
+            raise _not_eval("token '%s'%s is outside the v0 grammar" % (tok[:REASON_ECHO_MAX], cut))
         i += 1
     return established, log
 

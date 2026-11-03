@@ -22,6 +22,7 @@ Endpoints:
   POST /config-drift/compare — Compare two configs
 """
 
+import json
 import re
 from typing import List, Optional, Tuple, Dict
 from collections import OrderedDict
@@ -77,6 +78,11 @@ class DriftResponse(BaseModel):
     total_unchanged: int
     drift_score: float  # 0-100: 0 = identical, 100 = completely different
     summary: List[str]
+    # WEBSEC-01 (@ciso W11): all totals above and the summary counts cover every
+    # change; `sections` may hold fewer, see _limit_returned_changes.
+    truncated: bool = False
+    changes_total: int = 0
+    changes_returned: int = 0
 
 
 # ----------------------------
@@ -103,8 +109,16 @@ def _is_cosmetic(line: str) -> bool:
 
 
 def _strip_trailing_comment(line: str) -> str:
-    """Drop an inline trailing comment ('cmd  ! note') for comparison purposes."""
-    return re.sub(r"\s+!.*$", "", line).rstrip()
+    """Drop an inline trailing comment ('cmd  ! note') for comparison purposes.
+
+    Same result as re.sub(r"\\s+!.*$", "", line).rstrip(), which is quadratic on a
+    long run of spaces (WEBSEC-01e): the first '!' that follows whitespace."""
+    pos = line.find("!", 1)
+    while pos != -1:
+        if line[pos - 1].isspace():
+            return line[:pos].rstrip()
+        pos = line.find("!", pos + 1)
+    return line.rstrip()
 
 
 def _normalize(line: str) -> str:
@@ -117,6 +131,8 @@ def _normalize(line: str) -> str:
 # ----------------------------
 
 GLOBAL_SECTION = "__global__"
+MAX_HOSTNAME_LENGTH = 255
+MAX_SUMMARY_TITLE_LENGTH = 120
 BANNER_RE = re.compile(r"^banner\s+(motd|login|exec|incoming|prompt-timeout|slip-ppp)\s+(\S+)", re.IGNORECASE)
 
 
@@ -212,22 +228,32 @@ def _parse_into_sections(config_text: str, ignore_cosmetic: bool) -> OrderedDict
 def _reconcile_bare_headers(sections_a: OrderedDict, sections_b: OrderedDict) -> None:
     """If a line is a section (has children) in one config but appears as a bare
     global line in the other, promote the bare line to an empty section so the
-    engine compares children instead of reporting section removed + line added."""
+    engine compares children instead of reporting section removed + line added.
+
+    Each header takes the earliest bare line still unused with the same normalized
+    form. An index instead of a scan per header (WEBSEC-01): 90 KB cost 10.8 s."""
     for first, second in ((sections_a, sections_b), (sections_b, sections_a)):
+        bare = second.get(GLOBAL_SECTION, [])
+        positions: Dict[str, List[int]] = {}
+        for pos in range(len(bare) - 1, -1, -1):
+            positions.setdefault(_normalize(bare[pos]), []).append(pos)
+
+        promoted = set()
         for header in list(first.keys()):
             if header == GLOBAL_SECTION or header in second:
                 continue
-            norm_header = _normalize(header)
-            for gline in list(second.get(GLOBAL_SECTION, [])):
-                if _normalize(gline) == norm_header:
-                    second[GLOBAL_SECTION].remove(gline)
-                    second[header] = []
-                    break
+            candidates = positions.get(_normalize(header))
+            if candidates:
+                promoted.add(candidates.pop())
+                second[header] = []
+
+        if promoted:
+            bare[:] = [line for pos, line in enumerate(bare) if pos not in promoted]
 
 
 def _detect_hostname(config_text: str) -> Optional[str]:
     m = re.search(r"^hostname\s+(\S+)", config_text, re.MULTILINE)
-    return m.group(1) if m else None
+    return m.group(1)[:MAX_HOSTNAME_LENGTH] if m else None
 
 
 # ----------------------------
@@ -237,40 +263,83 @@ def _detect_hostname(config_text: str) -> Optional[str]:
 RANGE_HEADER_RE = re.compile(r"^interface range\s+(.+)$", re.IGNORECASE)
 _RANGE_PART_RE = re.compile(r"^(\S+?)(\d+)\s*-\s*(\d+)$")
 _MAX_RANGE_SPAN = 1024
+_MAX_RANGE_PART_LENGTH = 128  # _RANGE_PART_RE is quadratic on a long run of digits
+
+# WEBSEC-01f (@ciso W10): the span above limits one part, and nothing limited the
+# number of parts: 4 KB expanded to 308 224 sections and over 1 GB. These limits are
+# shared by both configs of one request. Lines count too, because every port copies
+# the children of its range. Measured need: an 8 x 48 stack with 30 lines per port
+# is 384 ports and about 12 000 lines.
+MAX_EXPANDED_PORTS = 8192
+MAX_EXPANDED_LINES = 32768
 
 
-def _expand_interface_range(header: str, children: List[str]) -> "OrderedDict":
+class _RangeBudget:
+    def __init__(self) -> None:
+        self.ports = MAX_EXPANDED_PORTS
+        self.lines = MAX_EXPANDED_LINES
+        self.exhausted = False
+
+    def take(self, ports: int, children: int) -> bool:
+        lines = ports * (children + 1)
+        if ports > self.ports or lines > self.lines:
+            self.exhausted = True
+            return False
+        self.ports -= ports
+        self.lines -= lines
+        return True
+
+
+def _expand_interface_range(header: str, children: List[str],
+                            budget: Optional[_RangeBudget] = None) -> "OrderedDict":
     """Expand 'interface range GigabitEthernet1/0/1 - 40' into per-port sections,
     each with a copy of the range's child lines. Comma-separated parts supported.
-    Unparsable parts become single 'interface <part>' sections."""
+    Unparsable parts become single 'interface <part>' sections. Once the budget
+    runs out, the remaining parts stay together as one 'interface range' section."""
+    if budget is None:
+        budget = _RangeBudget()
     spec = RANGE_HEADER_RE.match(header).group(1).strip()
     expanded: "OrderedDict" = OrderedDict()
-    for part in [p.strip() for p in spec.split(",") if p.strip()]:
-        m = _RANGE_PART_RE.match(part)
+    parts = [p.strip() for p in spec.split(",") if p.strip()]
+    for index, part in enumerate(parts):
+        m = _RANGE_PART_RE.match(part) if len(part) <= _MAX_RANGE_PART_LENGTH else None
+        ports = None
         if m:
             prefix, start, end = m.group(1), int(m.group(2)), int(m.group(3))
             if start <= end and (end - start) <= _MAX_RANGE_SPAN:
-                for port in range(start, end + 1):
-                    expanded[f"interface {prefix}{port}"] = list(children)
-                continue
-        expanded[f"interface {part}"] = list(children)
+                ports = range(start, end + 1)
+        if not budget.take(len(ports) if ports else 1, len(children)):
+            expanded[f"interface range {', '.join(parts[index:])}"] = list(children)
+            break
+        if ports:
+            for port in ports:
+                expanded[f"interface {prefix}{port}"] = list(children)
+        else:
+            expanded[f"interface {part}"] = list(children)
     return expanded
 
 
-def _expand_unmatched_ranges(sections_x: OrderedDict, sections_y: OrderedDict) -> None:
+def _expand_unmatched_ranges(sections_x: OrderedDict, sections_y: OrderedDict,
+                             budget: Optional[_RangeBudget] = None) -> None:
     """Expand range headers in X that have no identical header in Y.
     Identical ranges on both sides stay compact (readable report)."""
+    if budget is None:
+        budget = _RangeBudget()
     for header in list(sections_x.keys()):
         if header in sections_y:
             continue
         if not RANGE_HEADER_RE.match(header):
             continue
-        expanded = _expand_interface_range(header, sections_x[header])
+        expanded = _expand_interface_range(header, sections_x[header], budget)
         del sections_x[header]
         for new_header, lines in expanded.items():
             if new_header in sections_x:
                 existing = sections_x[new_header]
-                existing.extend(l for l in lines if l not in existing)
+                seen = set(existing)
+                for line in lines:
+                    if line not in seen:
+                        seen.add(line)
+                        existing.append(line)
             else:
                 sections_x[new_header] = lines
 
@@ -619,6 +688,10 @@ def _compare_sections(sections_a: OrderedDict, sections_b: OrderedDict) -> List[
     return result
 
 
+def _clip_title(title: str) -> str:
+    return title if len(title) <= MAX_SUMMARY_TITLE_LENGTH else title[:MAX_SUMMARY_TITLE_LENGTH] + "..."
+
+
 def _generate_summary(sections: List[DriftSection], total_added: int,
                       total_removed: int, total_modified: int) -> List[str]:
     """Generate human-readable summary of drift."""
@@ -660,7 +733,7 @@ def _generate_summary(sections: List[DriftSection], total_added: int,
         )
 
     # Highlight specific sections
-    section_names = [s.title for s in sections
+    section_names = [_clip_title(s.title) for s in sections
                      if s.added_count + s.removed_count + s.modified_count > 0]
     if len(section_names) <= 5:
         summary.append(f"Changed sections: {', '.join(section_names)}")
@@ -668,6 +741,58 @@ def _generate_summary(sections: List[DriftSection], total_added: int,
         summary.append(f"Changed sections: {', '.join(section_names[:5])} + {len(section_names) - 5} more")
 
     return summary
+
+
+# ----------------------------
+# Response size
+# ----------------------------
+
+# WEBSEC-01 (@ciso W11): disjoint configs at the body limit produced a 17 MB
+# response, because each change carries its line and its section header. Every
+# number here applies after the totals and the summary counts are done, so those
+# stay true. An 8 x 48 stack with 30 lines per port is about 12 000 lines, but only
+# two configs that differ on every line report all of them as changes.
+MAX_RETURNED_CHANGES = 5000
+MAX_RETURNED_BYTES = 1_500_000
+_RISK_ORDER = {"critical": 0, "warning": 1, "info": 2}
+
+
+def _limit_returned_changes(sections: List[DriftSection]) -> Tuple[List[DriftSection], int, int]:
+    """Keep the changes that fit in the limits, the highest risk first and in report
+    order within a risk level. Returns (sections, changes in total, changes kept).
+
+    A change too large to fit is skipped so that it cannot hide the smaller ones.
+    Sizes are of the ASCII JSON form, which is never smaller than the real response.
+    """
+    flat = [(_RISK_ORDER.get(c.risk, 3), si, ci, c)
+            for si, s in enumerate(sections) for ci, c in enumerate(s.changes)]
+    flat.sort(key=lambda item: item[:3])
+
+    kept: Dict[int, List[Tuple[int, DriftLine]]] = {}
+    used = 0
+    count = 0
+    for _, si, ci, change in flat:
+        if count == MAX_RETURNED_CHANGES:
+            break
+        rough = len(change.line) + len(change.section) + len(change.old_line or "")
+        if used + rough > MAX_RETURNED_BYTES:
+            continue
+        size = len(json.dumps(change.model_dump()))
+        if si not in kept:
+            size += len(json.dumps(sections[si].title)) + 100  # title and counters
+        if used + size > MAX_RETURNED_BYTES:
+            continue
+        used += size
+        count += 1
+        kept.setdefault(si, []).append((ci, change))
+
+    if count == len(flat):
+        return sections, len(flat), count
+    limited = [
+        sections[si].model_copy(update={"changes": [c for _, c in sorted(kept[si], key=lambda x: x[0])]})
+        for si in sorted(kept)
+    ]
+    return limited, len(flat), count
 
 
 # ----------------------------
@@ -682,9 +807,10 @@ def compare_configs(req: DriftRequest):
     sections_a = _parse_into_sections(req.config_a, req.ignore_cosmetic)
     sections_b = _parse_into_sections(req.config_b, req.ignore_cosmetic)
     _reconcile_bare_headers(sections_a, sections_b)
+    range_budget = _RangeBudget()
     if req.expand_interface_range:
-        _expand_unmatched_ranges(sections_a, sections_b)
-        _expand_unmatched_ranges(sections_b, sections_a)
+        _expand_unmatched_ranges(sections_a, sections_b, range_budget)
+        _expand_unmatched_ranges(sections_b, sections_a, range_budget)
 
     # Detect hostnames
     hostname_a = _detect_hostname(req.config_a)
@@ -714,15 +840,32 @@ def compare_configs(req: DriftRequest):
     drift_score = (total_changed / max(total_changed + total_unchanged, 1)) * 100
 
     summary = _generate_summary(drift_sections, total_added, total_removed, total_modified)
+    if range_budget.exhausted:
+        summary.append(
+            f"Interface range expansion stopped at its limit ({MAX_EXPANDED_PORTS} ports, "
+            f"{MAX_EXPANDED_LINES} lines): the remaining parts are compared as one section, "
+            "so they may show as drift."
+        )
+
+    returned_sections, changes_total, changes_returned = _limit_returned_changes(drift_sections)
+    truncated = changes_returned < changes_total
+    if truncated:
+        summary.append(
+            f"Report truncated: showing {changes_returned} of {changes_total} changes, "
+            "highest risk first. The counts above cover all of them."
+        )
 
     return DriftResponse(
         hostname_a=hostname_a,
         hostname_b=hostname_b,
-        sections=drift_sections,
+        sections=returned_sections,
         total_added=total_added,
         total_removed=total_removed,
         total_modified=total_modified,
         total_unchanged=total_unchanged,
         drift_score=round(min(drift_score, 100), 1),
         summary=summary,
+        truncated=truncated,
+        changes_total=changes_total,
+        changes_returned=changes_returned,
     )

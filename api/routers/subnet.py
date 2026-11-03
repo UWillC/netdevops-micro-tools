@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, validator
 from typing import Optional, List
 import ipaddress
+import itertools
 import datetime
 
 router = APIRouter()
@@ -50,20 +51,33 @@ class ConvertRequest(BaseModel):
 # -----------------------------
 # Helper functions
 # -----------------------------
+IPV6_MESSAGE = "IPv6 is not supported by this tool: enter an IPv4 network."
+MAX_DISPLAYED_SUBNETS = 64
+
+
+def parse_ipv4_network(text: str) -> ipaddress.IPv4Network:
+    """The whole calculator works on IPv4 only. An IPv6 network used to spend all
+    the memory there is before it failed (WEBSEC-01, @ciso W18)."""
+    network = ipaddress.ip_network(text, strict=False)
+    if network.version != 4:
+        raise HTTPException(status_code=400, detail=IPV6_MESSAGE)
+    return network
+
+
 def get_subnet_info(network: ipaddress.IPv4Network) -> dict:
     """Get detailed information about a subnet"""
     # Calculate usable hosts
     total_hosts = network.num_addresses
     usable_hosts = total_hosts - 2 if total_hosts > 2 else total_hosts
 
-    # Get host range
-    hosts = list(network.hosts())
-    if hosts:
-        first_host = str(hosts[0])
-        last_host = str(hosts[-1])
+    # Host range by position: listing the hosts of a /8 took 1.4 GB (@ciso W18).
+    # A /31 has two hosts and a /32 one, with no network or broadcast address.
+    if network.prefixlen >= 31:
+        first_host = str(network[0])
+        last_host = str(network[-1])
     else:
-        first_host = str(network.network_address)
-        last_host = str(network.network_address)
+        first_host = str(network[1])
+        last_host = str(network[-2])
 
     # Wildcard mask (inverse of netmask)
     netmask_int = int(network.netmask)
@@ -132,7 +146,7 @@ def netmask_to_prefix(netmask: str) -> int:
 def subnet_info(req: SubnetInfoRequest):
     """Get detailed information about a subnet"""
     try:
-        network = ipaddress.ip_network(req.ip_cidr, strict=False)
+        network = parse_ipv4_network(req.ip_cidr)
         info = get_subnet_info(network)
 
         return {
@@ -144,6 +158,8 @@ def subnet_info(req: SubnetInfoRequest):
                 "tool": "NetDevOps Micro-Tools",
             },
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -152,7 +168,7 @@ def subnet_info(req: SubnetInfoRequest):
 def subnet_split(req: SubnetSplitRequest):
     """Split a network into smaller subnets"""
     try:
-        network = ipaddress.ip_network(req.ip_cidr, strict=False)
+        network = parse_ipv4_network(req.ip_cidr)
 
         if req.new_prefix <= network.prefixlen:
             raise HTTPException(
@@ -163,15 +179,13 @@ def subnet_split(req: SubnetSplitRequest):
         if req.new_prefix > 32:
             raise HTTPException(status_code=400, detail="Prefix cannot exceed /32")
 
-        # Calculate subnets
-        subnets = list(network.subnets(new_prefix=req.new_prefix))
-
-        # Limit output if too many subnets
-        max_display = 64
-        truncated = len(subnets) > max_display
+        # Only the displayed subnets are ever built: the count is arithmetic.
+        total_subnets = 2 ** (req.new_prefix - network.prefixlen)
+        truncated = total_subnets > MAX_DISPLAYED_SUBNETS
 
         subnet_list = []
-        for i, subnet in enumerate(subnets[:max_display]):
+        displayed = itertools.islice(network.subnets(new_prefix=req.new_prefix), MAX_DISPLAYED_SUBNETS)
+        for i, subnet in enumerate(displayed):
             info = get_subnet_info(subnet)
             subnet_list.append({
                 "index": i + 1,
@@ -187,7 +201,7 @@ def subnet_split(req: SubnetSplitRequest):
             "original_network": str(network),
             "original_prefix": network.prefixlen,
             "new_prefix": req.new_prefix,
-            "total_subnets": len(subnets),
+            "total_subnets": total_subnets,
             "hosts_per_subnet": subnet_list[0]["usable_hosts"] if subnet_list else 0,
             "subnets": subnet_list,
             "truncated": truncated,
@@ -214,8 +228,7 @@ def subnet_supernet(req: SupernetRequest):
         networks = []
         for net_str in req.networks:
             try:
-                net = ipaddress.ip_network(net_str, strict=False)
-                networks.append(net)
+                networks.append(parse_ipv4_network(net_str))
             except ValueError as e:
                 raise HTTPException(status_code=400, detail=f"Invalid network '{net_str}': {e}")
 

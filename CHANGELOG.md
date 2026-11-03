@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.7.13] – 2026-11-02 (Request limits and hardening for paste tools)
+
+### Security and reliability
+- **Request size limit:** a POST body above 256 KB gets a 413 before the JSON is parsed;
+  Config Drift, Hardening Audit, Config Parser, Config Explainer and Port Auditor accept
+  up to 960 KB. Chunked uploads are counted by bytes.
+- **Rate limits:** an IPv6 client is counted per /64. The paste tools have their own limit
+  of 10 requests a minute and 120 an hour.
+- **One heavy request at a time:** while a paste tool is working, another paste request
+  gets a 503 with `Retry-After` and a short message in the page. Other tools keep answering.
+- **Parser and memory fixes:** Port Auditor, Hardening Audit, Config Drift, IP Path Tracer
+  and CVE Analyzer no longer slow down sharply on crafted input. `interface range` expansion
+  in Config Drift has a budget per request, and a long Drift response is cut, highest risk
+  changes first, with the totals still counting everything.
+- **Subnet Calculator:** large networks answer immediately. IPv6 input gets a 400, since
+  the tool works on IPv4.
+- **Timezone batch:** at most 1000 items per request.
+- **Errors:** a 422 from a paste tool no longer sends the input back, ACL messages quote at
+  most 20 characters of a line, and text from a paste is escaped before it reaches the page.
+
+---
+
 ## [v0.7.12] – 2026-10-31 (ACL What-If: no false "clean", line and seq, edge relation)
 
 ### Network Tools
