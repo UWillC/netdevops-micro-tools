@@ -27,6 +27,22 @@ from pydantic import BaseModel, Field
 router = APIRouter()
 
 
+# WEBSEC-01e: the checks run regexes such as `login\s+\S+\s+.*\bgroup` over the
+# whole paste, and a long run of whitespace makes those quadratic: under 1 MB would
+# hold the process for minutes. No config needs a run this long, so it shrinks to a
+# single space or, when it spans lines, to the line break and the indent after it.
+_WHITESPACE_RUN_RE = re.compile(r"\s{33,}")
+
+
+def _squeeze_whitespace_run(match: "re.Match") -> str:
+    run = match.group(0)
+    newline = run.rfind("\n")
+    if newline < 0:
+        return " "
+    tail = run[newline:]
+    return tail if len(tail) <= 33 else "\n "
+
+
 def _normalize_config(cfg: str) -> str:
     """Strip leading whitespace added by chat/forum/PDF paste while preserving
     relative indentation inside VTY/interface blocks.
@@ -44,6 +60,7 @@ def _normalize_config(cfg: str) -> str:
        leading whitespace; leave zero-indent lines untouched.
     """
     cfg = cfg.replace("\r\n", "\n").replace("\r", "\n")
+    cfg = _WHITESPACE_RUN_RE.sub(_squeeze_whitespace_run, cfg)
     lines = cfg.split("\n")
     indented_prefixes = []
     for ln in lines:
@@ -484,7 +501,9 @@ def _check_logging_buffered(cfg):
 LOG_HOST_RE = re.compile(
     r"^\s*logging\s+(?:host\s+)?(?:vrf\s+\S+\s+)?"
     r"(?P<dest>\d+\.\d+\.\d+\.\d+"
-    r"|[0-9a-fA-F:]+:[0-9a-fA-F:]*"
+    # Same as [0-9a-fA-F:]+:[0-9a-fA-F:]*, whose two parts overlap: a character,
+    # a colon somewhere after it, and all the rest of the run (WEBSEC-01e).
+    r"|[0-9a-fA-F:](?=[0-9a-fA-F]*:)[0-9a-fA-F:]*"
     r"|[A-Za-z][A-Za-z0-9_.\-]*)"
     r"(?:\s+transport\s+(?:tcp|udp)(?:\s+port\s+\d+)?)?\s*$",
     re.MULTILINE,

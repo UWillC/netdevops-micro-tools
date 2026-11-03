@@ -12,6 +12,10 @@ so the first entry is attacker-controlled and the second-to-last is the
 address Cloudflare saw. We key on that one; with a single entry we use it,
 with no header we fall back to the socket peer.
 
+Key (WEBSEC-01c, @ciso N3): an IPv6 client is counted per /64, because a single
+subscriber usually holds a whole /64 and could otherwise mint a new counter for
+every request. IPv4 stays per address.
+
 Mechanism: in-process sliding windows (dict of deques, one lock), same as the
 The Backroom magic-link limiter. Counters reset on deploy and are not shared
 between instances - acceptable while Render runs one instance.
@@ -27,6 +31,7 @@ address stays in memory for 1 h + SWEEP_INTERVAL after its last request.
 """
 
 import hashlib
+import ipaddress
 import threading
 import time
 from collections import deque
@@ -35,6 +40,8 @@ from typing import Callable, Dict, Optional, Tuple
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
+
+from api.body_limit import PASTE_PATHS
 
 # Tests switch this off suite-wide (tests/conftest.py); limiter tests turn it on.
 ENABLED = True
@@ -51,6 +58,11 @@ PATH_LIMITS = {
     # ACL-01.3 (@ciso W1, 2026-10-28): ~0.4 s CPU locally (~1 s on Render) and
     # up to ~30x response amplification per call; the hourly cap bounds transfer.
     "/tools/acl/analyze": ((10, 60), (120, 3600)),
+    # WEBSEC-01 (@ciso W11): the tools that accept a 960 KB body, same cap as ACL.
+    # Each path has its own counter; DEFAULT_LIMITS is what they share.
+    **{path: ((10, 60), (120, 3600)) for path in PASTE_PATHS},
+    # @ciso W20: a list of up to 1000 timestamps, 5 MB of response before that cap.
+    "/tools/timezone/batch": ((10, 60), (120, 3600)),
 }
 MAX_KEYS_BEFORE_SWEEP = 10_000
 SWEEP_INTERVAL = 5 * 60  # seconds between retention sweeps of inactive addresses
@@ -76,6 +88,24 @@ def client_ip(request: Request) -> str:
     if request.client:
         return request.client.host
     return "unknown"
+
+
+def limit_key(ip: str) -> str:
+    """What the limiter counts: an IPv4 address as is, an IPv6 address as its /64.
+
+    An IPv4-mapped address counts as that IPv4 address (the /64 of ::ffff:0:0/96
+    would put every such client on one counter). Anything that does not parse,
+    like "unknown", stays as it is.
+    """
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return ip
+    if addr.version == 4:
+        return ip
+    if addr.ipv4_mapped is not None:
+        return str(addr.ipv4_mapped)
+    return "%s/64" % ipaddress.IPv6Address(int(addr) >> 64 << 64)
 
 
 class SlidingWindowLimiter:
@@ -173,9 +203,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         if not ENABLED or request.method != "POST":
             return await call_next(request)
-        path = request.url.path
+        # Not request.url.path: Starlette builds the URL from the Host header, so
+        # `Host: x/y` would change the path here while the router still sees the real
+        # one (@ciso W22).
+        path = request.scope["path"]
         try:
-            ip = client_ip(request)
+            ip = limit_key(client_ip(request))
             keys = [("ip:" + ip, DEFAULT_LIMITS)]
             if path in PATH_LIMITS:
                 keys.append(("ip:" + ip + "|" + path, PATH_LIMITS[path]))

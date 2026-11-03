@@ -201,3 +201,79 @@ def test_start_sweeper_once(monkeypatch):
     assert rl.start_sweeper() is True
     assert rl.start_sweeper() is False
     assert started == ["rate-limit-sweeper"]
+
+
+# WEBSEC-01c (@ciso N3): IPv6 counts per /64, IPv4 stays per address.
+A_64 = "2001:db8:1:2::1"
+B_64 = "2001:db8:1:2:ffff:ffff:ffff:ffff"
+
+
+def _from(ip, edge="172.71.0.1"):
+    return {"X-Forwarded-For": f"{ip}, {edge}"}
+
+
+def test_two_addresses_in_one_64_share_the_counter(client, clock):
+    for _ in range(60):
+        assert _post(client, _from(A_64)).status_code != 429
+    assert _post(client, _from(B_64)).status_code == 429
+
+
+def test_rotating_inside_a_64_uses_one_key(client, clock):
+    for i in range(60):
+        assert _post(client, _from(f"2001:db8:1:2::{i + 1:x}")).status_code != 429
+    assert _post(client, _from("2001:db8:1:2::ffff")).status_code == 429
+    assert rl.limiter.key_count() == 1
+
+
+def test_another_64_has_its_own_counter(client, clock):
+    for _ in range(60):
+        _post(client, _from(A_64))
+    assert _post(client, _from("2001:db8:1:3::1")).status_code != 429
+
+
+def test_path_limit_is_shared_inside_a_64(client, clock):
+    def acl(ip):
+        return client.post("/tools/acl/analyze", json={"config_text": "access-list 1 permit any"},
+                           headers=_from(ip))
+    for i in range(10):
+        assert acl(f"2001:db8:1:2::{i + 1:x}").status_code != 429
+    assert acl(B_64).status_code == 429
+
+
+def test_ipv4_addresses_keep_separate_counters(client, clock):
+    for _ in range(60):
+        assert _post(client, _from("70.0.0.1")).status_code != 429
+    assert _post(client, _from("70.0.0.1")).status_code == 429
+    assert _post(client, _from("70.0.0.2")).status_code != 429
+
+
+@pytest.mark.parametrize("ip,key", [
+    ("70.0.0.1", "70.0.0.1"),
+    ("2001:db8:1:2::1", "2001:db8:1:2::/64"),
+    ("2001:0DB8:0001:0002:0000:0000:0000:0001", "2001:db8:1:2::/64"),  # same /64, other spelling
+    ("2001:db8:1:2:aaaa:bbbb:cccc:dddd", "2001:db8:1:2::/64"),
+    ("2001:db8:1:3::1", "2001:db8:1:3::/64"),
+    ("::1", "::/64"),
+    ("fe80::1%eth0", "fe80::/64"),
+    ("::ffff:70.0.0.1", "70.0.0.1"),  # mapped = the IPv4 client, not one shared /64
+    ("unknown", "unknown"),
+    ("not an address", "not an address"),
+    ("", ""),
+])
+def test_limit_key(ip, key):
+    assert rl.limit_key(ip) == key
+
+
+def test_mapped_and_plain_ipv4_share_a_counter_but_not_with_other_mapped(client, clock):
+    for _ in range(60):
+        _post(client, _from("70.0.0.1"))
+    assert _post(client, _from("::ffff:70.0.0.1")).status_code == 429
+    assert _post(client, _from("::ffff:70.0.0.2")).status_code != 429
+
+
+def test_client_ip_keeps_the_full_address(client):
+    # /whoami reads the same function and must keep showing the real address.
+    class R:
+        headers = {"x-forwarded-for": f"{A_64}, 172.71.0.1"}
+        client = None
+    assert rl.client_ip(R()) == A_64

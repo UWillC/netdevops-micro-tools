@@ -234,8 +234,17 @@ def _openvuln_ostype(platform: str, version: str) -> Optional[str]:
     return None
 
 
+MAX_VERSION_LENGTH = 256
+
+
 @router.post("/cve", response_model=CVEAnalyzeResponse)
 def analyze_cve(req: CVEAnalyzeRequest):
+    # WEBSEC-01e: the release parsers are quadratic on a long run of digits or spaces
+    # (256 KB held the process for minutes). Manual check because a max_length error
+    # would send the whole value back. A pasted "show version" line fits easily.
+    if len(req.version) > MAX_VERSION_LENGTH:
+        raise HTTPException(status_code=400, detail="Version is too long.")
+
     # 1) Base run (local JSON only) to find which CVE IDs apply.
     # SDWAN-02.1 fix (K1): "Catalyst SD-WAN 20.18.2.1" is a control component,
     # not cEdge. Every step below works on the effective platform; the response

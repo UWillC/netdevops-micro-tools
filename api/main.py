@@ -23,6 +23,16 @@ app = FastAPI(
     version=APP_VERSION,
 )
 
+# One heavy request at a time (@ciso W19). Added first, so it runs inside the body
+# limit: the body it reads before taking the slot is already counted.
+from api.heavy_gate import HeavyGateMiddleware  # noqa: E402
+app.add_middleware(HeavyGateMiddleware)
+
+# Request body limit (WEBSEC-01d). Added before the limiter, so it runs inside it:
+# an oversized request still counts against the sender and a 413 has CORS headers.
+from api.body_limit import BodyLimitMiddleware  # noqa: E402
+app.add_middleware(BodyLimitMiddleware)
+
 # Per-IP limit on every POST (fix 2026-09-30). Added before CORS so CORS stays
 # the outer layer and a 429 still carries the CORS headers the landing needs.
 from api.rate_limit import RateLimitMiddleware, start_sweeper  # noqa: E402
@@ -51,10 +61,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# POST endpoints that take pasted text (WEBSEC-01b, @ciso N2 extended from ACL
+# What-If): FastAPI's default 422 sends the offending value back, and for a
+# missing field that value is the whole request body.
+NO_ECHO_422_PATHS = frozenset({
+    acl.ANALYZE_PATH,
+    "/tools/config-drift/compare",
+    "/tools/hardening-audit/check",
+    "/tools/cis-audit/check",  # legacy alias of hardening-audit
+    "/tools/config/parse",
+    "/tools/config/parse/summary",
+    "/tools/config-explainer/explain",
+    "/tools/port-auditor/analyze",
+    "/tools/ip-path-tracer/analyze",
+})
+
+
 @app.exception_handler(RequestValidationError)
 async def _validation_error(request, exc):
-    """ACL What-If (@ciso N2): its 422 carries no ``input`` echo; other tools keep FastAPI's default."""
-    if request.url.path == acl.ANALYZE_PATH:
+    """A 422 on a paste endpoint carries no ``input`` echo; other tools keep FastAPI's default."""
+    if request.url.path in NO_ECHO_422_PATHS:
         return JSONResponse(status_code=422, content=acl.validation_error_body(exc.errors()))
     return await request_validation_exception_handler(request, exc)
 

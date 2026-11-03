@@ -395,12 +395,28 @@ async function postJSON(path, payload) {
     body: JSON.stringify(payload),
   });
 
+  if (res.status === 503) {
+    // The large-paste tools take one request at a time: a sentence, not a failure.
+    let sentence = "The service is busy. Please try again in a few seconds.";
+    try {
+      const body = await res.json();
+      if (typeof body.detail === "string") sentence = body.detail;
+    } catch (_) { /* a 503 from the platform has no JSON body */ }
+    const busy = new Error(sentence);
+    busy.busy = true;
+    throw busy;
+  }
+
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Request failed (${res.status}): ${text || res.statusText}`);
   }
 
   return res.json();
+}
+
+function errorText(err) {
+  return err.busy ? err.message : `Error: ${err.message}`;
 }
 
 // -----------------------------

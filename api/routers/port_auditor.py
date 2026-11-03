@@ -69,10 +69,16 @@ UPLINK_PREFIXES = ("Te", "Fo", "Hu", "Tw", "FiveGig", "TwentyFiveGig", "App")
 # Gi1/0/1      PC-ADMIN           connected    10         a-full  a-1000 10/100/1000BaseTX
 # Gi1/0/2                         notconnect   1            auto    auto 10/100/1000BaseTX
 
-STATUS_LINE_RE = re.compile(
-    r"^(\S+)\s+"            # interface
-    r"(.*?)\s+"             # description (may be empty/spaces)
-    r"(connected|notconnect|disabled|err-disabled|inactive|monitoring)\s+"  # status
+#
+# WEBSEC-01e (@ciso W9): this used to be one regex,
+#   ^(\S+)\s+(.*?)\s+(<status>)\s+(\S+)\s+(\S+)\s+(\S+)\s*(.*)$
+# whose \s+ / .*? / \s+ overlap, so a run of spaces cost cubic time (1000 spaces
+# = 6.5 s under the GIL, and every tool shares that process). _match_status_line
+# finds the same match in linear time; tests/test_websec_02.py compares the two.
+_IFACE_RE = re.compile(r"\S+")
+_NON_SPACE_RE = re.compile(r"\S")
+_STATUS_TAIL_RE = re.compile(
+    r"(?<=\s)(connected|notconnect|disabled|err-disabled|inactive|monitoring)\s+"
     r"(\S+)\s+"             # vlan
     r"(\S+)\s+"             # duplex
     r"(\S+)\s*"             # speed
@@ -80,11 +86,16 @@ STATUS_LINE_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Fallback: simpler pattern for wider column formats
-STATUS_SIMPLE_RE = re.compile(
-    r"^(\S+)\s+.*?(connected|notconnect|disabled|err-disabled|inactive)\s",
+# Fallback for wider column formats: the first status word after the interface.
+_STATUS_SIMPLE_RE = re.compile(
+    r"(connected|notconnect|disabled|err-disabled|inactive)\s",
     re.IGNORECASE,
 )
+
+# No real line of these commands comes near this (@ciso W9).
+MAX_LINE_LENGTH = 512
+# 'Last input' is a short duration; a longer value is not one.
+MAX_LAST_INPUT_LENGTH = 64
 
 # 'show interfaces' Last input parsing
 LAST_INPUT_RE = re.compile(r"Last input\s+([^,]+)", re.IGNORECASE)
@@ -101,6 +112,8 @@ def _parse_last_input_to_days(last_input: str) -> Optional[int]:
         return None
     if "never" in s:
         return 9999  # never = definitely unused
+    if len(s) > MAX_LAST_INPUT_LENGTH:
+        return None  # the searches below are quadratic on a long run of digits
 
     days = 0
     # Years
@@ -127,6 +140,40 @@ def _parse_last_input_to_days(last_input: str) -> Optional[int]:
     return days if days > 0 else 0
 
 
+def _match_status_line(line: str) -> Optional[tuple]:
+    """(interface, description, status, vlan, duplex, speed, type), or None.
+
+    The description is what lies between the interface and the status word, and
+    the interface and status are separated by at least two whitespace characters
+    when there is no description. A status word inside a description wins over
+    the one opening the description, as it always did.
+    """
+    head = _IFACE_RE.match(line)
+    if not head or head.end() == len(line):
+        return None
+    after = head.end()
+    first = _NON_SPACE_RE.search(line, after)
+    if not first:
+        return None
+    start = first.start()
+    m = _STATUS_TAIL_RE.search(line, start + 1)
+    if not m and start >= after + 2:
+        m = _STATUS_TAIL_RE.match(line, start)
+    if not m:
+        return None
+    return (head.group(0), line[after:m.start()].strip(), m.group(1).lower(),
+            m.group(2), m.group(3), m.group(4), m.group(5).strip())
+
+
+def _match_status_simple(line: str) -> Optional[tuple]:
+    """(interface, status) for a line _match_status_line refused, or None."""
+    head = _IFACE_RE.match(line)
+    if not head or head.end() == len(line):
+        return None
+    m = _STATUS_SIMPLE_RE.search(line, head.end() + 1)
+    return (head.group(0), m.group(1).lower()) if m else None
+
+
 def _parse_interface_status(text: str) -> List[PortInfo]:
     """Parse 'show interface status' output."""
     ports = []
@@ -134,17 +181,12 @@ def _parse_interface_status(text: str) -> List[PortInfo]:
         line = line.rstrip()
         if not line or line.startswith("-") or line.lower().startswith("port"):
             continue
+        if len(line) > MAX_LINE_LENGTH:
+            continue
 
-        m = STATUS_LINE_RE.match(line)
-        if m:
-            iface = m.group(1)
-            desc = m.group(2).strip()
-            status = m.group(3).lower()
-            vlan = m.group(4)
-            duplex = m.group(5)
-            speed = m.group(6)
-            port_type = m.group(7).strip()
-
+        full = _match_status_line(line)
+        if full:
+            iface, desc, status, vlan, duplex, speed, port_type = full
             ports.append(PortInfo(
                 interface=iface,
                 status=status,
@@ -156,11 +198,11 @@ def _parse_interface_status(text: str) -> List[PortInfo]:
             ))
         else:
             # Fallback parse
-            m2 = STATUS_SIMPLE_RE.match(line)
-            if m2:
+            simple = _match_status_simple(line)
+            if simple:
                 ports.append(PortInfo(
-                    interface=m2.group(1),
-                    status=m2.group(2).lower(),
+                    interface=simple[0],
+                    status=simple[1],
                 ))
 
     return ports
@@ -175,6 +217,9 @@ def _parse_interface_detail(text: str) -> dict:
     current_iface = None
 
     for line in text.strip().splitlines():
+        if len(line) > MAX_LINE_LENGTH:
+            continue
+
         # Interface header line
         m = INTERFACE_HEADER_RE.match(line)
         if m:
@@ -252,17 +297,19 @@ def analyze_unused_ports(req: AuditRequest):
     if req.interface_detail:
         last_input_map = _parse_interface_detail(req.interface_detail)
 
+    # The first entry per normalized name. An index instead of a scan per port
+    # (WEBSEC-01): 200 KB cost 9.3 s.
+    last_input_by_norm = {}
+    for full_name, li in last_input_map.items():
+        last_input_by_norm.setdefault(_normalize_interface_name(full_name), li)
+
     # Match Last input data to ports
     for port in ports:
         # Try exact match first, then normalized
         last_input = last_input_map.get(port.interface)
         if not last_input:
             # Try matching normalized names
-            norm = _normalize_interface_name(port.interface)
-            for full_name, li in last_input_map.items():
-                if _normalize_interface_name(full_name) == norm:
-                    last_input = li
-                    break
+            last_input = last_input_by_norm.get(_normalize_interface_name(port.interface))
 
         if last_input:
             port.last_input = last_input

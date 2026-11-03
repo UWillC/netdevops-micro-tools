@@ -102,7 +102,9 @@ def _is_private_ip(ip: str) -> bool:
 
 HOP_LINE_RE = re.compile(r"^\s*(\d+)\s+(.+)$")
 IP_RE = re.compile(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})")
-RTT_RE = re.compile(r"([\d.]+)\s*(?:ms(?:ec)?|ms)")
+# The lookbehind starts a match only at the start of a number. Same matches, and it
+# keeps a long run of digits or dots linear instead of quadratic (WEBSEC-01e).
+RTT_RE = re.compile(r"(?<![\d.])([\d.]+)\s*(?:ms(?:ec)?|ms)")
 STAR_RE = re.compile(r"\*")
 
 

@@ -639,11 +639,12 @@ class TestSchemaErrorsWithoutEcho:
         assert len(r.content) < 1024 and "QQQQ" not in r.text
 
     def test_many_bad_fields_stay_small(self):
-        bad = {"acl": "A" * 50_000, "src": "B" * 50_000, "dst": "C" * 50_000,
-               "protocol": ["D" * 50_000], "src_port": "E" * 50_000,
-               "dst_port": "F" * 50_000, "established": "G" * 50_000}
-        r = client.post(URL, json={"config_text": "H" * 50_000, "trace": bad,
-                                   "auto_packets": "I" * 50_000})
+        # 25 000 per field: nine fields of 50 000 now stop at the body limit (WEBSEC-01d).
+        bad = {"acl": "A" * 25_000, "src": "B" * 25_000, "dst": "C" * 25_000,
+               "protocol": ["D" * 25_000], "src_port": "E" * 25_000,
+               "dst_port": "F" * 25_000, "established": "G" * 25_000}
+        r = client.post(URL, json={"config_text": "H" * 25_000, "trace": bad,
+                                   "auto_packets": "I" * 25_000})
         assert r.status_code == 422
         assert len(r.content) < 2048, len(r.content)
         for ch in "ABCDEFGHI":
@@ -657,8 +658,9 @@ class TestSchemaErrorsWithoutEcho:
         assert len(r.content) < 1024 and "ZZZZ" not in r.text
 
     def test_other_tools_keep_the_default_422(self):
-        # Scope: only this path changes. Config Drift still gets FastAPI's body.
-        r = client.post("/tools/config-drift/compare", json={"config_a": 1})
+        # Scope: the paste endpoints change (WEBSEC-01b, tests/test_websec_01.py).
+        # A short-form tool still gets FastAPI's body.
+        r = client.post("/tools/subnet/info", json={"cidr": 1})
         assert r.status_code == 422
         assert any("input" in d for d in r.json()["detail"])
 

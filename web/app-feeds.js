@@ -253,7 +253,7 @@ if (paForm && paOutput) {
         }
       }
     } catch (err) {
-      paOutput.value = `Error: ${err.message}`;
+      paOutput.value = errorText(err);
     }
   });
 }

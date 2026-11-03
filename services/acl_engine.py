@@ -107,6 +107,8 @@ ENTRY_KEYWORDS = ("permit", "deny", "remark")
 KNOWN_ENTRY_WORDS = frozenset(("dynamic", "evaluate", "default", "no", "exit", "statistics", "end",
                                "key", "dns", "ddns"))
 SUGGEST_MAX_DISTANCE = 2
+# Longest piece of an unknown first word quoted in a reason sentence.
+REASON_ECHO_MAX = 20
 SUGGEST_MIN_LENGTH = 3
 
 STANDARD_RANGES = ((1, 99), (1300, 1999))
@@ -463,9 +465,10 @@ def _parse_flags(tokens: List[str], i: int, proto: Optional[str], standard: bool
             raise _p01("port in a standard ACL")
         else:
             # e.g. `log <cookie>`, ICMP type, multi-port `eq 80 443`: not in v0 grammar.
+            cut = "..." if len(tok) > REASON_ECHO_MAX else ""
             if proto == "icmp":
-                raise _not_eval("ICMP type/code '%s' is outside v0" % tok)
-            raise _not_eval("token '%s' is outside the v0 grammar" % tok)
+                raise _not_eval("ICMP type/code '%s'%s is outside v0" % (tok[:REASON_ECHO_MAX], cut))
+            raise _not_eval("token '%s'%s is outside the v0 grammar" % (tok[:REASON_ECHO_MAX], cut))
         i += 1
     return established, log
 
@@ -573,7 +576,9 @@ class _Parser:
                         # unevaluated_lines, so the verdict is never shown as certain.
                         entry.kind = "rule"
                 else:
-                    entry.reason = "entry '%s' is outside the v0 grammar" % head
+                    # Echo bounded (WEBSEC-01 b2, @ciso): the word can be the whole paste.
+                    cut = "..." if len(head) > REASON_ECHO_MAX else ""
+                    entry.reason = "entry '%s'%s is outside the v0 grammar" % (head[:REASON_ECHO_MAX], cut)
             return entry
         try:
             entry.rule = parse_rule(body, acl_type)
