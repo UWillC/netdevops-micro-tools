@@ -176,3 +176,68 @@ def test_other_platforms_never_get_the_sdwan_rule(platform, version):
     _, body = _analyze(platform, version)
     assert "Catalyst SD-WAN release" not in (body["coverage_note"] or "")
     assert "newer than every train" not in (body["coverage_note"] or "")
+
+
+# --- @ciso W1 (06.11): newest train per component ---------------------------
+# CVE-2026-76504 (the only record naming 26.2) is Manager only. Controller and
+# Validator advisories stop at 26.1, so 26.2.x is not described for them.
+
+@pytest.mark.parametrize("platform", ["Catalyst SD-WAN Controller", "Catalyst SD-WAN Validator"])
+@pytest.mark.parametrize("version", ["26.2", "26.2.0", "26.2.1"])
+def test_w1_controller_validator_26_2_is_not_evaluated(platform, version):
+    ids, body = _analyze(platform, version)
+    assert ids == []
+    note = body["coverage_note"]
+    assert note.startswith("NOT EVALUATED")
+    assert "newest 26.1" in note
+
+
+def test_w1_manager_26_2_1_keeps_the_usual_note():
+    ids, body = _analyze("Catalyst SD-WAN Manager", "26.2.1")
+    assert ids == []
+    assert body["coverage_note"].startswith("Catalyst SD-WAN Manager/Controller/Validator coverage")
+
+
+def test_w1_bare_catalyst_sdwan_26_2_1_keeps_the_usual_note():
+    # All three components: newest train 26.2, so 26.2.1 is inside the data.
+    ids, body = _analyze("Catalyst SD-WAN", "26.2.1")
+    assert ids == []
+    assert body["coverage_note"].startswith("Catalyst SD-WAN Manager/Controller/Validator coverage")
+
+
+def test_w1_newest_train_per_component():
+    from services.cve_engine import CVEEngine, CVEEngineConfig, sdwan_newest_train
+    eng = CVEEngine(config=CVEEngineConfig(engine_version="0.3.7",
+                                           data_dir="cve_data/sdwan_controllers"))
+    eng.load_all()
+    assert sdwan_newest_train(eng.cves) == (26, 2)
+    assert sdwan_newest_train(eng.cves, "manager") == (26, 2)
+    assert sdwan_newest_train(eng.cves, "controller") == (26, 1)
+    assert sdwan_newest_train(eng.cves, "validator") == (26, 1)
+
+
+# --- @ciso W2 (06.11): a release with no "N.N" token is not read as 20.0 ------
+
+SDWAN_COMPONENTS = ["Catalyst SD-WAN Manager", "Catalyst SD-WAN Controller",
+                    "Catalyst SD-WAN Validator"]
+
+
+@pytest.mark.parametrize("platform", SDWAN_COMPONENTS)
+@pytest.mark.parametrize("version", ["20", "20.", "20.x"])
+def test_w2_unreadable_release_has_no_matches(platform, version):
+    ids, body = _analyze(platform, version)
+    assert ids == []
+    note = body["coverage_note"]
+    assert note.startswith("NOT EVALUATED")
+    assert f'Release "{version}" could not be read' in note
+
+
+@pytest.mark.parametrize("platform,expected", [
+    ("Catalyst SD-WAN Manager", 6), ("Catalyst SD-WAN Controller", 2),
+    ("Catalyst SD-WAN Validator", 2),
+])
+@pytest.mark.parametrize("version", ["20.12", "x20.12", "020.012.005"])
+def test_w2_readable_releases_unchanged(platform, expected, version):
+    ids, body = _analyze(platform, version)
+    assert len(ids) == expected
+    assert body["coverage_note"].startswith("Catalyst SD-WAN Manager/Controller/Validator coverage")

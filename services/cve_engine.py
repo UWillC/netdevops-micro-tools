@@ -928,7 +928,7 @@ def match_sdwan_record(cve, version: str) -> Optional[bool]:
 
 
 def sdwan_coverage_note(entries, conflicts=None, unplaced=None, version=None,
-                        matched=None) -> str:
+                        matched=None, platform=None) -> str:
     """What the SD-WAN controller answer rests on, said in every such report.
 
     The count and the list come from the loaded records, never a constant.
@@ -937,11 +937,14 @@ def sdwan_coverage_note(entries, conflicts=None, unplaced=None, version=None,
     SDWAN-02.3: with `version` given and `matched` == 0, a reason from
     sdwan_not_evaluated_reasons turns the note into "NOT EVALUATED: ..." so the
     form shows "Not evaluated" instead of "No CVEs matched".
+    @ciso W1 (06.11): `platform` names the component, so "newer than every
+    train" is judged on that component's advisories only.
     """
     base = _sdwan_base_note(entries, conflicts, unplaced)
     if version is None or matched != 0 or base.startswith("NOT EVALUATED"):
         return base
-    reasons = sdwan_not_evaluated_reasons(entries, version, conflicts, unplaced)
+    reasons = sdwan_not_evaluated_reasons(entries, version, conflicts, unplaced,
+                                          component=sdwan_component(platform or ""))
     if not reasons:
         return base
     return ("NOT EVALUATED: " + " ".join(r[0].upper() + r[1:] for r in reasons)
@@ -970,12 +973,17 @@ def _sdwan_base_note(entries, conflicts=None, unplaced=None) -> str:
       + _sdwan_build_sentence(unplaced)
 
 
-def sdwan_newest_train(entries) -> Optional[tuple]:
-    """The newest train any SD-WAN controller record's fix table names (26.2 today)."""
+def sdwan_newest_train(entries, component: Optional[str] = None) -> Optional[tuple]:
+    """The newest train an SD-WAN controller record's fix table names.
+
+    @ciso W1 (06.11): only records covering `component` count (None = all three).
+    Today 26.2 for Manager and for all components (CVE-2026-76504 is Manager
+    only), 26.1 for Controller and Validator.
+    """
     prefix = SDWAN_FAMILY_KEY + "-"
     trains = []
     for e in entries:
-        if not is_sdwan_record(e):
+        if not is_sdwan_record(e) or not _sdwan_record_covers(e, component):
             continue
         ff = getattr(e, "first_fixed_version", None)
         for key in ((getattr(ff, "fixes", None) or {}) if ff is not None else {}):
@@ -984,14 +992,16 @@ def sdwan_newest_train(entries) -> Optional[tuple]:
     return max(trains) if trains else None
 
 
-def sdwan_not_evaluated_reasons(entries, version, conflicts=None, unplaced=None) -> List[str]:
+def sdwan_not_evaluated_reasons(entries, version, conflicts=None, unplaced=None,
+                                component: Optional[str] = None) -> List[str]:
     """SDWAN-02.3: why an SD-WAN answer with ZERO matches is not a clean answer.
 
     Four cases (wycena 06.11, sekcja 4): the release cannot be read, it is a
     build the tables do not name (N1), Cisco's sources disagree about it (S1),
     or its train is newer than every train in the dataset (match_sdwan_record
     rule 3 says "not affected" about a train no advisory describes).
-    The caller applies this only when nothing matched.
+    The caller applies this only when nothing matched. `component` limits the
+    "newest train" to the advisories of that component (@ciso W1, 06.11).
     """
     shown = (version or "").strip()[:30]
     m = _SDWAN_RELEASE_TOKEN.search(version or "")
@@ -1007,11 +1017,12 @@ def sdwan_not_evaluated_reasons(entries, version, conflicts=None, unplaced=None)
     if other:
         reasons.append(f"Cisco's sources disagree about release {shown} for {', '.join(other)}, "
                        f"so no answer was given for {'it' if len(other) == 1 else 'them'}.")
-    newest = sdwan_newest_train(entries)
+    newest = sdwan_newest_train(entries, component)
     train = tuple(_tokenize_version(m.group(0))[:2])
     if newest is not None and len(train) == 2 and _cmp_tuples(train, newest) > 0:
-        reasons.append(f"train {train[0]}.{train[1]} is newer than every train in the dataset "
-                       f"(newest {newest[0]}.{newest[1]}); no advisory here describes it.")
+        scope = f" for the {component.capitalize()}" if component else ""
+        reasons.append(f"train {train[0]}.{train[1]} is newer than every train in the dataset"
+                       f"{scope} (newest {newest[0]}.{newest[1]}); no advisory here describes it.")
     return reasons
 
 
@@ -1651,6 +1662,12 @@ class CVEEngine:
             self.excluded_by_known_affected = []
             self.cisco_source_conflicts = []
             component = sdwan_component(platform)
+            # @ciso W2 (06.11): a release with no "N.N" token ("20", "20.",
+            # "20.x") was read as 20.0 and collected "migrate" hits from the
+            # "<20.9" key: a guessed answer. Nothing is matched; the coverage
+            # note says NOT EVALUATED ("could not be read").
+            if not _SDWAN_RELEASE_TOKEN.search(version or ""):
+                return []
             for cve in self.cves:
                 if not is_sdwan_record(cve) or not _sdwan_record_covers(cve, component):
                     continue

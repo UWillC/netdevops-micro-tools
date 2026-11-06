@@ -21,6 +21,14 @@ All notable changes to this project will be documented in this file.
   disagree about it, or when its train is newer than every train in the dataset (today
   26.2). A plain release the tables place past every fix (such as 20.12.8.2) keeps the
   usual note, which says that advisories outside the dataset are never assumed clean.
+- **SD-WAN, newest train per component (security review):** "newer than every train in
+  the dataset" is now judged on the advisories of the component asked about. Controller
+  and Validator 26.2.x used to get the usual note, because only a Manager advisory names
+  26.2; now they are not evaluated (newest train for them 26.1). Manager and plain
+  "Catalyst SD-WAN" 26.2.1 are unchanged.
+- **SD-WAN, release without a minor number (security review):** `20`, `20.` or `20.x` was
+  read as 20.0 and collected "migrate" matches. Now it gives no matches and is shown as
+  not evaluated ("could not be read"). `20.12`, `x20.12` and `020.012.005` are unchanged.
 
 ---
 
