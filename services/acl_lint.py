@@ -614,7 +614,8 @@ def lint(parsed: ParseResult) -> Dict[str, Any]:
             totals[f["level"]] += 1
         out_acls.append({"acl": acl.name, "type": acl.acl_type, "findings": fs,
                          "not_evaluated": not_evaluated_by_acl[acl.name]})
-    top_not_eval = [dict(n, proposal=None) for n in parsed.not_evaluated]
+    top_not_eval = [{"line": n["line"], "text": n["text"], "reason": n["reason"],
+                     "proposal": _did_you_mean(n.get("suggestion"))} for n in parsed.not_evaluated]
     return {
         "engine": LINT_VERSION,
         "acls": out_acls,

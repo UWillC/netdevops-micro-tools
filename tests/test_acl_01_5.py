@@ -353,3 +353,249 @@ def test_w1_flush_left_rule_typo_still_gets_did_you_mean(acl_type, line, expecte
     assert [n["line"] for n in ne] == [3]
     assert ne[0]["proposal"].startswith("Did you mean '%s'?" % expected)
     assert b["lint"]["not_evaluated_count"] == 1
+
+
+# ---------------------------------------------------------------- 5f header typo (2026-11-05)
+
+@pytest.mark.parametrize("word", ["acess-list", "acces-list", "access-lst", "accesslist", "ACCESS-LIST"])
+def test_5f_numbered_header_typo_is_a_not_evaluated_rule_of_that_acl(word):
+    parsed = parse_acls("%s 10 permit 10.1.1.1\naccess-list 10 deny any log\n" % word)
+    assert parsed.other_lines == []
+    acl = parsed.acls["10"]
+    e = acl.entries[0]
+    assert (e.line, e.status, e.kind, e.suggestion) == (1, STATUS_NOT_EVALUATED, "rule", "access-list")
+    assert (e.seq, acl.entries[1].seq) == (10, 20)
+    res = lint(parsed)
+    assert res["not_evaluated_count"] == 1
+    ne = res["acls"][0]["not_evaluated"]
+    assert [n["line"] for n in ne] == [1]
+    assert ne[0]["proposal"].startswith("Did you mean 'access-list'?")
+
+
+def test_5f_numbered_typo_makes_the_trace_verdict_uncertain():
+    from services.acl_engine import Packet, trace
+    parsed = parse_acls("acess-list 10 permit 10.1.1.1\naccess-list 10 deny any log\n")
+    t = trace(parsed, "10", Packet(src="10.1.1.1"))
+    assert t["verdict"] == "deny" and t["unevaluated_lines"] == [1]
+
+
+def test_5f_numbered_typo_alone_shows_in_the_api_as_not_clean():
+    b = _analyze("acess-list 10 permit any\n")
+    assert b["lint"]["not_evaluated_count"] == 1
+    assert b["acls"][0]["rules"] == 1 and b["acls"][0]["evaluated_rules"] == 0
+
+
+def test_5f_numbered_typo_with_a_number_outside_the_ranges_is_top_level():
+    res = lint(parse_acls("acess-list 700 permit any\n"))
+    assert [n["line"] for n in res["not_evaluated"]] == [1]
+    assert res["not_evaluated"][0]["proposal"].startswith("Did you mean 'access-list'?")
+    assert res["not_evaluated_count"] == 1
+
+
+def test_5f_numbered_typo_after_a_correct_line_joins_the_same_acl():
+    parsed = parse_acls("access-list 10 permit any\nacess-list 10 permit tcp any any eq 22\n")
+    assert [e.line for e in parsed.acls["10"].entries] == [1, 2]
+    assert lint(parsed)["not_evaluated_count"] == 1
+
+
+def test_5f_remark_after_numbered_typo_is_not_a_rule():
+    acl = parse_acls("acess-list 10 remark SSH\naccess-list 10 permit any\n").acls["10"]
+    assert acl.entries[0].kind == "other" and acl.entries[0].status == STATUS_NOT_EVALUATED
+    assert sum(1 for e in acl.entries if e.kind == "rule") == 1
+
+
+@pytest.mark.parametrize("header", [
+    "ip acess-list extended EDGE", "ip acces-list extended EDGE", "ip access-lst extended EDGE",
+    "ip accesslist extended EDGE", "ip access list extended EDGE", "IP ACCESS-LIST EXTENDED EDGE",
+    "ip acess-list extnded EDGE", "ipp access-list extended EDGE", "pi access-list extended EDGE",
+])
+def test_5f_named_header_typo_reports_the_header_and_every_entry(header):
+    parsed = parse_acls("%s\n 10 permit tcp any any eq 22\n 20 deny ip any any log\ninterface Gi1\n" % header)
+    assert parsed.acls == {}
+    assert parsed.other_lines == [4]
+    res = lint(parsed)
+    assert [n["line"] for n in res["not_evaluated"]] == [1, 2, 3]
+    assert res["not_evaluated_count"] == 3
+    assert res["not_evaluated"][0]["proposal"].startswith("Did you mean 'ip access-list'?")
+    assert res["not_evaluated"][1]["proposal"] is None
+
+
+def test_5f_numbered_header_with_a_space_instead_of_a_hyphen():
+    parsed = parse_acls("access list 10 permit any\n")
+    assert parsed.acls["10"].entries[0].suggestion == "access-list"
+    assert lint(parsed)["not_evaluated_count"] == 1
+
+
+def test_5f_header_typo_ends_the_named_block_before_it():
+    parsed = parse_acls("ip access-list standard A\n permit any\nacess-list 10 permit any\n")
+    assert [e.line for e in parsed.acls["A"].entries] == [2]
+    assert [e.line for e in parsed.acls["10"].entries] == [3]
+
+
+def test_5f_echo_in_the_reason_is_bounded():
+    # Only near-distance words reach the reason sentence, so it can never be the paste.
+    res = lint(parse_acls("acess-list 10 permit any\n"))
+    assert "acess-list" in res["acls"][0]["not_evaluated"][0]["reason"]
+    assert len(res["acls"][0]["not_evaluated"][0]["reason"]) < 80
+
+
+# False positives: real IOS commands and prose in a change file stay in other_lines.
+@pytest.mark.parametrize("line", [
+    "access-group 10 in", "access-class 10 in", "access-map X 10", "access-session closed",
+    "ip access-group 10 in", "ip access-class 10", "ip address 10.1.1.1 255.255.255.0",
+    "ip accounting output-packets", "ip route 0.0.0.0 0.0.0.0 10.1.1.1",
+    "no access-list 10", "no ip access-list standard X", "show access-lists", "show ip access-lists 10",
+    "sh access-list", "arp access-list X", "ipx access-list standard X", "vlan access-map X 10",
+    "ip access-lists are reviewed monthly", "IP access-lists below", "Access-list changes below:",
+    "access-lists 10 was reviewed", "access lists below", "access list 10 was reviewed",
+    "acess-list", "acess-list 10", "acl 10 permit any", "class-map match-any X",
+    "accept-lifetime 00:00:00 Jan 1 2026 infinite", "accounting-list 10 permit",
+    '"access-list 10 permit any",', "-access-list 10 permit any", "+access-list 10 permit any",
+    "`access-list 10 permit any`", "#access-list 10 permit any", "ip \"access-list standard X",
+    "#ip access-list standard X", "//ip access-list standard X", "-ip access-list standard X",
+    '"ip access-list standard X",', "assess-list reviewed", "prefix-list 10 permit any",
+])
+def test_5f_no_false_positive_on_real_commands_and_prose(line):
+    parsed = parse_acls("%s\n" % line)
+    assert parsed.acls == {}
+    assert parsed.not_evaluated == []
+    assert parsed.other_lines == [1]
+    assert lint(parsed)["not_evaluated_count"] == 0
+
+
+def test_5f_no_change_for_the_correct_headers():
+    parsed = parse_acls(CLEAN)
+    assert all(e.suggestion is None for a in parsed.acls.values() for e in a.entries)
+    assert lint(parsed)["not_evaluated_count"] == 0
+
+
+def test_5f_named_typo_through_the_api_is_not_clean_and_has_a_proposal():
+    b = _analyze("ip acess-list extended EDGE\n 10 permit tcp any any eq 22\n 20 deny ip any any log\n")
+    assert b["acls"] == []
+    assert b["lint"]["totals"] == {"ERROR": 0, "WARN": 0, "INFO": 0}
+    assert b["lint"]["not_evaluated_count"] == 3
+    first = b["lint"]["not_evaluated"][0]
+    assert first["proposal"].startswith("Did you mean 'ip access-list'?")
+    assert set(first) == {"line", "text", "reason", "proposal"}  # contract unchanged
+
+
+def test_5f_change_file_with_prose_and_real_commands_stays_clean():
+    paste = """Access-list changes below:
+access-lists 10 was reviewed
+ip access-lists are reviewed monthly
+interface Gi1/0/1
+ ip access-group 10 in
+line vty 0 4
+ access-class 10 in
+access-list 10 permit 10.1.1.1
+access-list 10 deny any log
+"""
+    parsed = parse_acls(paste)
+    assert parsed.not_evaluated == []
+    assert [e.line for e in parsed.acls["10"].entries] == [8, 9]
+    assert lint(parsed)["not_evaluated_count"] == 0
+
+
+# ---------------------------------------------------------------- @ciso review of 5f (2026-11-05)
+
+
+def test_5f_w1_indented_typo_stays_in_the_block_and_the_verdict_is_right():
+    from services.acl_engine import Packet, trace
+    parsed = parse_acls("ip access-list extended A\n 10 deny ip host 1.1.1.1 any\n"
+                        " acess-list 10 permit any\n 20 permit ip any any\n")
+    t = trace(parsed, "A", Packet(src="2.2.2.2", dst="3.3.3.3", protocol="tcp", src_port=1, dst_port=2))
+    assert (t["verdict"], t["matched_line"], t["unevaluated_lines"]) == ("permit", 4, [3])
+    assert parsed.other_lines == []
+    assert list(parsed.acls) == ["A"]
+    assert lint(parsed)["not_evaluated_count"] == 1
+
+
+def test_5f_flush_left_numbered_typo_ends_the_block():
+    parsed = parse_acls("ip access-list standard A\n permit any\nacess-list 10 permit any\n permit 10.1.1.1\n")
+    assert [e.line for e in parsed.acls["A"].entries] == [2]
+    assert [e.line for e in parsed.acls["10"].entries] == [3]
+    assert parsed.other_lines == [4]
+
+
+_LONG = "9" * 5000
+W2_PASTES = [
+    "acess-list \u00b2 permit any", "access list \u00b2 permit any", "acess-list %s permit any" % _LONG,
+    "access list %s permit any" % _LONG, "access-list \u00b2 permit any", "access-list %s permit any" % _LONG,
+    "ip access-list standard \u00b2", "ip access-list standard %s" % _LONG,
+    "ip access-list standard A\n \u00b2 permit any", "ip access-list standard A\n %s permit any" % _LONG,
+    # The same int() on a protocol and a port (found while fixing W2).
+    "access-list 100 permit \u00b2 any any", "access-list 100 permit %s any any" % _LONG,
+    "access-list 100 permit tcp any any eq \u00b2", "access-list 100 permit tcp any any eq %s" % _LONG,
+    "access-list 100 permit tcp any eq \u00b2 any", "access-list 100 permit tcp any any range 1 %s" % _LONG,
+]
+
+
+@pytest.mark.parametrize("paste", W2_PASTES, ids=[str(i) for i in range(len(W2_PASTES))])
+def test_5f_w2_odd_numbers_are_reported_and_never_a_500(paste):
+    b = _analyze(paste + "\n")  # _analyze asserts HTTP 200
+    res = b["lint"]
+    assert res["not_evaluated_count"] + sum(res["totals"].values()) >= 1
+    items = res["not_evaluated"] + [n for a in res["acls"] for n in a["not_evaluated"]]
+    assert all(len(n["reason"]) < 200 for n in items)  # the line itself is in `text`, not in `reason`
+    assert all(len(f["effect"]) < 200 for a in res["acls"] for f in a["findings"])
+
+
+W2_CISO_TABLE = W2_PASTES[:10]
+
+
+@pytest.mark.parametrize("paste", W2_CISO_TABLE, ids=[str(i) for i in range(len(W2_CISO_TABLE))])
+def test_5f_w2_every_row_of_the_ciso_table_is_counted_as_not_evaluated(paste):
+    assert _analyze(paste + "\n")["lint"]["not_evaluated_count"] >= 1
+
+
+def test_5f_w2_real_numbers_still_read_as_numbers():
+    parsed = parse_acls("ip access-list extended A\n 15 permit 6 any any\n 25 permit tcp any any eq 22\n")
+    assert [(e.seq, e.status) for e in parsed.acls["A"].entries] == [(15, "OK"), (25, "OK")]
+    assert lint(parse_acls("access-list 700 permit any\n"))["not_evaluated_count"] == 1
+
+
+@pytest.mark.parametrize("word", ["acces$-list", "access<list", "access-l1st", 'access"list'])
+def test_5f_w3_only_letters_hyphen_underscore_can_be_a_header_typo(word):
+    parsed = parse_acls("%s 10 permit any\n" % word)
+    assert parsed.acls == {} and parsed.not_evaluated == [] and parsed.other_lines == [1]
+
+
+def _forbid_edit_distance(monkeypatch):
+    import services.acl_engine as engine
+
+    def boom(a, b):
+        raise AssertionError("edit distance on an unbounded word")
+    monkeypatch.setattr(engine, "_edit_distance", boom)
+    return engine
+
+
+def test_5f_w3_long_header_word_costs_no_edit_distance(monkeypatch):
+    engine = _forbid_edit_distance(monkeypatch)
+    assert engine._is_header_word("a" * 100_000) is False
+
+
+def test_5f_w3_long_type_word_costs_no_edit_distance(monkeypatch):
+    engine = _forbid_edit_distance(monkeypatch)
+    assert engine._is_acl_type_word("a" * 100_000) is False
+
+
+def test_5f_w3_long_first_word_before_access_list_costs_no_edit_distance(monkeypatch):
+    import services.acl_engine as engine
+    calls = []
+    real = engine._edit_distance
+    monkeypatch.setattr(engine, "_edit_distance", lambda a, b: calls.append(a) or real(a, b))
+    assert engine._named_header_typo(["a" * 100_000, "access-list", "standard", "X"]) is None
+    assert all(len(a) < 100 for a in calls)
+
+
+def test_5f_w3_numbered_reason_does_not_repeat_the_line():
+    entry = parse_acls("acess-list 10 permit any SECRET-TAIL\n").acls["10"].entries[0]
+    assert entry.reason == "'acess-list' is not an ACL keyword"
+    top = parse_acls("acess-list 700 permit any SECRET-TAIL\n").not_evaluated[0]
+    assert top["reason"] == "'acess-list' is not an ACL keyword"
+
+
+def test_5f_w3_named_reasons_do_not_repeat_the_line():
+    items = parse_acls("ip acess-list extended SECRET-NAME\n 10 permit tcp any any eq 22 SECRET-TAIL\n").not_evaluated
+    assert items[0]["reason"] == "'ip acess-list' is not an ACL keyword"
+    assert items[1]["reason"] == "the ACL header on line 1 is mistyped, so this entry is not evaluated"
