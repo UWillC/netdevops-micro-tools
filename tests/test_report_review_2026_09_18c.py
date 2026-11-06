@@ -93,7 +93,10 @@ def test_platform_is_a_select_of_covered_platforms_only():
     form = html[html.index('id="cve-form"'):html.index('id="cve-form"') + 2500]
     assert '<select name="platform"' in form and 'type="text" name="platform"' not in form
     values = re.findall(r'<option value="([^"]+)"', form[:form.index("</select>")])
-    assert values == ["IOS XE", "IOS", "NX-OS", "ISE"]
+    # SDWAN-02.3: the list lives in one place (services.cve_engine.COVERED_PLATFORMS).
+    from services.cve_engine import COVERED_PLATFORMS
+    assert values == [v for v, _ in COVERED_PLATFORMS]
+    assert values[:4] == ["IOS XE", "IOS", "NX-OS", "ISE"]
     from services.cve_engine import uncovered_family
     from services.platform_taxonomy import normalize_user_platform
     for v in values:

@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.7.15] – 2026-11-06 (CVE Analyzer: Catalyst SD-WAN in the form, one platform list)
+
+### Security Tools
+- **CVE Analyzer, Catalyst SD-WAN in the form:** the platform list now offers
+  Catalyst SD-WAN Manager, Controller and Validator (example release `20.12.5`). Until now
+  they worked only through the API. Each option gets only its own advisories: Manager
+  20.12.5 = 6 CVEs, Controller or Validator 20.12.5 = 2. The hint under the list says that
+  SD-WAN edge routers (cEdge) are checked as IOS XE and that FMC is available only through
+  the API, from 2 curated advisories.
+- **One platform list:** the form options and every report sentence that names the covered
+  platforms come from one list in the engine, and a test keeps them equal.
+- **SD-WAN, not evaluated instead of "no CVEs matched":** with no match, the result is
+  shown as not evaluated when the release cannot be read, when it is a build the Fixed
+  Software tables do not name (such as 20.12.401 or 20.12.8.2.01), when Cisco's sources
+  disagree about it, or when its train is newer than every train in the dataset (today
+  26.2). A plain release the tables place past every fix (such as 20.12.8.2) keeps the
+  usual note, which says that advisories outside the dataset are never assumed clean.
+
+---
+
 ## [v0.7.14] – 2026-11-05 (ACL What-If: mistyped ACL headers, odd numbers; README profiles)
 
 ### Network Tools

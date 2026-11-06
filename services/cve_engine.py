@@ -694,7 +694,23 @@ _IOS_XE_DATASET_FAMILIES = {
     ProductFamily.IOS_XE, ProductFamily.IOS,
     ProductFamily.IOS_XE_SDWAN, ProductFamily.IOS_XE_WLC,
 }
-_COVERED_PLATFORMS_TEXT = "Cisco IOS XE, Cisco IOS, Cisco NX-OS and Cisco ISE"
+# SDWAN-02.3 (2026-11-06): the ONE list of platforms with a dataset. The CVE
+# Analyzer form offers exactly these values, in this order (`web/index.html`,
+# select#cve-platform; tests/test_sdwan_02_3_form.py keeps the two equal), and
+# every report sentence naming the covered platforms is built from it.
+# (form value, name in the report). FMC is answered through the API from a few
+# curated records (_PARTIAL_DATASET_FAMILIES) and is deliberately not listed.
+COVERED_PLATFORMS = (
+    ("IOS XE", "Cisco IOS XE"),
+    ("IOS", "Cisco IOS"),
+    ("NX-OS", "Cisco NX-OS"),
+    ("ISE", "Cisco ISE"),
+    ("Catalyst SD-WAN Manager", "Cisco Catalyst SD-WAN Manager"),
+    ("Catalyst SD-WAN Controller", "Cisco Catalyst SD-WAN Controller"),
+    ("Catalyst SD-WAN Validator", "Cisco Catalyst SD-WAN Validator"),
+)
+_COVERED_NAMES = [name for _, name in COVERED_PLATFORMS]
+_COVERED_PLATFORMS_TEXT = ", ".join(_COVERED_NAMES[:-1]) + " and " + _COVERED_NAMES[-1]
 
 
 # FMC-FREE-TEXT (2026-09-27): families with a handful of curated records in the
@@ -911,13 +927,29 @@ def match_sdwan_record(cve, version: str) -> Optional[bool]:
     return True
 
 
-def sdwan_coverage_note(entries, conflicts=None, unplaced=None) -> str:
+def sdwan_coverage_note(entries, conflicts=None, unplaced=None, version=None,
+                        matched=None) -> str:
     """What the SD-WAN controller answer rests on, said in every such report.
 
     The count and the list come from the loaded records, never a constant.
     Doctrine: a release with no match is "not evaluated" for everything outside
     the listed advisories, never "not vulnerable".
+    SDWAN-02.3: with `version` given and `matched` == 0, a reason from
+    sdwan_not_evaluated_reasons turns the note into "NOT EVALUATED: ..." so the
+    form shows "Not evaluated" instead of "No CVEs matched".
     """
+    base = _sdwan_base_note(entries, conflicts, unplaced)
+    if version is None or matched != 0 or base.startswith("NOT EVALUATED"):
+        return base
+    reasons = sdwan_not_evaluated_reasons(entries, version, conflicts, unplaced)
+    if not reasons:
+        return base
+    return ("NOT EVALUATED: " + " ".join(r[0].upper() + r[1:] for r in reasons)
+            + " An empty result here means \"not checked\", not \"not vulnerable\". "
+            + base)
+
+
+def _sdwan_base_note(entries, conflicts=None, unplaced=None) -> str:
     records = sorted((e for e in entries if is_sdwan_record(e)), key=lambda e: e.cve_id)
     if not records:
         return ("NOT EVALUATED: the Catalyst SD-WAN controller dataset is empty on this "
@@ -936,6 +968,51 @@ def sdwan_coverage_note(entries, conflicts=None, unplaced=None) -> str:
         f"Cisco Software Checker."
     ) + _sdwan_conflict_sentence(sorted(set(conflicts or []) - set(unplaced or []))) \
       + _sdwan_build_sentence(unplaced)
+
+
+def sdwan_newest_train(entries) -> Optional[tuple]:
+    """The newest train any SD-WAN controller record's fix table names (26.2 today)."""
+    prefix = SDWAN_FAMILY_KEY + "-"
+    trains = []
+    for e in entries:
+        if not is_sdwan_record(e):
+            continue
+        ff = getattr(e, "first_fixed_version", None)
+        for key in ((getattr(ff, "fixes", None) or {}) if ff is not None else {}):
+            if key.startswith(prefix) and not key.startswith(prefix + "<"):
+                trains.append(tuple(_tokenize_version(key[len(prefix):])[:2]))
+    return max(trains) if trains else None
+
+
+def sdwan_not_evaluated_reasons(entries, version, conflicts=None, unplaced=None) -> List[str]:
+    """SDWAN-02.3: why an SD-WAN answer with ZERO matches is not a clean answer.
+
+    Four cases (wycena 06.11, sekcja 4): the release cannot be read, it is a
+    build the tables do not name (N1), Cisco's sources disagree about it (S1),
+    or its train is newer than every train in the dataset (match_sdwan_record
+    rule 3 says "not affected" about a train no advisory describes).
+    The caller applies this only when nothing matched.
+    """
+    shown = (version or "").strip()[:30]
+    m = _SDWAN_RELEASE_TOKEN.search(version or "")
+    if not m:
+        return [f"release \"{shown}\" could not be read as a Catalyst SD-WAN release "
+                f"(expected a form such as 20.12.5), so no advisory was checked."]
+    reasons = []
+    builds = sorted(set(unplaced or []))
+    if builds:
+        reasons.append(f"release {shown} is a build the Fixed Software tables do not name, so it "
+                       f"could not be placed against the fix for {', '.join(builds)}.")
+    other = sorted(set(conflicts or []) - set(builds))
+    if other:
+        reasons.append(f"Cisco's sources disagree about release {shown} for {', '.join(other)}, "
+                       f"so no answer was given for {'it' if len(other) == 1 else 'them'}.")
+    newest = sdwan_newest_train(entries)
+    train = tuple(_tokenize_version(m.group(0))[:2])
+    if newest is not None and len(train) == 2 and _cmp_tuples(train, newest) > 0:
+        reasons.append(f"train {train[0]}.{train[1]} is newer than every train in the dataset "
+                       f"(newest {newest[0]}.{newest[1]}); no advisory here describes it.")
+    return reasons
 
 
 def _sdwan_sir_phrase(records) -> str:
