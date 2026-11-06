@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.7.14] – 2026-11-05 (ACL What-If: mistyped ACL headers, odd numbers; README profiles)
+
+### Network Tools
+- **ACL What-If, mistyped headers:** a line such as `acess-list 10 permit ...` or
+  `ip acess-list extended NAME` used to vanish from the result, and a numbered one could
+  change the trace verdict without a warning. Now the line is NOT EVALUATED with
+  "Did you mean 'access-list'?" (or `ip access-list`); a mistyped numbered line counts
+  as a rule of its ACL and a trace lists it on the way, and every entry under a mistyped
+  named header is listed too. This covers typos close to the keyword followed by an ACL
+  number or type; other forms (for example `access-list10`, `ip-access-list`) are still
+  not recognised.
+- **ACL What-If, odd numbers:** a number the tool cannot read (such as `²` or thousands
+  of digits) as an ACL number, sequence number, protocol or port is reported as not
+  evaluated instead of failing the request.
+
+### Documentation
+- **README, profiles:** profiles are read-only during the public beta (three demo
+  profiles); `POST /profiles/save` and `DELETE /profiles/delete/{name}` are marked as
+  disabled (403), and the Docker example no longer mounts a profiles volume.
+
+---
+
 ## [v0.7.13] – 2026-11-02 (Request limits and hardening for paste tools)
 
 ### Security and reliability

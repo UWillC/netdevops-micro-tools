@@ -217,7 +217,9 @@ GET /mitigate/tag/{tag}     # Filter by platform tag
 
 ## 📁 Profiles v2 (UI + API)
 
-Profiles allow you to **capture, reuse and reapply configuration intent**.
+Profiles allow you to **reuse and reapply configuration intent**.
+
+> **Read-only during the public beta (since v0.6.66).** The three demo profiles shipped with the app (`branch`, `dc`, `lab`) can be listed and loaded. Saving and deleting profiles on the server is disabled and returns 403.
 
 ### What is a profile?
 A profile is a named snapshot of:
@@ -226,17 +228,15 @@ A profile is a named snapshot of:
 - AAA / TACACS+ configuration
 
 ### What you can do
-- Save current form values as a profile
-- List available profiles
-- Load a profile into the Web UI
-- Delete profiles you no longer need
+- List the demo profiles
+- Load a demo profile into the Web UI
 
 ### API Endpoints
 ```
 GET    /profiles/list
 GET    /profiles/load/{name}
-POST   /profiles/save
-DELETE /profiles/delete/{name}
+POST   /profiles/save            # disabled (403) during public beta
+DELETE /profiles/delete/{name}   # disabled (403) during public beta
 GET    /profiles/vulnerabilities   # NEW in v0.3.5
 ```
 
@@ -253,7 +253,7 @@ Response includes:
 - CVE count and max CVSS score per profile
 - Summary counts across all profiles
 
-Profiles are stored on disk and can be persisted via Docker volumes.
+The demo profiles ship inside the app (`profiles/`). Nothing is written to disk.
 
 ---
 
@@ -269,7 +269,7 @@ The Web UI provides a clean, modern interface for daily use.
 - **Dark/Light Mode** — full theme support with persistence
 - **Category Colors** — visual distinction (blue/red/green/purple)
 - CVE Mitigation Advisor with actionable commands
-- Profiles management UI (Profiles v2)
+- Profiles UI (Profiles v2, read-only during public beta)
 - Copy & download buttons for all outputs
 - Persistent form state using `localStorage`
 
@@ -308,7 +308,7 @@ netdevops-micro-tools/
 │   └── nvd/                 # NVD API response cache (24h TTL)
 ├── cve_data/
 │   └── ios_xe/              # Local CVE database (JSON)
-├── profiles/                # Saved device profiles
+├── profiles/                # Demo device profiles (read-only)
 ├── web/
 │   ├── index.html           # SPA entry
 │   ├── app-core.js          # Core: theme, quick access, helpers
@@ -352,20 +352,12 @@ http://127.0.0.1:8000/docs
 docker build -t netdevops-micro-tools .
 ```
 
-### Run (ephemeral profiles)
+### Run
 ```bash
 docker run --rm -p 8000:8000 netdevops-micro-tools
 ```
 
-### Run with persistent profiles (recommended)
-```bash
-docker run --rm -p 8000:8000 \
-  -v "$(pwd)/profiles:/app/profiles" \
-  netdevops-micro-tools
-```
-
-This ensures that profiles created via `/profiles/save`
-are persisted across container restarts.
+Saving profiles is disabled during the public beta (`/profiles/save` returns 403), so the container needs no volume.
 
 ---
 
@@ -391,7 +383,7 @@ are persisted across container restarts.
 
 ## 🛣 Roadmap (high level)
 
-**v0.7.13 (current):** 22 live modules (21 tools in the sidebar + the Cisco Threat Feed widget on the home page), plus one Reference page outside the count
+**v0.7.14 (current):** 22 live modules (21 tools in the sidebar + the Cisco Threat Feed widget on the home page), plus one Reference page outside the count
 - **Config Generators** (5): SNMPv3, SNMP Multi-Host, NTP, AAA / TACACS+, Golden Config
 - **Security Tools** (4): CVE Analyzer, CVE Mitigation, Hardening Audit, KEV Watch
 - **Network Tools** (11): iPerf3, Subnet, MTU, Timezone/DTG (Zulu), Config Parser, Config Explainer, IP Path Tracer, Port Auditor, Config Drift, ACL What-If, What's My IP

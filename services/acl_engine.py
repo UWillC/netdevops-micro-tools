@@ -111,6 +111,15 @@ SUGGEST_MAX_DISTANCE = 2
 REASON_ECHO_MAX = 20
 SUGGEST_MIN_LENGTH = 3
 
+# ACL-01.5f (2026-11-05): `acess-list 10 permit ...` / `ip acess-list extended X` went
+# to other_lines, the same false "clean" as 5a one level up. Prose and real commands
+# stay out through the shape of the REST of the line, not through the word alone.
+HEADER_WORD = "access-list"
+NAMED_HEADER = "ip access-list"
+ACL_TYPES = ("standard", "extended")
+# Real IOS words one edit away from `ip` that can precede `access-list`: not typos.
+REAL_IP_NEIGHBOURS = frozenset(("ipx", "ipv"))
+
 STANDARD_RANGES = ((1, 99), (1300, 1999))
 EXTENDED_RANGES = ((100, 199), (2000, 2699))
 
@@ -357,7 +366,79 @@ def _flush_left_rule_typo(tokens: List[str]) -> bool:
     return suggest_keyword(tokens[0]) in ("permit", "deny") and _looks_like_rule_tail(tokens[1])
 
 
-def _numbered_type(number: int) -> Optional[str]:
+def _is_header_word(word: str) -> bool:
+    """`acess-list`, `accesslist`, `ACCESS-LIST`. Length check first: the word is unbounded.
+
+    Letters, `-` and `_` only, starting with a letter: `"access-list` (quoted in a script),
+    `-access-list` and `+access-list` (a diff) are one edit away too, and are not typos.
+    """
+    w = word.lower()
+    if abs(len(w) - len(HEADER_WORD)) > SUGGEST_MAX_DISTANCE or not w[0].isalpha():
+        return False
+    if not all(c.isalpha() or c in "-_" for c in w):
+        return False
+    return _edit_distance(w, HEADER_WORD) <= SUGGEST_MAX_DISTANCE
+
+
+def _is_entry_keyword(word: str) -> bool:
+    w = word.lower()
+    return w in ENTRY_KEYWORDS or suggest_keyword(w) is not None
+
+
+def _numbered_header_typo(tokens: List[str]) -> Optional[Tuple[str, int]]:
+    """(word as typed, index of the ACL number) when the line is a mistyped
+    ``access-list <number> permit|deny|remark ...``. None for anything else, so
+    `access-lists 10 was reviewed` in a change file stays an ordinary line."""
+    if tokens[0].lower() == "access" and len(tokens) >= 2 and tokens[1].lower() == "list":
+        word, i = " ".join(tokens[:2]), 2  # a space instead of the hyphen
+    elif _is_header_word(tokens[0]):
+        word, i = tokens[0], 1
+    else:
+        return None
+    if len(tokens) < i + 2 or not tokens[i].isdigit() or not _is_entry_keyword(tokens[i + 1]):
+        return None
+    return word, i
+
+
+def _is_acl_type_word(word: str) -> bool:
+    w = word.lower()
+    return len(w) <= 12 and any(_edit_distance(w, t) <= SUGGEST_MAX_DISTANCE for t in ACL_TYPES)
+
+
+def _named_header_typo(tokens: List[str]) -> Optional[str]:
+    """The words as typed when the line is a mistyped ``ip access-list standard|extended ...``."""
+    first = tokens[0].lower()
+    if first == "ip" and len(tokens) >= 4 and tokens[1].lower() == "access" and tokens[2].lower() == "list":
+        if _is_acl_type_word(tokens[3]):  # a space instead of the hyphen
+            return " ".join(tokens[:3])
+        return None
+    if len(tokens) < 3 or not _is_acl_type_word(tokens[2]):
+        return None
+    if first == "ip":
+        return " ".join(tokens[:2]) if _is_header_word(tokens[1]) else None
+    # isalpha: `#ip access-list ...` (commented out) and `"ip access-list ...",` (quoted
+    # in a JSON or script) are one edit from `ip` too, and neither is a typo.
+    if (tokens[1].lower() == HEADER_WORD and len(first) <= 3 and first.isalpha() and first not in REAL_IP_NEIGHBOURS
+            and _edit_distance(first, "ip") == 1):
+        return " ".join(tokens[:2])
+    return None
+
+
+def _plain_number(token: str) -> Optional[int]:
+    """The token as a number, or None. `isdigit()` alone also passes `²`, which int()
+    refuses, and int() refuses over 4300 digits: either one was an HTTP 500 on paste
+    content (@ciso W2, 2026-11-05). No ACL number, seq, port or protocol has 11 digits."""
+    return int(token) if token.isascii() and token.isdigit() and len(token) <= 10 else None
+
+
+def _echo(token: str) -> str:
+    """A token from the paste, cut for a reason sentence (WEBSEC-01 b2)."""
+    return token[:REASON_ECHO_MAX] + ("..." if len(token) > REASON_ECHO_MAX else "")
+
+
+def _numbered_type(number: Optional[int]) -> Optional[str]:
+    if number is None:
+        return None
     for lo, hi in STANDARD_RANGES:
         if lo <= number <= hi:
             return "standard"
@@ -403,11 +484,13 @@ def _parse_address(tokens: List[str], i: int, standard: bool) -> Tuple[AddressSp
 
 
 def _parse_port_value(token: str, proto: str) -> int:
-    if token.isdigit():
-        value = int(token)
+    value = _plain_number(token)
+    if value is not None:
         if value > 65535:
             raise _p01("port %s out of range 0-65535" % token)
         return value
+    if token.isdigit():  # `²` or a number too long to read: never a port name
+        raise _p01("port %s out of range 0-65535" % _echo(token))
     names = PORT_NAMES[proto]
     if token in names:
         return names[token]
@@ -498,13 +581,13 @@ def parse_rule(body: List[str], acl_type: str) -> Rule:
         proto, number = "ip", None
     elif proto_tok in PROTO_NUMBERS:
         proto, number = proto_tok, PROTO_NUMBERS[proto_tok]
-    elif proto_tok.isdigit():
-        number = int(proto_tok)
+    elif _plain_number(proto_tok) is not None:
+        number = _plain_number(proto_tok)
         if number > 255:
             raise _p01("protocol number %s out of range 0-255" % proto_tok)
         proto = proto_tok
     else:
-        raise _not_eval("protocol '%s' is outside v0 (ip|tcp|udp|icmp|0-255)" % proto_tok)
+        raise _not_eval("protocol '%s' is outside v0 (ip|tcp|udp|icmp|0-255)" % _echo(proto_tok))
     i += 1
     port_proto = proto if proto in PORT_NAMES else None
     src, i = _parse_address(body, i, standard=False)
@@ -533,8 +616,11 @@ class _Parser:
         self.order += 1
         return self.order
 
-    def _top_not_eval(self, line_no: int, text: str, reason: str) -> None:
-        self.result.not_evaluated.append({"line": line_no, "text": text, "reason": reason})
+    def _top_not_eval(self, line_no: int, text: str, reason: str, suggestion: Optional[str] = None) -> None:
+        item = {"line": line_no, "text": text, "reason": reason}
+        if suggestion is not None:
+            item["suggestion"] = suggestion
+        self.result.not_evaluated.append(item)
 
     def _get_acl(self, name: str, acl_type: str, form: str) -> Acl:
         acl = self.result.acls.get(name)
@@ -609,6 +695,10 @@ class _Parser:
             self.ctx = {"unsupported": True, "reason": self._unsupported_reason(tokens)}
             self._top_not_eval(line_no, stripped, self.ctx["reason"])
             return
+        # An indented line inside a block is an entry of that block, also when mistyped
+        # (5a): ending the block here dropped the rules after it (@ciso W1, 2026-11-05).
+        if not (indented and self.ctx is not None) and self._header_typo(line_no, stripped, tokens):
+            return
 
         if self.ctx is not None:
             # A flush-left `permin ...` inside a named block is a typo of an entry
@@ -639,14 +729,48 @@ class _Parser:
             return "MAC ACL is outside v0"
         return "object-group definition is outside v0"
 
+    def _header_typo(self, line_no: int, stripped: str, tokens: List[str]) -> bool:
+        """ACL-01.5f: a mistyped ACL header is reported, never left in other_lines."""
+        numbered = _numbered_header_typo(tokens)
+        if numbered is not None:
+            self.ctx = None
+            self._numbered_typo(line_no, stripped, tokens, *numbered)
+            return True
+        word = _named_header_typo(tokens)
+        if word is None:
+            return False
+        reason = "'%s' is not an ACL keyword" % word
+        # Same mechanism as an unsupported header: the block's entries are listed one
+        # by one. Reading them as the ACL the user probably meant would be a guess.
+        self.ctx = {"unsupported": True,
+                    "reason": "the ACL header on line %d is mistyped, so this entry is not evaluated" % line_no}
+        self._top_not_eval(line_no, stripped, reason, suggestion=NAMED_HEADER)
+        return True
+
+    def _numbered_typo(self, line_no: int, stripped: str, tokens: List[str], word: str, i: int) -> None:
+        reason = "'%s' is not an ACL keyword" % word
+        name = tokens[i]
+        acl_type = _numbered_type(_plain_number(name))
+        existing = self.result.acls.get(name)
+        if acl_type is None or (existing is not None and existing.acl_type != acl_type):
+            self._top_not_eval(line_no, stripped, reason, suggestion=HEADER_WORD)
+            return
+        # As in 5a, a mistyped rule is still a rule of that ACL: it counts in "rules"
+        # (not in "evaluated") and a trace lists it in unevaluated_lines, so the verdict
+        # is never shown as certain when the line might have matched first.
+        is_remark = suggest_keyword(tokens[i + 1].lower()) == "remark" or tokens[i + 1].lower() == "remark"
+        entry = Entry(line=line_no, text=stripped, kind="other" if is_remark else "rule",
+                      status=STATUS_NOT_EVALUATED, form="numbered", reason=reason,
+                      suggestion=HEADER_WORD, _block=0)
+        self._add_entry(self._get_acl(name, acl_type, "numbered"), entry)
+
     def _numbered(self, line_no: int, stripped: str, tokens: List[str]) -> None:
         if len(tokens) < 3 or not tokens[1].isdigit():
             self._top_not_eval(line_no, stripped, "access-list form outside v0 (expected access-list <number> ...)")
             return
-        number = int(tokens[1])
-        acl_type = _numbered_type(number)
+        acl_type = _numbered_type(_plain_number(tokens[1]))
         if acl_type is None:
-            self._top_not_eval(line_no, stripped, "ACL number %d is outside the IPv4 standard/extended ranges" % number)
+            self._top_not_eval(line_no, stripped, "ACL number is outside the IPv4 standard/extended ranges")
             return
         name = tokens[1]
         existing = self.result.acls.get(name)
@@ -665,12 +789,12 @@ class _Parser:
             return
         acl_type, name = tokens[2], tokens[3]
         if name.isdigit():
-            num_type = _numbered_type(int(name))
+            num_type = _numbered_type(_plain_number(name))
             if num_type != acl_type:
                 # Spec: a numeric name takes the type of its number range. A mismatch
                 # (or a number outside the ranges) is not described: do not guess.
                 reason = "ACL %s declared %s, number range says %s; behaviour not verified" % (
-                    name, acl_type, num_type or "no IPv4 range")
+                    _echo(name), acl_type, num_type or "no IPv4 range")
                 self.ctx = {"unsupported": True, "reason": reason}
                 self._top_not_eval(line_no, stripped, reason)
                 return
@@ -688,8 +812,9 @@ class _Parser:
         acl = self.result.acls[self.ctx["name"]]
         seq: Optional[int] = None
         body = tokens
-        if tokens[0].isdigit():
-            seq = int(tokens[0])
+        number = _plain_number(tokens[0])
+        if number is not None:
+            seq = number
             body = tokens[1:]
         entry = self._entry_from_body(line_no, stripped, body, self.ctx["type"], "named", seq,
                                       block=self.ctx["block"])
