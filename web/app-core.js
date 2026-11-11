@@ -415,6 +415,24 @@ async function postJSON(path, payload) {
   return res.json();
 }
 
+// Every value interpolated into an innerHTML template goes through this first.
+// Lives here (app-core.js loads before every other app-*.js except app-gate.js).
+function esc(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  })[c]);
+}
+
+// Links built from data: only absolute https: URLs, anything else -> null.
+function safeHttpsUrl(value) {
+  try {
+    const u = new URL(String(value ?? ""));
+    return u.protocol === "https:" ? u.href : null;
+  } catch (_) {
+    return null;
+  }
+}
+
 function errorText(err) {
   return err.busy ? err.message : `Error: ${err.message}`;
 }
@@ -459,13 +477,17 @@ function showToast(title, message) {
   const existing = document.getElementById("toast");
   if (existing) existing.remove();
 
+  // Toast text can carry err.message or a profile name: text nodes only, never markup.
   const div = document.createElement("div");
   div.id = "toast";
   div.className = "toast";
-  div.innerHTML = `
-    <div class="toast-title">${title}</div>
-    <div>${message}</div>
-  `;
+  const titleEl = document.createElement("div");
+  titleEl.className = "toast-title";
+  titleEl.textContent = title ?? "";
+  const msgEl = document.createElement("div");
+  msgEl.textContent = message ?? "";
+  div.appendChild(titleEl);
+  div.appendChild(msgEl);
   document.body.appendChild(div);
 
   setTimeout(() => {

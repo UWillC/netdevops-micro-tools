@@ -472,7 +472,7 @@ class TestDriftSummaryEscaping:
         data = client.post(DRIFT, json={"config_a": XSS_TITLE + "\n network 10.0.0.0\n",
                                         "config_b": "hostname R\n"}).json()
         assert any("<img" in s for s in data["summary"])  # the API does send it back
-        script = (_js_function(_web("app-feeds.js"), "esc") + "\n"
+        script = (_js_function(_web("app-core.js"), "esc") + "\n"
                   + _js_function(_web("app-network.js"), "formatDriftSummary") + "\n"
                   + "process.stdout.write(formatDriftSummary(" + json.dumps(data) + "));")
         html = _node(script)

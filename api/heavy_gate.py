@@ -20,6 +20,7 @@ from api.body_limit import PASTE_PATHS
 
 RETRY_AFTER_SECONDS = 5
 BUSY_MESSAGE = "Another large paste is being processed. Please try again in a few seconds."
+CLIENT_LEFT_MESSAGE = "The request body was not received in full."
 
 _slot = threading.Lock()
 
@@ -44,10 +45,19 @@ class HeavyGateMiddleware:
                 await response(scope, receive, send)
                 return
             if message["type"] != "http.request":
-                return  # the client left before sending the whole body
+                # The client left before sending the whole body. Answer anyway (W30):
+                # a bare return made the outer middleware log "No response returned"
+                # with a full traceback. Nobody reads this 400; the slot is never taken.
+                response = JSONResponse({"detail": CLIENT_LEFT_MESSAGE}, status_code=400)
+                await response(scope, receive, send)
+                return
             chunks.append(message.get("body", b""))
             if not message.get("more_body", False):
                 break
+
+        # Join before acquire (W31): a MemoryError here must not leave the slot taken.
+        body = b"".join(chunks)
+        del chunks
 
         if not _slot.acquire(blocking=False):
             response = JSONResponse(
@@ -66,8 +76,6 @@ class HeavyGateMiddleware:
                 held = False
                 _slot.release()
 
-        body = b"".join(chunks)
-        del chunks
         replayed = False
 
         async def replay():
