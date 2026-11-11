@@ -5,6 +5,12 @@ Acceptance (backlog HARD-02):
   WARNING  block-for set, but `login on-failure log` or `login on-success log` missing
   INFO     `login delay`, `ip ssh logging events`: named in the evidence only,
            they never change the result
+@ciso review 11.11 (W3):
+  WARNING  weak block-for threshold: attempts > 3 or quiet period < 60 s
+  WARNING  no block-for, but the NSA 4.6 variant: `aaa authentication attempts
+           login` and/or `ip ssh authentication-retries` <= 3 plus `login delay` >= 1
+  refs     NSA 4.6 = attempt limit + login delay; block-for = Cisco Login
+           Enhancements / DISA STIG
   Golden PASS / FAIL per platform: IOS classic (15.x) and IOS-XE (17.x), run
   through the whole audit, not just the check function.
 """
@@ -137,10 +143,86 @@ def test_missing_login_logging_warns(head, vty, drop, missing):
 
 def test_both_logging_lines_missing_warns_with_both():
     result, evidence, fix = audit._check_login_block_for(
-        "login block-for 60 attempts 5 within 30\nline vty 0 4\n")
+        "login block-for 60 attempts 3 within 30\nline vty 0 4\n")
     assert result == "WARNING"
-    assert "login block-for 60 attempts 5 within 30" in evidence
+    assert "login block-for 60 attempts 3 within 30" in evidence
     assert fix == "Add: login on-failure log; login on-success log"
+
+
+# ---------- W3: weak threshold ----------
+
+LOGGED = "login on-failure log\nlogin on-success log\nline vty 0 4\n"
+
+
+@pytest.mark.parametrize("block,why", [
+    ("login block-for 1 attempts 1000 within 1", ["1000 attempts allowed", "quiet period 1 s"]),
+    ("login block-for 120 attempts 4 within 60", ["4 attempts allowed (NSA: 3 or fewer)"]),
+    ("login block-for 59 attempts 3 within 60", ["quiet period 59 s (under 60 s)"]),
+])
+def test_weak_threshold_warns(block, why):
+    result, evidence, fix = audit._check_login_block_for(block + "\n" + LOGGED)
+    assert result == "WARNING"
+    assert evidence.startswith(block + " set, but the threshold is weak")
+    for w in why:
+        assert w in evidence
+    assert fix == "Use: login block-for 120 attempts 3 within 60"
+
+
+def test_weak_threshold_also_names_missing_logging():
+    result, evidence, fix = audit._check_login_block_for(
+        "login block-for 30 attempts 10 within 60\nline vty 0 4\n")
+    assert result == "WARNING"
+    assert "Not logged: login on-failure log, login on-success log." in evidence
+    assert fix == ("Use: login block-for 120 attempts 3 within 60; "
+                   "add: login on-failure log; login on-success log")
+
+
+@pytest.mark.parametrize("block", ["login block-for 60 attempts 3 within 60",
+                                   "login block-for 900 attempts 1 within 120"])
+def test_threshold_boundary_passes(block):
+    assert audit._check_login_block_for(block + "\n" + LOGGED)[0] == "PASS"
+
+
+def test_weak_threshold_through_the_whole_audit():
+    cfg, _ = GOLDENS["ios-xe-pass"]
+    rule = _rule(cfg.replace("login block-for 120 attempts 3 within 60",
+                             "login block-for 1 attempts 1000 within 1"))
+    assert rule.result == "WARNING"
+
+
+# ---------- W3: NSA 4.6 variant (attempt limit + login delay, no block-for) ----------
+
+@pytest.mark.parametrize("limit", [
+    "aaa authentication attempts login 3\nip ssh authentication-retries 3\n",
+    "aaa authentication attempts login 2\n",
+    "ip ssh authentication-retries 3\n",
+])
+def test_nsa_variant_warns_not_fails(limit):
+    cfg = limit + "login delay 1\n" + LOGGED
+    result, evidence, fix = audit._check_login_block_for(cfg)
+    assert result == "WARNING"
+    assert evidence.startswith("No 'login block-for', but logins are limited (")
+    assert "login delay 1" in evidence and "never trigger a quiet period" in evidence
+    assert fix == "Add: login block-for 120 attempts 3 within 60"
+
+
+def test_nsa_config_through_the_whole_audit():
+    nsa = ("aaa authentication attempts login 3\nip ssh authentication-retries 3\n"
+           "login delay 1\nlogin on-failure log\nlogin on-success log\n!\n")
+    for head, vty in ((IOS_CLASSIC_HEAD, IOS_CLASSIC_VTY), (IOS_XE_HEAD, IOS_XE_VTY)):
+        rule = _rule(head + nsa + vty)
+        assert rule.result == "WARNING"
+        assert rule.severity == "high"
+
+
+@pytest.mark.parametrize("cfg", [
+    "aaa authentication attempts login 3\nip ssh authentication-retries 3\n",   # no login delay
+    "aaa authentication attempts login 5\nlogin delay 1\n",                     # limit too high
+    "ip ssh authentication-retries 4\nlogin delay 2\n",                         # limit too high
+    "aaa authentication attempts login 3\nlogin delay 0\n",                     # no real delay
+])
+def test_incomplete_nsa_variant_still_fails(cfg):
+    assert audit._check_login_block_for(cfg + LOGGED)[0] == "FAIL"
 
 
 def test_logging_with_every_keyword_counts():
@@ -192,5 +274,16 @@ def test_rule_is_registered_at_level_1_with_references():
     assert row == [(RULE_ID, "Login brute-force protection", "Access", "high", "1",
                     audit._check_login_block_for)]
     refs = audit.REFERENCES[RULE_ID]
-    assert refs[0].endswith("§4.6 Limit authentication attempts")
-    assert "login block-for" in refs[1]
+    # NSA 4.6 is an attempt limit + login delay; block-for is Cisco / STIG.
+    assert refs[0].endswith("§4.6 Limit authentication attempts (attempt limit + login delay)")
+    assert "block-for" not in refs[0]
+    assert refs[1].startswith("Cisco IOS XE Login Enhancements") and "login block-for" in refs[1]
+    assert "DISA STIG" in refs[1]
+
+
+def test_default_login_delay_claim_has_no_verify_marker():
+    src = open(audit.__file__, encoding="utf-8").read()
+    assert "(IOS applies 1 s while login block-for is set)" in src
+    for ln in src.splitlines():
+        if "1 s" in ln and "block-for" in ln:
+            assert "VERIFY" not in ln, ln

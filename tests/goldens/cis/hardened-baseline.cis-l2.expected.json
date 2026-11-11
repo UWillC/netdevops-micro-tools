@@ -253,12 +253,12 @@
         },
         {
           "category": "Access",
-          "cis_ref": "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a74.6 Limit authentication attempts",
+          "cis_ref": "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a74.6 Limit authentication attempts (attempt limit + login delay)",
           "description": "Hardening rule 1.2.11",
           "evidence": "login block-for 120 attempts 3 within 60; failed and successful logins logged.",
           "references": [
-            "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a74.6 Limit authentication attempts",
-            "Cisco IOS command reference: login block-for"
+            "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a74.6 Limit authentication attempts (attempt limit + login delay)",
+            "Cisco IOS XE Login Enhancements (login block-for; also DISA STIG V-215668)"
           ],
           "remediation": "",
           "result": "PASS",
