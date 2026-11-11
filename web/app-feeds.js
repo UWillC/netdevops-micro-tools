@@ -10,12 +10,7 @@ const threatFeedRefresh = document.getElementById("cisco-advisories-refresh");
 const threatFeedPlatform = document.getElementById("cisco-advisories-platform");
 
 // Feed rows are built with innerHTML and advisory titles come from an external
-// API, so every interpolated value goes through this first.
-function esc(value) {
-  return String(value ?? "").replace(/[&<>"']/g, (c) => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-  })[c]);
-}
+// API, so every interpolated value goes through esc() (defined in app-core.js).
 
 async function loadThreatFeed() {
   if (!threatFeedList) return;

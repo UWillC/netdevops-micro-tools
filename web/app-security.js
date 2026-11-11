@@ -697,7 +697,7 @@ if (cveForm && cveOutput) {
       if (cveSummary) {
         cveSummary.innerHTML = `
           <h3>Security posture</h3>
-          <p class="summary-muted">Error during CVE analysis: ${err.message}</p>
+          <p class="summary-muted">Error during CVE analysis: ${esc(err.message)}</p>
         `;
       }
     }

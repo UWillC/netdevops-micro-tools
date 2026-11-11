@@ -392,38 +392,56 @@ function setTextarea(id, lines) {
   if (el) el.value = Array.isArray(lines) ? lines.join("\n") : (lines || "");
 }
 
-// Render workaround steps
+// Render workaround steps.
+// Step text comes from cve_mitigations/*.json and holds placeholders such as
+// <STRING> or <V3GROUP>: built as DOM with textContent, so they show literally.
 function renderWorkarounds(steps) {
   const container = document.getElementById("mitigation-workarounds");
   if (!container) return;
 
-  container.innerHTML = "";
+  container.replaceChildren();
 
   steps.forEach((step) => {
     const stepDiv = document.createElement("div");
     stepDiv.className = "mitigation-step card";
-    stepDiv.innerHTML = `
-      <h4>Step ${step.order}: ${step.description}</h4>
-      ${step.platform_notes ? `<p class="step-notes"><em>${step.platform_notes}</em></p>` : ""}
-      <div class="output-card">
-        <div class="output-header">
-          <span>Commands</span>
-          <button class="btn-secondary copy-step-btn">Copy</button>
-        </div>
-        <textarea class="output-text step-commands" readonly>${step.commands.join("\n")}</textarea>
-      </div>
-    `;
 
-    // Add copy handler
-    const copyBtn = stepDiv.querySelector(".copy-step-btn");
-    const textarea = stepDiv.querySelector(".step-commands");
-    if (copyBtn && textarea) {
-      copyBtn.addEventListener("click", () => {
-        navigator.clipboard.writeText(textarea.value);
-        copyBtn.textContent = "Copied!";
-        setTimeout(() => (copyBtn.textContent = "Copy"), 1500);
-      });
+    const h4 = document.createElement("h4");
+    h4.textContent = `Step ${step.order ?? ""}: ${step.description ?? ""}`;
+    stepDiv.appendChild(h4);
+
+    if (step.platform_notes) {
+      const notes = document.createElement("p");
+      notes.className = "step-notes";
+      const em = document.createElement("em");
+      em.textContent = step.platform_notes;
+      notes.appendChild(em);
+      stepDiv.appendChild(notes);
     }
+
+    const card = document.createElement("div");
+    card.className = "output-card";
+    const header = document.createElement("div");
+    header.className = "output-header";
+    const label = document.createElement("span");
+    label.textContent = "Commands";
+    const copyBtn = document.createElement("button");
+    copyBtn.className = "btn-secondary copy-step-btn";
+    copyBtn.textContent = "Copy";
+    header.appendChild(label);
+    header.appendChild(copyBtn);
+    const textarea = document.createElement("textarea");
+    textarea.className = "output-text step-commands";
+    textarea.readOnly = true;
+    textarea.value = (step.commands || []).join("\n");
+    card.appendChild(header);
+    card.appendChild(textarea);
+    stepDiv.appendChild(card);
+
+    copyBtn.addEventListener("click", () => {
+      navigator.clipboard.writeText(textarea.value);
+      copyBtn.textContent = "Copied!";
+      setTimeout(() => (copyBtn.textContent = "Copy"), 1500);
+    });
 
     container.appendChild(stepDiv);
   });
@@ -451,7 +469,7 @@ function renderCiscoWorkaround(m) {
       setText("mitigation-cisco-text", wa.text);
       setText("mitigation-cisco-fetched", wa.fetched || "");
       const src = document.getElementById("mitigation-cisco-source");
-      if (src) src.href = wa.source || m.cisco_psirt || "#";
+      if (src) src.href = safeHttpsUrl(wa.source) || safeHttpsUrl(m.cisco_psirt) || "#";
     } else {
       section.style.display = "none";
     }
@@ -470,12 +488,13 @@ function renderCiscoWorkaround(m) {
   }
 }
 
-// Render references
+// Render references. Links only for absolute https: URLs; anything else is
+// shown as plain text without a link.
 function renderReferences(mitigation) {
   const container = document.getElementById("mitigation-references");
   if (!container) return;
 
-  container.innerHTML = "";
+  container.replaceChildren();
 
   const refs = [];
   if (mitigation.cisco_psirt) refs.push({ label: "Cisco PSIRT Advisory", url: mitigation.cisco_psirt });
@@ -484,12 +503,24 @@ function renderReferences(mitigation) {
 
   refs.forEach((ref) => {
     const li = document.createElement("li");
-    li.innerHTML = `<a href="${ref.url}" target="_blank" rel="noopener">${ref.label}</a>`;
+    const href = safeHttpsUrl(ref.url);
+    if (href) {
+      const a = document.createElement("a");
+      a.href = href;
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.textContent = ref.label;
+      li.appendChild(a);
+    } else {
+      li.textContent = ref.label;
+    }
     container.appendChild(li);
   });
 
   if (refs.length === 0) {
-    container.innerHTML = "<li>No external references available</li>";
+    const li = document.createElement("li");
+    li.textContent = "No external references available";
+    container.appendChild(li);
   }
 }
 

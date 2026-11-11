@@ -14,7 +14,9 @@ WEBSEC-01, slots from the @ciso final review 02.11 (2026-11-02_ciso-final-review
    the slot taken until restart. The body is now joined before `acquire`.
 """
 import asyncio
+import glob
 import json
+import os
 import re
 import shutil
 
@@ -23,7 +25,7 @@ import pytest
 from api import body_limit as bl
 from api import heavy_gate as hg
 from api.main import app
-from tests.test_websec_03 import _http_scope, _Inner, _js_function, _node, _run, _web
+from tests.test_websec_03 import ROOT, _http_scope, _Inner, _js_function, _node, _run, _web
 
 XSS = "<img src=x onerror=alert(1)>"
 needs_node = pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
@@ -53,7 +55,7 @@ def _error_paths_script(fetch_js):
              "fetchCurrentTime", "convertDtg", "fetchCurrentDtg", "fetchMitigationList"]
     return (
         FAKE_DOM
-        + _js_function(_web("app-feeds.js"), "esc") + "\n"
+        + _js_function(_web("app-core.js"), "esc") + "\n"
         + "\n".join(_js_function(net, f) for f in funcs) + "\n"
         + "const TARGET_TIMEZONES = [];\n"
         + "const tzResults = new FakeNode('div'), tzResultsGrid = new FakeNode('div'), tzNowResults = new FakeNode('div'),"
@@ -94,9 +96,12 @@ class TestErrorTextIsText:
         assert (p["tag"], p["cls"], p["text"]) == ("P", "", "Error loading CVE list: " + XSS)
 
     def test_no_error_text_goes_into_markup(self):
-        for name in ("app-network.js", "app-feeds.js", "app-profiles.js", "app-kev.js"):
+        # Every web/*.js, not a hand-kept list (WEBSEC-01b, @ciso review 11.11 W1).
+        names = sorted(os.path.basename(p) for p in glob.glob(os.path.join(ROOT, "web", "*.js")))
+        assert "app-security.js" in names and "app-core.js" in names
+        for name in names:
             js = _web(name)
-            assert not re.search(r"innerHTML\s*=\s*`[^`]*\$\{err\.message\}", js), name
+            assert not re.search(r"innerHTML\s*\+?=\s*`[^`]*\$\{err\.message\}", js), name
         net = _web("app-network.js")
         assert net.count("showErrorIn(") == 6  # definition + 5 call sites
         assert "${esc(err.message)}" in _web("app-feeds.js")
@@ -105,7 +110,7 @@ class TestErrorTextIsText:
     @needs_node
     def test_time_cards_escape_server_fields(self):
         script = (
-            _js_function(_web("app-feeds.js"), "esc") + "\n"
+            _js_function(_web("app-core.js"), "esc") + "\n"
             + "const document = { createElement: () => ({}) };\n"
             + _js_function(_web("app-network.js"), "renderTzResult") + "\n"
             + _js_function(_web("app-network.js"), "renderDtgResult") + "\n"
