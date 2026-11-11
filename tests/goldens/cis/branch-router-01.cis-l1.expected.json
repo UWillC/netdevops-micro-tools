@@ -84,7 +84,7 @@
       "warnings": 0
     },
     {
-      "failed": 4,
+      "failed": 5,
       "name": "Access",
       "passed": 1,
       "rules": [
@@ -191,6 +191,21 @@
           "rule_id": "1.2.9",
           "severity": "low",
           "title": "Domain name"
+        },
+        {
+          "category": "Access",
+          "cis_ref": "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a74.6 Limit authentication attempts",
+          "description": "Hardening rule 1.2.11",
+          "evidence": "No 'login block-for': repeated failed logins never trigger a quiet period (VTY brute force). Info: no 'login delay'; no 'ip ssh logging events'.",
+          "references": [
+            "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a74.6 Limit authentication attempts",
+            "Cisco IOS command reference: login block-for"
+          ],
+          "remediation": "Add: login block-for 120 attempts 3 within 60; login on-failure log; login on-success log",
+          "result": "FAIL",
+          "rule_id": "1.2.11",
+          "severity": "high",
+          "title": "Login brute-force protection"
         }
       ],
       "warnings": 2
@@ -394,22 +409,22 @@
     }
   ],
   "critical_fails": 7,
-  "failed": 15,
+  "failed": 16,
   "grade": "F",
   "hostname": "BRANCH-RTR-01",
   "level": "1",
   "not_applicable": 1,
-  "parser_coverage": 82.6,
+  "parser_coverage": 83.3,
   "passed": 3,
-  "score": 17.3,
+  "score": 16.7,
   "score_capped": false,
   "summary": [
-    "Hardening Score: 17.3% (Grade F)",
-    "3 passed, 15 failed, 4 warnings, 1 N/A",
+    "Hardening Score: 16.7% (Grade F)",
+    "3 passed, 16 failed, 4 warnings, 1 N/A",
     "CRITICAL failures (7): Enable secret, No enable password, AAA new-model, SSH version 2, No telnet on VTY, No HTTP server, No SNMPv2c",
-    "Parser coverage 82.6% \u2014 4 rule(s) returned WARN (ambiguous); score may understate or overstate true posture.",
+    "Parser coverage 83.3% \u2014 4 rule(s) returned WARN (ambiguous); score may understate or overstate true posture.",
     "Critical compliance gaps. Immediate remediation needed."
   ],
-  "total_rules": 23,
+  "total_rules": 24,
   "warnings": 4
 }

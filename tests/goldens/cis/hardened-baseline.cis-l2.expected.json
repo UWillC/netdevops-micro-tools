@@ -101,7 +101,7 @@
     {
       "failed": 0,
       "name": "Access",
-      "passed": 9,
+      "passed": 10,
       "rules": [
         {
           "category": "Access",
@@ -250,6 +250,21 @@
           "rule_id": "1.2.10",
           "severity": "high",
           "title": "RSA key size"
+        },
+        {
+          "category": "Access",
+          "cis_ref": "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a74.6 Limit authentication attempts",
+          "description": "Hardening rule 1.2.11",
+          "evidence": "login block-for 120 attempts 3 within 60; failed and successful logins logged.",
+          "references": [
+            "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a74.6 Limit authentication attempts",
+            "Cisco IOS command reference: login block-for"
+          ],
+          "remediation": "",
+          "result": "PASS",
+          "rule_id": "1.2.11",
+          "severity": "high",
+          "title": "Login brute-force protection"
         }
       ],
       "warnings": 0
@@ -638,15 +653,15 @@
   "hostname": "GOOD-RTR",
   "level": "2",
   "not_applicable": 7,
-  "parser_coverage": 97.4,
-  "passed": 31,
+  "parser_coverage": 97.5,
+  "passed": 32,
   "score": 98.4,
   "score_capped": false,
   "summary": [
     "Hardening Score: 98.4% (Grade A)",
-    "31 passed, 0 failed, 1 warnings, 7 N/A",
+    "32 passed, 0 failed, 1 warnings, 7 N/A",
     "Excellent hardening. Minor improvements possible."
   ],
-  "total_rules": 39,
+  "total_rules": 40,
   "warnings": 1
 }
