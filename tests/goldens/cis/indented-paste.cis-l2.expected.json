@@ -99,7 +99,7 @@
       "warnings": 0
     },
     {
-      "failed": 4,
+      "failed": 5,
       "name": "Access",
       "passed": 1,
       "rules": [
@@ -250,6 +250,21 @@
           "rule_id": "1.2.10",
           "severity": "high",
           "title": "RSA key size"
+        },
+        {
+          "category": "Access",
+          "cis_ref": "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a74.6 Limit authentication attempts (attempt limit + login delay)",
+          "description": "Hardening rule 1.2.11",
+          "evidence": "No 'login block-for': repeated failed logins never trigger a quiet period (VTY brute force). Info: no 'login delay'; no 'ip ssh logging events'.",
+          "references": [
+            "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a74.6 Limit authentication attempts (attempt limit + login delay)",
+            "Cisco IOS XE Login Enhancements (login block-for; also DISA STIG V-215668)"
+          ],
+          "remediation": "Add: login block-for 120 attempts 3 within 60; login on-failure log; login on-success log",
+          "result": "FAIL",
+          "rule_id": "1.2.11",
+          "severity": "high",
+          "title": "Login brute-force protection"
         }
       ],
       "warnings": 3
@@ -633,22 +648,22 @@
     }
   ],
   "critical_fails": 7,
-  "failed": 15,
+  "failed": 16,
   "grade": "F",
   "hostname": "BRANCH-RTR-01",
   "level": "2",
   "not_applicable": 10,
-  "parser_coverage": 74.4,
+  "parser_coverage": 75.0,
   "passed": 4,
-  "score": 19.1,
+  "score": 18.5,
   "score_capped": false,
   "summary": [
-    "Hardening Score: 19.1% (Grade F)",
-    "4 passed, 15 failed, 10 warnings, 10 N/A",
+    "Hardening Score: 18.5% (Grade F)",
+    "4 passed, 16 failed, 10 warnings, 10 N/A",
     "CRITICAL failures (7): Enable secret, No enable password, AAA new-model, SSH version 2, No telnet on VTY, No HTTP server, No SNMPv2c",
-    "Parser coverage 74.4% \u2014 10 rule(s) returned WARN (ambiguous); score may understate or overstate true posture.",
+    "Parser coverage 75.0% \u2014 10 rule(s) returned WARN (ambiguous); score may understate or overstate true posture.",
     "Critical compliance gaps. Immediate remediation needed."
   ],
-  "total_rules": 39,
+  "total_rules": 40,
   "warnings": 10
 }

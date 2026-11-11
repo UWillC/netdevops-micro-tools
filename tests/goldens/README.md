@@ -12,9 +12,9 @@ have prevented every bug in the 2026-04-19 defect report.
 
 | Config | Purpose |
 |--------|---------|
-| `branch-router-01.cfg` | Defect-report §2 test config (verbatim). Level 1 score 17.3%, 7 CRITICAL FAILs. Anchor for CIS-001 … CIS-010. |
+| `branch-router-01.cfg` | Defect-report §2 test config (verbatim). Level 1 score 16.7% (17.3% before HARD-02), 7 CRITICAL FAILs. Anchor for CIS-001 … CIS-010. |
 | `indented-paste.cfg` | Same content as branch-router-01 but with 2-space chat-paste indent. Anchor for the v0.6.13/v0.6.14 normalize-config fix. Expected output MUST match branch-router-01. |
-| `hardened-baseline.cfg` | Fully-hardened Cisco IOS-XE config. Level 1 score 100%, Grade A, all 23 rules PASS. Anchors severity weighting and regression against false-FAIL drift. |
+| `hardened-baseline.cfg` | Fully-hardened Cisco IOS-XE config. Level 1 score 100%, Grade A, all 24 rules PASS. Anchors severity weighting and regression against false-FAIL drift. |
 | `l3-only-router.cfg` | Pure L3 router (no switchport tokens). Anchors CIS-009 — all 6.1.x L2 rules must return N/A, not WARN. |
 
 ## Add a new case

@@ -174,7 +174,7 @@ A lightweight CVE awareness engine focused on Cisco platforms with NVD enrichmen
 
 Audit your Cisco config against public hardening guidance.
 
-- **39 rules** (23 at Level 1, all 39 at Level 2) aligned with the NSA *Network Infrastructure Security Guide* (v1.2) and Cisco's *Harden IOS Devices* guide; cross-checked against the CERT Polska knowledge base (CC BY-SA 4.0)
+- **40 rules** (24 at Level 1, all 40 at Level 2) aligned with the NSA *Network Infrastructure Security Guide* (v1.2) and Cisco's *Harden IOS Devices* guide; cross-checked against the CERT Polska knowledge base (CC BY-SA 4.0)
 - Every rule carries its source reference (`references` in the API, `REF:` in the report)
 - Categories: Management Plane, Access, Services, Logging & NTP, Banner, SNMP, Layer 2 Security
 - Compliance score 0-100% with letter grade (A-F)

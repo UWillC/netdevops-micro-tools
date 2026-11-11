@@ -768,6 +768,94 @@ def _check_login_local(cfg):
         return "PASS", "VTY lines have login configured", ""
     return "WARNING", "Login method not explicitly set on all VTY blocks", "Add: login local (or login authentication <list>)"
 
+# HARD-02: login attack surface (VTY brute force). Same syntax on IOS 15.x and
+# IOS-XE.
+#   PASS     login block-for with a sane threshold + failed/successful logins logged
+#   WARNING  block-for with a weak threshold (attempts > 3 or quiet period < 60 s),
+#            block-for without full login logging, or no block-for but the NSA
+#            variant (attempt limit <= 3 + login delay >= 1 s): limits guessing,
+#            but no quiet period after a burst of failures
+#   FAIL     none of the above
+# login delay / ip ssh logging events are otherwise informational only.
+# "IOS applies 1 s while login block-for is set": Cisco IOS XE Login
+# Enhancements ("If you enter only the login block-for command, the default
+# login delay time of one second is automatically enforced"), @ciso 11.11.
+# NSA NISG section 4.6 recommends an attempt limit + login delay (3 or fewer),
+# not login block-for; block-for comes from Cisco's Login Enhancements and DISA
+# STIG. [VERIFY v1.2] section 4.6 checked in the v1.0 text (PP-22-0266, 03.2022);
+# numbering in v1.2 assumed the same.
+LOGIN_BLOCK_FOR_RE = re.compile(
+    r"^login block-for\s+(\d+)\s+attempts\s+(\d+)\s+within\s+(\d+)\b", re.M)
+LOGIN_BLOCK_FOR_FIX = "Add: login block-for 120 attempts 3 within 60"
+LOGIN_LOG_LINES = ("login on-failure log", "login on-success log")
+LOGIN_MAX_ATTEMPTS = 3       # NSA NISG 4.6: three or fewer
+LOGIN_MIN_BLOCK_SECONDS = 60
+AAA_ATTEMPTS_RE = re.compile(r"^aaa authentication attempts login\s+(\d+)\b", re.M)
+SSH_RETRIES_RE = re.compile(r"^ip ssh authentication-retries\s+(\d+)\b", re.M)
+LOGIN_DELAY_RE = re.compile(r"^login delay\s+(\d+)\b", re.M)
+
+
+def _nsa_attempt_limit(cfg):
+    """The NSA 4.6 variant: attempt limit <= 3 (AAA and/or SSH) plus login delay >= 1 s."""
+    delay = LOGIN_DELAY_RE.search(cfg)
+    if not delay or int(delay.group(1)) < 1:
+        return None
+    limits = [f"{label} {m.group(1)}" for label, rx in
+              (("aaa authentication attempts login", AAA_ATTEMPTS_RE),
+               ("ip ssh authentication-retries", SSH_RETRIES_RE))
+              for m in [rx.search(cfg)] if m and 1 <= int(m.group(1)) <= LOGIN_MAX_ATTEMPTS]
+    if not limits:
+        return None
+    return ", ".join(limits) + f", login delay {delay.group(1)}"
+
+
+def _check_login_block_for(cfg):
+    if not _extract_blocks(cfg, VTY_HEADER_RE):
+        return "N/A", "No VTY lines configured", ""
+
+    m = LOGIN_BLOCK_FOR_RE.search(cfg)
+    info = []
+    if not LOGIN_DELAY_RE.search(cfg):
+        info.append("no 'login delay'" + (" (IOS applies 1 s while login block-for is set)" if m else ""))
+    if not re.search(r"^ip ssh logging events\b", cfg, re.M):
+        info.append("no 'ip ssh logging events'")
+    info_text = f" Info: {'; '.join(info)}." if info else ""
+
+    missing_log = [ln for ln in LOGIN_LOG_LINES
+                   if not re.search(r"^%s\b" % re.escape(ln), cfg, re.M)]
+    if not m:
+        fix = "; ".join([LOGIN_BLOCK_FOR_FIX] + missing_log)
+        nsa = _nsa_attempt_limit(cfg)
+        if nsa:
+            return ("WARNING",
+                    f"No 'login block-for', but logins are limited ({nsa}): this meets the NSA "
+                    "attempt limit + login delay, yet repeated failures never trigger a quiet period."
+                    + info_text,
+                    fix)
+        return ("FAIL",
+                "No 'login block-for': repeated failed logins never trigger a quiet period (VTY brute force)." + info_text,
+                fix)
+    block_s, attempts = int(m.group(1)), int(m.group(2))
+    block = f"login block-for {m.group(1)} attempts {m.group(2)} within {m.group(3)}"
+    weak = []
+    if attempts > LOGIN_MAX_ATTEMPTS:
+        weak.append(f"{attempts} attempts allowed (NSA: {LOGIN_MAX_ATTEMPTS} or fewer)")
+    if block_s < LOGIN_MIN_BLOCK_SECONDS:
+        weak.append(f"quiet period {block_s} s (under {LOGIN_MIN_BLOCK_SECONDS} s)")
+    if weak:
+        missing = (f" Not logged: {', '.join(missing_log)}." if missing_log else "")
+        return ("WARNING",
+                f"{block} set, but the threshold is weak: {'; '.join(weak)}." + missing + info_text,
+                "Use: login block-for 120 attempts 3 within 60"
+                + ("; add: " + "; ".join(missing_log) if missing_log else ""))
+    if missing_log:
+        return ("WARNING",
+                f"{block} set, but failed/successful logins are not fully logged "
+                f"(missing: {', '.join(missing_log)})." + info_text,
+                "Add: " + "; ".join(missing_log))
+    return "PASS", f"{block}; failed and successful logins logged." + info_text, ""
+
+
 def _check_ip_verify_source(cfg):
     if not _has_switchports(cfg):
         return "N/A", _L2_NA_EVIDENCE, ""
@@ -821,6 +909,7 @@ RULES = [
     ("1.2.8", "Console authentication", "Access", "high", "2", _check_console_password),
     ("1.2.9", "Domain name", "Access", "low", "1", _check_domain_name),
     ("1.2.10", "RSA key size", "Access", "high", "2", _check_rsa_key_size),
+    ("1.2.11", "Login brute-force protection", "Access", "high", "1", _check_login_block_for),
 
     # Services (2.x)
     ("2.1.1", "No HTTP server", "Services", "critical", "1", _check_no_http_server),
@@ -889,6 +978,8 @@ REFERENCES = {
     "1.2.8": [_nsa("4.2 Configure authentication"), CISCO_HARDEN],
     "1.2.9": [CISCO_HARDEN],
     "1.2.10": [_nsa("7.11 Configure remote network administration services"), CISCO_HARDEN],
+    "1.2.11": [_nsa("4.6 Limit authentication attempts (attempt limit + login delay)"),
+               "Cisco IOS XE Login Enhancements (login block-for; also DISA STIG V-215668)"],
     "2.1.1": [_nsa("7.1 Disable clear text administration services"), CISCO_HARDEN],
     "2.1.2": [_nsa("7.11 Configure remote network administration services")],
     "2.1.3": [_nsa("8.1 Disable IP source routing"), CISCO_HARDEN],

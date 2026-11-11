@@ -86,7 +86,7 @@
     {
       "failed": 0,
       "name": "Access",
-      "passed": 7,
+      "passed": 8,
       "rules": [
         {
           "category": "Access",
@@ -191,6 +191,21 @@
           "rule_id": "1.2.9",
           "severity": "low",
           "title": "Domain name"
+        },
+        {
+          "category": "Access",
+          "cis_ref": "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a74.6 Limit authentication attempts (attempt limit + login delay)",
+          "description": "Hardening rule 1.2.11",
+          "evidence": "login block-for 120 attempts 3 within 60; failed and successful logins logged.",
+          "references": [
+            "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a74.6 Limit authentication attempts (attempt limit + login delay)",
+            "Cisco IOS XE Login Enhancements (login block-for; also DISA STIG V-215668)"
+          ],
+          "remediation": "",
+          "result": "PASS",
+          "rule_id": "1.2.11",
+          "severity": "high",
+          "title": "Login brute-force protection"
         }
       ],
       "warnings": 0
@@ -400,14 +415,14 @@
   "level": "1",
   "not_applicable": 0,
   "parser_coverage": 100.0,
-  "passed": 23,
+  "passed": 24,
   "score": 100.0,
   "score_capped": false,
   "summary": [
     "Hardening Score: 100.0% (Grade A)",
-    "23 passed, 0 failed, 0 warnings, 0 N/A",
+    "24 passed, 0 failed, 0 warnings, 0 N/A",
     "Excellent hardening. Minor improvements possible."
   ],
-  "total_rules": 23,
+  "total_rules": 24,
   "warnings": 0
 }

@@ -84,7 +84,7 @@
       "warnings": 0
     },
     {
-      "failed": 0,
+      "failed": 1,
       "name": "Access",
       "passed": 5,
       "rules": [
@@ -191,6 +191,21 @@
           "rule_id": "1.2.9",
           "severity": "low",
           "title": "Domain name"
+        },
+        {
+          "category": "Access",
+          "cis_ref": "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a74.6 Limit authentication attempts (attempt limit + login delay)",
+          "description": "Hardening rule 1.2.11",
+          "evidence": "No 'login block-for': repeated failed logins never trigger a quiet period (VTY brute force). Info: no 'login delay'; no 'ip ssh logging events'.",
+          "references": [
+            "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a74.6 Limit authentication attempts (attempt limit + login delay)",
+            "Cisco IOS XE Login Enhancements (login block-for; also DISA STIG V-215668)"
+          ],
+          "remediation": "Add: login block-for 120 attempts 3 within 60; login on-failure log; login on-success log",
+          "result": "FAIL",
+          "rule_id": "1.2.11",
+          "severity": "high",
+          "title": "Login brute-force protection"
         }
       ],
       "warnings": 2
@@ -394,21 +409,21 @@
     }
   ],
   "critical_fails": 0,
-  "failed": 8,
+  "failed": 9,
   "grade": "C",
   "hostname": "L3-ONLY-RTR",
   "level": "1",
   "not_applicable": 1,
-  "parser_coverage": 91.3,
+  "parser_coverage": 91.7,
   "passed": 12,
-  "score": 70.3,
+  "score": 67.6,
   "score_capped": false,
   "summary": [
-    "Hardening Score: 70.3% (Grade C)",
-    "12 passed, 8 failed, 2 warnings, 1 N/A",
-    "Parser coverage 91.3% \u2014 2 rule(s) returned WARN (ambiguous); score may understate or overstate true posture.",
+    "Hardening Score: 67.6% (Grade C)",
+    "12 passed, 9 failed, 2 warnings, 1 N/A",
+    "Parser coverage 91.7% \u2014 2 rule(s) returned WARN (ambiguous); score may understate or overstate true posture.",
     "Moderate compliance. Several important gaps to fix."
   ],
-  "total_rules": 23,
+  "total_rules": 24,
   "warnings": 2
 }
