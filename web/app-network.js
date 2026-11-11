@@ -1,4 +1,13 @@
-// Depends on: app-core.js (postJSON, API_BASE_URL, showToast)
+// Depends on: app-core.js (postJSON, API_BASE_URL, showToast), app-feeds.js (esc, called at run time)
+
+// Error text can carry server-supplied words (err.detail, WEBSEC-01): build the
+// node with textContent, never markup. className "" = a plain <p>.
+function showErrorIn(container, text, className = "error") {
+  const p = document.createElement("p");
+  if (className) p.className = className;
+  p.textContent = text;
+  container.replaceChildren(p);
+}
 
 // -----------------------------
 // Subnet Calculator
@@ -574,7 +583,7 @@ async function fetchMitigationList() {
     mitigationResult.style.display = "none";
     mitigationNotFound.style.display = "none";
   } catch (err) {
-    mitigationCveList.innerHTML = `<p>Error loading CVE list: ${err.message}</p>`;
+    showErrorIn(mitigationCveList, `Error loading CVE list: ${err.message}`, "");
     mitigationAvailable.style.display = "block";
   }
 }
@@ -632,9 +641,9 @@ function renderTzResult(result) {
   const div = document.createElement("div");
   div.className = "tz-result-card";
   div.innerHTML = `
-    <div class="tz-result-label">${result.label}</div>
-    <div class="tz-result-time">${result.datetime_formatted}</div>
-    <div class="tz-result-offset">${result.offset}</div>
+    <div class="tz-result-label">${esc(result.label)}</div>
+    <div class="tz-result-time">${esc(result.datetime_formatted)}</div>
+    <div class="tz-result-offset">${esc(result.offset)}</div>
   `;
   return div;
 }
@@ -667,7 +676,7 @@ async function convertTimestamp(timestamp, fromTz) {
     tzResults.style.display = "block";
     tzNowResults.style.display = "none";
   } catch (err) {
-    tzResultsGrid.innerHTML = `<p class="error">Error: ${err.message}</p>`;
+    showErrorIn(tzResultsGrid, `Error: ${err.message}`);
     tzResults.style.display = "block";
   }
 }
@@ -688,7 +697,7 @@ async function fetchCurrentTime() {
     tzNowResults.style.display = "block";
     tzResults.style.display = "none";
   } catch (err) {
-    tzNowGrid.innerHTML = `<p class="error">Error: ${err.message}</p>`;
+    showErrorIn(tzNowGrid, `Error: ${err.message}`);
     tzNowResults.style.display = "block";
   }
 }
@@ -971,10 +980,10 @@ function renderDtgResult(result) {
   const div = document.createElement("div");
   div.className = "tz-result-card dtg-result-card";
   div.innerHTML = `
-    <div class="tz-result-label">${result.label}</div>
-    <div class="dtg-military">${result.military_letter} (${result.military_name})</div>
-    <div class="dtg-time">${result.dtg_full}</div>
-    <div class="tz-result-time">${result.datetime_formatted}</div>
+    <div class="tz-result-label">${esc(result.label)}</div>
+    <div class="dtg-military">${esc(result.military_letter)} (${esc(result.military_name)})</div>
+    <div class="dtg-time">${esc(result.dtg_full)}</div>
+    <div class="tz-result-time">${esc(result.datetime_formatted)}</div>
   `;
   return div;
 }
@@ -1004,7 +1013,7 @@ async function convertDtg(dtg) {
 
     dtgResults.style.display = "block";
   } catch (err) {
-    dtgResultsGrid.innerHTML = `<p class="error">Error: ${err.message}</p>`;
+    showErrorIn(dtgResultsGrid, `Error: ${err.message}`);
     dtgResults.style.display = "block";
   }
 }
@@ -1027,7 +1036,7 @@ async function fetchCurrentDtg() {
     // Also update picker to current time
     setDtgPickerToNow();
   } catch (err) {
-    dtgResultsGrid.innerHTML = `<p class="error">Error: ${err.message}</p>`;
+    showErrorIn(dtgResultsGrid, `Error: ${err.message}`);
     dtgResults.style.display = "block";
   }
 }

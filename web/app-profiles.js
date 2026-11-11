@@ -571,7 +571,7 @@ async function refreshVulnerabilityWidget() {
     renderVulnerabilityWidget(data);
     showToast("Vulnerabilities", `Checked ${data.profiles_checked} profiles`);
   } catch (err) {
-    vulnContent.innerHTML = `<p class="summary-muted">Error: ${err.message}</p>`;
+    vulnContent.innerHTML = `<p class="summary-muted">Error: ${esc(err.message)}</p>`;
   }
 }
 
@@ -680,7 +680,7 @@ async function refreshSecurityScoreWidget() {
     renderSecurityScoreWidget(data);
     showToast("Security Scores", `Scored ${data.profiles_checked} profiles (avg: ${data.average_score || "N/A"})`);
   } catch (err) {
-    scoreContent.innerHTML = `<p class="summary-muted">Error: ${err.message}</p>`;
+    scoreContent.innerHTML = `<p class="summary-muted">Error: ${esc(err.message)}</p>`;
   }
 }
 

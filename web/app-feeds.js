@@ -138,7 +138,7 @@ async function loadThreatFeed() {
       threatFeedList.appendChild(a);
     });
   } catch (err) {
-    threatFeedList.innerHTML = `<p class="summary-muted">Could not load threat feed: ${err.message}</p>`;
+    threatFeedList.innerHTML = `<p class="summary-muted">Could not load threat feed: ${esc(err.message)}</p>`;
   }
 }
 
