@@ -4,6 +4,40 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.7.16] – 2026-11-11 (Error text shown as text; Hardening Audit: login brute-force rule)
+
+### Security Tools
+- **Error messages shown as text:** when a request fails, the message from the server is
+  now put into the page as plain text in every tool (CVE Analyzer, CVE list, Timezone and
+  DTG converters, Cisco Threat Feed, Device Profiles, pop-up notices). Before, some of these
+  messages were inserted as HTML, so markup in an error message could run in the page.
+- **CVE Mitigation steps rendered safely:** workaround steps are built as page elements with
+  text only. Placeholders such as `<STRING>` or `<V3GROUP>` now show literally (they used to
+  disappear, for example in step 3 of CVE-2017-6736). Reference and Cisco workaround links
+  are clickable only for absolute `https:` addresses; anything else is shown as a label.
+- **Upload limits (paste tools):** a client that leaves in the middle of an upload gets a
+  400 and no longer leaves a traceback in the server log. An error while reading the body
+  can no longer keep the one heavy-request slot taken.
+
+### Hardening Audit
+- **New rule 1.2.11, login brute-force protection (VTY):** FAIL without a global
+  `login block-for N attempts M within S`. WARNING when the threshold is weak (more than
+  3 attempts or a quiet period under 60 seconds) or when `login on-failure log` or
+  `login on-success log` is missing. The NSA variant without block-for (attempt limit of 3
+  or fewer plus `login delay` of at least 1 second) is a WARNING; an incomplete variant
+  stays FAIL. `login delay` and `ip ssh logging events` are listed as information and never
+  change the result. Not applicable on configs without VTY lines.
+- **Rule counts:** 40 rules, 24 at Level 1 (was 39 and 23). The level selector and README
+  show the new numbers. References: NSA Network Infrastructure Security Guide (attempt
+  limit and login delay) and Cisco IOS XE Login Enhancements.
+
+### Tests
+- New tests for error rendering in the browser code (fake DOM in Node), the upload gate
+  and rule 1.2.11 (strong, weak and missing settings on IOS 15.x and IOS-XE 17.x, both
+  levels). Hardening Audit golden files regenerated for the new rule.
+
+---
+
 ## [v0.7.15] – 2026-11-06 (CVE Analyzer: Catalyst SD-WAN in the form, one platform list)
 
 ### Security Tools
