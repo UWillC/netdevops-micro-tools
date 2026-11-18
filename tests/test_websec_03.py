@@ -369,12 +369,36 @@ class TestTimezoneBatch:
         assert "QQQ" not in r.text
         assert len(r.content) < 200
 
-    def test_at_the_cap_is_fast(self):
-        start = time.perf_counter()
-        r = client.post(BATCH, json={"timestamps": ["a"] * 1000})
-        assert time.perf_counter() - start < 0.2
+    @staticmethod
+    def _best_of(n_items, runs=5):
+        """Fastest of `runs` timed requests, after one untimed warm-up.
+
+        Load on the machine (the rest of the suite, a busy CI runner, GC) only ever
+        adds time, so the fastest run is the closest estimate of the real cost. A
+        code regression slows every run, the fastest one included.
+        """
+        body = {"timestamps": ["a"] * n_items}
+        r = client.post(BATCH, json=body)
         assert r.status_code == 200
-        assert len(r.json()) == 1000
+        assert len(r.json()) == n_items
+        best = float("inf")
+        for _ in range(runs):
+            start = time.perf_counter()
+            client.post(BATCH, json=body)
+            best = min(best, time.perf_counter() - start)
+        return best
+
+    def test_at_the_cap_is_fast(self):
+        # TEST-FLAKY-01: one cold request against 0.2 s failed now and then (about
+        # 0.05-0.11 s locally, so too little headroom under load). The budget stays
+        # 0.2 s, but on the best of 5 warm runs, which noise cannot push up.
+        at_cap = self._best_of(tz.MAX_BATCH_TIMESTAMPS)
+        assert at_cap < 0.2, at_cap
+        # Cost grows linearly: 10x the items, about 10x the time. Quadratic work
+        # per request would give about 100x. Measured 7.7-8.3x idle, 3.8-8.1x under load;
+        # 15x leaves room for noise and still fails a per-request quadratic term.
+        tenth = self._best_of(tz.MAX_BATCH_TIMESTAMPS // 10)
+        assert at_cap < 15 * tenth, (at_cap, tenth)
 
     def test_results_as_before(self):
         r = client.post(BATCH, json={"timestamps": ["2026-11-02 12:00:00", "nope"],
