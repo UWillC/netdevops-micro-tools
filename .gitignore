@@ -51,3 +51,4 @@ profiles/*.json
 
 # Docker
 .docker/
+/BUILD_TIME

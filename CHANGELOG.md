@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.7.17] – 2026-11-19 (`/meta/version` reports the real build time)
+
+### Platform
+- **`build_time` in `/meta/version` is the image build time:** the Dockerfile writes the
+  time of the build into the image and the API reads it once at startup. Before, the field
+  showed the time of each request, so two calls a second apart gave two different values.
+  Outside the container (local run, tests) the process start time stands in.
+
+---
+
 ## [v0.7.16] – 2026-11-11 (Error text shown as text; Hardening Audit: login brute-force rule)
 
 ### Security Tools

@@ -18,6 +18,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the full application code
 COPY . .
 
+# Image build time for /meta/version (WEBSEC-01); after COPY, so every commit rebuilds this layer
+RUN date -u +%Y-%m-%dT%H:%M:%SZ > /app/BUILD_TIME
+
 # Expose API port
 EXPOSE 8000
 

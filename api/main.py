@@ -187,11 +187,31 @@ def _warm_up_cve_datasets():
 def health():
     return {"status": "ok"}
 
+def _read_build_time() -> str:
+    """Image build time, written by the Dockerfile (``BUILD_TIME`` file); fixed per build.
+
+    Outside the container (local run, tests) there is no file, so the process start
+    time stands in. Either way the value no longer changes per request (WEBSEC-01).
+    """
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "BUILD_TIME")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            value = fh.read().strip()
+        if value:
+            return value
+    except OSError:
+        pass
+    return datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+BUILD_TIME = _read_build_time()
+
+
 @app.get("/meta/version", response_model=MetaInfo)
 def meta_version():
     return MetaInfo(
         version=APP_VERSION,
-        build_time=datetime.datetime.utcnow().isoformat() + "Z",
+        build_time=BUILD_TIME,
         feature_flags=["cve_engine_v3", "nvd_enrichment", "nvd_cache", "web_ui_v2", "profiles_v2", "profiles_cve", "security_score", "subnet_calc", "mtu_calc", "config_parser", "cloud_deploy", "export_pdf", "cve_mitigation_advisor", "timezone_converter", "ip_path_tracer", "port_auditor", "config_explainer", "config_drift", "cis_audit", "whoami", "ise_coverage", "threat_feed_local", "kev_badges", "ise_analyzer", "bundled_cve", "kev_catalog", "known_affected_match", "ise_full_coverage", "kev_watch", "acl_whatif", "cli_cheat_sheet"]
     )
 
