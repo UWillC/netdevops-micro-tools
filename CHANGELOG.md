@@ -4,6 +4,31 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.7.18] – 2026-11-20 (Hardening Audit: SSH cryptography rule)
+
+### Security Tools
+- **Hardening Audit rule 1.2.12 SSH cryptography (Access, high, Level 1):** checks
+  `ip ssh server algorithm encryption | mac | kex` and `ip ssh dh min size`. FAIL when a
+  weak algorithm is allowed (CBC, 3DES, hmac-sha1, SHA-1 key exchange and similar) or the
+  DH minimum is under 2048. WARNING when a list is missing on a release whose defaults
+  still include weak algorithms, when the DH minimum is missing or under 4096, or when a
+  token is not a known IOS / IOS XE algorithm (an unknown token never passes). A later
+  `no ip ssh server algorithm <kw>` or `no ip ssh dh min size` line puts the device back on
+  its defaults and is treated that way. On IOS 15.x a missing kex line is information only
+  (the command needs IOS XE 16.3+); on IOS XE 17.10+ missing lists are information only
+  (strong defaults). ASA-style `ip ssh` lines are named as not valid on IOS.
+- **Rule counts:** 41 rules, 25 at Level 1 (was 40 and 24). The level selector and README
+  show the new numbers. References: NSA Network Infrastructure Security Guide 7.11, Cisco
+  IOS Security Command Reference (`ip ssh server algorithm`, `ip ssh dh min size`) and
+  Cisco IOS XE 17.x SSH algorithms for Common Criteria.
+
+### Tests
+- 59 new tests for rule 1.2.12 (strong, weak, missing and unknown algorithms, `no` lines,
+  IOS 15.x and IOS XE 16.x / 17.x, both levels). Hardening Audit golden files regenerated;
+  the hardened baseline gains the SSH crypto lines and stays at 100% (A) at Level 1.
+
+---
+
 ## [v0.7.17] – 2026-11-19 (`/meta/version` reports the real build time)
 
 ### Platform
