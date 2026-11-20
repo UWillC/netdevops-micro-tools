@@ -159,10 +159,77 @@ def test_last_algorithm_line_wins():
 
 
 def test_negated_and_client_lines_do_not_count():
-    cfg = STRONG + ("no ip ssh server algorithm encryption 3des-cbc\n"
-                    "ip ssh client algorithm encryption 3des-cbc\n"
+    # client lines and comments never count
+    cfg = STRONG + ("ip ssh client algorithm encryption 3des-cbc\n"
                     "! ip ssh server algorithm mac hmac-sha1\n")
     assert _run(cfg)[0] == "PASS"
+    # @ciso W2: `no ... <kw>` after a strong line puts the device back on its
+    # defaults (safer reading: with or without tokens, the whole list goes)
+    for neg in ("no ip ssh server algorithm encryption\n",
+                "no ip ssh server algorithm encryption 3des-cbc\n"):
+        result, evidence, remediation = _run(STRONG + neg)
+        assert result == "WARNING", neg
+        assert "no 'ip ssh server algorithm encryption'" in evidence
+        assert "ip ssh server algorithm encryption " in remediation
+    # on 17.10+ the defaults are strong, so a dropped list is fine
+    assert _run("version 17.12\n" + STRONG + "no ip ssh server algorithm kex\n")[0] == "PASS"
+    # a `no` line before the strong line does not matter
+    assert _run("no ip ssh server algorithm encryption\n" + STRONG)[0] == "PASS"
+    # `no ip ssh dh min size` = IOS default 2048
+    result, evidence, _ = _run(STRONG + "no ip ssh dh min size\n")
+    assert result == "WARNING" and "no 'ip ssh dh min size'" in evidence
+
+
+# ---------- @ciso W1: unknown tokens never PASS ----------
+
+@pytest.mark.parametrize("keyword,token,expected", [
+    ("encryption", "arcfour", "WARNING"),
+    ("encryption", "3des", "WARNING"),
+    ("encryption", "aes256-ctr,aes128-cbc", "FAIL"),
+    ("encryption", "aes256-ctr,aes128-ctr", "WARNING"),
+    ("mac", "hmac-sha1-etm@openssh.com", "WARNING"),
+    ("kex", "aes256-ctr", "WARNING"),  # valid token, wrong keyword
+])
+def test_unknown_token_never_passes(keyword, token, expected):
+    cfg = STRONG.replace(f"ip ssh server algorithm {keyword} ",
+                         f"ip ssh server algorithm {keyword} {token} ")
+    result, evidence, remediation = _run(cfg)
+    assert result != "PASS"
+    assert result == expected
+    if "," in token or expected == "WARNING":
+        assert f"unknown {keyword} algorithm {token}" in evidence
+    assert f"ip ssh server algorithm {keyword} " in remediation
+
+
+def test_unknown_token_echo_is_capped():
+    cfg = STRONG.replace("aes128-ctr", "x" * 500)
+    result, evidence, _ = _run(cfg)
+    assert result == "WARNING"
+    assert "x" * 40 in evidence and "x" * 41 not in evidence
+
+
+def test_every_known_strong_token_passes():
+    lines = {kw: " ".join(sorted(ssh_crypto.SSH_STRONG_KNOWN[kw]))
+             for kw in ("encryption", "mac", "kex")}
+    cfg = "".join(f"ip ssh server algorithm {kw} {t}\n" for kw, t in lines.items())
+    assert _run(cfg + "ip ssh dh min size 4096\n")[0] == "PASS"
+
+
+# ---------- @ciso R1: huge numbers never raise ----------
+
+@pytest.mark.parametrize("cfg", [
+    STRONG.replace("4096", "9" * 5000),
+    "version " + "1" * 5000 + ".1\n" + STRONG,
+    "version 17." + "9" * 5000 + "\n" + STRONG,
+], ids=["dh-min-size", "version-major", "version-minor"])
+def test_huge_numbers_are_no_line_not_an_error(cfg):
+    result, _, _ = _run(cfg)
+    assert result in ("PASS", "WARNING")
+    from fastapi.testclient import TestClient
+    from api.main import app
+    resp = TestClient(app).post("/tools/hardening-audit/check",
+                                json={"config_text": cfg, "level": "2"})
+    assert resp.status_code == 200
 
 
 # ---------- dh min size ----------

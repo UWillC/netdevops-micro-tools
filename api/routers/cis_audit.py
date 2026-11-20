@@ -878,9 +878,23 @@ def _check_login_block_for(cfg):
 # and hmac-sha2-256/512 from the defaults, and 17.x encryption defaults have no CBC.
 # `ip ssh cipher|key-exchange` (ASA-like, not an IOS command; what Golden Config
 # emitted until v0.6.65) is named as Info and never changes the result.
-SSH_ALGO_LINE_RE = re.compile(r"^ip ssh server algorithm (encryption|mac|kex)[ \t]+(\S.*?)[ \t]*$", re.M)
-SSH_DH_MIN_RE = re.compile(r"^ip ssh dh min size[ \t]+(\d+)\b", re.M)
-IOS_VERSION_RE = re.compile(r"^version[ \t]+(\d+)\.(\d+)\b", re.M)
+# Unknown tokens (@ciso W1, 19.11): a token outside ssh_crypto.SSH_STRONG_KNOWN and
+# the weak sets is at least a WARNING, never a PASS (allowlist, not only a
+# blacklist). Tokens joined by a comma are split, so a weak part still FAILs, and
+# the joined token itself counts as unknown: IOS separates algorithms by spaces.
+# `no` lines (@ciso W2, 19.11): `no ip ssh server algorithm <kw>` and `no ip ssh dh
+# min size` after a positive line put the device back on its defaults, so the
+# keyword counts as missing. [VERIFY on IOS XE 16.x/17.x: whether `no ... <kw>
+# <tokens>` removes only those tokens.] The rule takes the safer reading: any `no`
+# line drops the whole list.
+# Numbers are capped at 5 digits (@ciso R1): a longer one is not a valid value and
+# would make int() raise on > 4300 digits (HTTP 500); it counts as no line.
+SSH_ALGO_LINE_RE = re.compile(
+    r"^(no[ \t]+)?ip ssh server algorithm (encryption|mac|kex)\b[ \t]*(.*?)[ \t]*$", re.M)
+SSH_DH_MIN_RE = re.compile(r"^(no[ \t]+)?ip ssh dh min size\b(?:[ \t]+(\d{1,5})\b)?", re.M)
+IOS_VERSION_RE = re.compile(r"^version[ \t]+(\d{1,5})\.(\d{1,5})\b", re.M)
+SSH_TOKEN_SPLIT_RE = re.compile(r"[\s,]+")
+SSH_UNKNOWN_SHOWN = 40  # characters of an unknown token echoed in the evidence
 SSH_WEAK = {"encryption": ssh_crypto.SSH_ENC_WEAK,
             "mac": ssh_crypto.SSH_MAC_WEAK,
             "kex": ssh_crypto.SSH_KEX_WEAK}
@@ -906,7 +920,12 @@ def _ios_version(cfg):
 
 
 def _check_ssh_crypto(cfg):
-    configured = {kw: toks.split() for kw, toks in SSH_ALGO_LINE_RE.findall(cfg)}  # last line wins
+    configured = {}  # last line wins; a `no` line drops the keyword (W2)
+    for neg, kw, toks in SSH_ALGO_LINE_RE.findall(cfg):
+        if neg:
+            configured.pop(kw, None)
+        elif toks:
+            configured[kw] = toks.split()
     version = _ios_version(cfg)
     classic = version is not None and version[0] < 16
     strong_defaults = version is not None and version >= (17, 10)
@@ -926,13 +945,27 @@ def _check_ssh_crypto(cfg):
                 missing.append(f"no 'ip ssh server algorithm {kw}' ({SSH_DEFAULTS_RISK[kw]})")
                 fix.append(SSH_FIX[kw])
             continue
-        bad = [t for t in toks if t.lower() in SSH_WEAK[kw]]
+        bad, unknown = [], []
+        for tok in toks:
+            if "," in tok:
+                unknown.append(tok)
+            for part in filter(None, SSH_TOKEN_SPLIT_RE.split(tok.lower())):
+                if part in SSH_WEAK[kw]:
+                    bad.append(part)
+                elif part not in ssh_crypto.SSH_STRONG_KNOWN[kw] and "," not in tok:
+                    unknown.append(tok)
         if bad:
             weak.append(f"{kw} {' '.join(bad)}")
+        if unknown:
+            shown = " ".join(t[:SSH_UNKNOWN_SHOWN] for t in unknown)
+            missing.append(f"unknown {kw} algorithm {shown} (not an IOS / IOS XE token;"
+                           " the device may reject the whole line and keep its defaults)")
+        if bad or unknown:
             fix.append(SSH_FIX[kw])
 
-    dh = SSH_DH_MIN_RE.findall(cfg)
-    dh_size = int(dh[-1]) if dh else None
+    dh_size = None  # last line wins; `no ip ssh dh min size` = IOS default (W2)
+    for neg, size in SSH_DH_MIN_RE.findall(cfg):
+        dh_size = None if neg or not size else int(size)
     if dh_size is None:
         missing.append("no 'ip ssh dh min size' (IOS default 2048)")
         fix.append(SSH_FIX["dh"])
