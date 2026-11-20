@@ -55,6 +55,11 @@ SSH_NEWER: Tuple[Tuple[str, Tuple[str, ...], str], ...] = (
 # for IOS XE 17.x (chacha20, GCM without the @openssh suffix, -etm MACs,
 # curve25519@libssh, group14-sha256). Never generated. A token outside this set
 # and outside the weak sets is unknown to the audit: never a PASS.
+# @ciso R7 (HARD-03b, S2 re-read 2026-11-20): all five names are in S2's default
+# lists, spelled as here: aes128-gcm / aes256-gcm (without @openssh.com, next to the
+# suffixed forms), chacha20-poly1305@openssh.com (feature history: 17.8.1),
+# hmac-sha2-256-etm@openssh.com / hmac-sha2-512-etm@openssh.com (default MAC list;
+# S2 gives no release for them), curve25519-sha256@libssh.org (17.8.1).
 SSH_STRONG_KNOWN: Dict[str, frozenset] = {
     "encryption": frozenset(SSH_ENC_ALLOWED) | {
         "aes128-gcm@openssh.com", "aes256-gcm@openssh.com", "aes128-gcm", "aes256-gcm",
