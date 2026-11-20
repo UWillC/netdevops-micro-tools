@@ -101,7 +101,7 @@
     {
       "failed": 0,
       "name": "Access",
-      "passed": 10,
+      "passed": 11,
       "rules": [
         {
           "category": "Access",
@@ -265,6 +265,22 @@
           "rule_id": "1.2.11",
           "severity": "high",
           "title": "Login brute-force protection"
+        },
+        {
+          "category": "Access",
+          "cis_ref": "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a77.11 Configure remote network administration services",
+          "description": "Hardening rule 1.2.12",
+          "evidence": "SSH server algorithms strong; dh min size 4096.",
+          "references": [
+            "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a77.11 Configure remote network administration services",
+            "Cisco IOS Security Command Reference D-L: ip ssh server algorithm, ip ssh dh min size",
+            "Cisco IOS XE 17.x: SSH Algorithms for Common Criteria Certification"
+          ],
+          "remediation": "",
+          "result": "PASS",
+          "rule_id": "1.2.12",
+          "severity": "high",
+          "title": "SSH cryptography"
         }
       ],
       "warnings": 0
@@ -653,15 +669,15 @@
   "hostname": "GOOD-RTR",
   "level": "2",
   "not_applicable": 7,
-  "parser_coverage": 97.5,
-  "passed": 32,
-  "score": 98.4,
+  "parser_coverage": 97.6,
+  "passed": 33,
+  "score": 98.5,
   "score_capped": false,
   "summary": [
-    "Hardening Score: 98.4% (Grade A)",
-    "32 passed, 0 failed, 1 warnings, 7 N/A",
+    "Hardening Score: 98.5% (Grade A)",
+    "33 passed, 0 failed, 1 warnings, 7 N/A",
     "Excellent hardening. Minor improvements possible."
   ],
-  "total_rules": 40,
+  "total_rules": 41,
   "warnings": 1
 }

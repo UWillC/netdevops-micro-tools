@@ -265,9 +265,25 @@
           "rule_id": "1.2.11",
           "severity": "high",
           "title": "Login brute-force protection"
+        },
+        {
+          "category": "Access",
+          "cis_ref": "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a77.11 Configure remote network administration services",
+          "description": "Hardening rule 1.2.12",
+          "evidence": "SSH crypto not fully restricted: no 'ip ssh server algorithm encryption' (IOS XE 16.x defaults include CBC and 3DES); no 'ip ssh server algorithm mac' (defaults before IOS XE 17.10 include hmac-sha1); no 'ip ssh server algorithm kex' (defaults before IOS XE 17.10 include diffie-hellman-group14-sha1); no 'ip ssh dh min size' (IOS default 2048).",
+          "references": [
+            "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a77.11 Configure remote network administration services",
+            "Cisco IOS Security Command Reference D-L: ip ssh server algorithm, ip ssh dh min size",
+            "Cisco IOS XE 17.x: SSH Algorithms for Common Criteria Certification"
+          ],
+          "remediation": "Use: ip ssh server algorithm encryption aes256-ctr aes192-ctr aes128-ctr; ip ssh server algorithm mac hmac-sha2-512 hmac-sha2-256 (IOS XE 16.5.1b+); ip ssh server algorithm kex ecdh-sha2-nistp521 ecdh-sha2-nistp384 ecdh-sha2-nistp256 (IOS XE 16.3+); ip ssh dh min size 4096",
+          "result": "WARNING",
+          "rule_id": "1.2.12",
+          "severity": "high",
+          "title": "SSH cryptography"
         }
       ],
-      "warnings": 3
+      "warnings": 4
     },
     {
       "failed": 3,
@@ -653,16 +669,16 @@
   "hostname": "L3-ONLY-RTR",
   "level": "2",
   "not_applicable": 10,
-  "parser_coverage": 82.5,
+  "parser_coverage": 80.5,
   "passed": 13,
-  "score": 63.1,
+  "score": 61.8,
   "score_capped": false,
   "summary": [
-    "Hardening Score: 63.1% (Grade C)",
-    "13 passed, 10 failed, 7 warnings, 10 N/A",
-    "Parser coverage 82.5% \u2014 7 rule(s) returned WARN (ambiguous); score may understate or overstate true posture.",
+    "Hardening Score: 61.8% (Grade C)",
+    "13 passed, 10 failed, 8 warnings, 10 N/A",
+    "Parser coverage 80.5% \u2014 8 rule(s) returned WARN (ambiguous); score may understate or overstate true posture.",
     "Moderate compliance. Several important gaps to fix."
   ],
-  "total_rules": 40,
-  "warnings": 7
+  "total_rules": 41,
+  "warnings": 8
 }

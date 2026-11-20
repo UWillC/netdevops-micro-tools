@@ -24,6 +24,8 @@ from typing import List, Optional
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
+from api import ssh_crypto
+
 router = APIRouter()
 
 
@@ -856,6 +858,108 @@ def _check_login_block_for(cfg):
     return "PASS", f"{block}; failed and successful logins logged." + info_text, ""
 
 
+# HARD-03: SSH server cryptography. Algorithm names come from api/ssh_crypto.py,
+# the same module the Golden Config generator reads (one list, GC-FIX-01).
+# Syntax on IOS / IOS XE: `ip ssh server algorithm encryption|mac|kex ...` and
+# `ip ssh dh min size {2048|4096}` (Cisco IOS Security Command Reference D-L).
+#   FAIL     a configured list names a weak algorithm (CBC / 3DES, hmac-sha1(-96) /
+#            hmac-md5, diffie-hellman-group1-sha1 / group14-sha1 / group-exchange-sha1),
+#            or dh min size < 2048
+#   WARNING  dh min size 2048 or not set (IOS default 2048), or an algorithm line is
+#            missing: the device then runs its defaults, which depend on the release
+#            (IOS XE 16.x encryption defaults include CBC / 3DES; before IOS XE 17.10
+#            kex and mac defaults include diffie-hellman-group14-sha1 and hmac-sha1)
+#   PASS     every list strong, dh min size 4096
+# The rule never asks for `kex` on IOS 15.x (`version 15.x` in the config, which
+# includes IOS XE 3.x): the command needs IOS XE 16.3. A missing `mac` line there
+# stays a WARNING: IOS 15.x offers only hmac-sha1 / hmac-sha1-96, so the device
+# runs a weak MAC whatever is configured (fix = IOS XE 16.5.1b+). With `version 17.10`
+# or later a missing algorithm line is fine: 17.10 removed group14-sha1, hmac-sha1
+# and hmac-sha2-256/512 from the defaults, and 17.x encryption defaults have no CBC.
+# `ip ssh cipher|key-exchange` (ASA-like, not an IOS command; what Golden Config
+# emitted until v0.6.65) is named as Info and never changes the result.
+SSH_ALGO_LINE_RE = re.compile(r"^ip ssh server algorithm (encryption|mac|kex)[ \t]+(\S.*?)[ \t]*$", re.M)
+SSH_DH_MIN_RE = re.compile(r"^ip ssh dh min size[ \t]+(\d+)\b", re.M)
+IOS_VERSION_RE = re.compile(r"^version[ \t]+(\d+)\.(\d+)\b", re.M)
+SSH_WEAK = {"encryption": ssh_crypto.SSH_ENC_WEAK,
+            "mac": ssh_crypto.SSH_MAC_WEAK,
+            "kex": ssh_crypto.SSH_KEX_WEAK}
+SSH_DEFAULTS_RISK = {
+    "encryption": "IOS XE 16.x defaults include CBC and 3DES",
+    "mac": "defaults before IOS XE 17.10 include hmac-sha1",
+    "kex": "defaults before IOS XE 17.10 include diffie-hellman-group14-sha1",
+}
+_SSH_NEWER = {kw: (algos, release) for kw, algos, release in ssh_crypto.SSH_NEWER}
+SSH_FIX = {
+    "encryption": "ip ssh server algorithm encryption " + " ".join(ssh_crypto.SSH_ENC_ALLOWED),
+    "mac": ("ip ssh server algorithm mac " + " ".join(_SSH_NEWER["mac"][0])
+            + f" ({_SSH_NEWER['mac'][1]}+)"),
+    "kex": ("ip ssh server algorithm kex " + " ".join(ssh_crypto.SSH_KEX_ALLOWED)
+            + f" ({ssh_crypto.BASELINE_RELEASE}+)"),
+    "dh": f"ip ssh dh min size {max(ssh_crypto.SSH_DH_MIN_SIZES)}",
+}
+
+
+def _ios_version(cfg):
+    m = IOS_VERSION_RE.search(cfg)
+    return (int(m.group(1)), int(m.group(2))) if m else None
+
+
+def _check_ssh_crypto(cfg):
+    configured = {kw: toks.split() for kw, toks in SSH_ALGO_LINE_RE.findall(cfg)}  # last line wins
+    version = _ios_version(cfg)
+    classic = version is not None and version[0] < 16
+    strong_defaults = version is not None and version >= (17, 10)
+
+    weak, missing, info, fix = [], [], [], []
+    for kw in ("encryption", "mac", "kex"):
+        toks = configured.get(kw)
+        if toks is None:
+            if classic and kw == "kex":
+                info.append("no kex line: the command needs IOS XE 16.3+ (not on IOS 15.x)")
+            elif classic and kw == "mac":
+                missing.append("no strong MAC: IOS 15.x offers only hmac-sha1 / hmac-sha1-96")
+                fix.append(SSH_FIX[kw])
+            elif strong_defaults:
+                info.append(f"no {kw} line: IOS XE 17.10+ defaults have no weak {kw}")
+            else:
+                missing.append(f"no 'ip ssh server algorithm {kw}' ({SSH_DEFAULTS_RISK[kw]})")
+                fix.append(SSH_FIX[kw])
+            continue
+        bad = [t for t in toks if t.lower() in SSH_WEAK[kw]]
+        if bad:
+            weak.append(f"{kw} {' '.join(bad)}")
+            fix.append(SSH_FIX[kw])
+
+    dh = SSH_DH_MIN_RE.findall(cfg)
+    dh_size = int(dh[-1]) if dh else None
+    if dh_size is None:
+        missing.append("no 'ip ssh dh min size' (IOS default 2048)")
+        fix.append(SSH_FIX["dh"])
+    elif dh_size < 2048:
+        weak.append(f"dh min size {dh_size} (under 2048)")
+        fix.append(SSH_FIX["dh"])
+    elif dh_size < 4096:
+        missing.append(f"dh min size {dh_size} (4096 recommended; can lock out older SSH clients)")
+        fix.append(SSH_FIX["dh"])
+
+    invalid = sorted({ln.split()[2] for ln in cfg.splitlines()
+                      if ssh_crypto.INVALID_IP_SSH_RE.match(ln)})
+    if invalid:
+        info.append(" / ".join(f"'ip ssh {k}'" for k in invalid)
+                    + " is not an IOS / IOS XE command (ASA-like syntax), the device rejects it;"
+                      " use ip ssh server algorithm")
+    info_text = f" Info: {'; '.join(info)}." if info else ""
+    remediation = ("Use: " + "; ".join(fix)) if fix else ""
+
+    if weak:
+        also = f" Also: {'; '.join(missing)}." if missing else ""
+        return ("FAIL", f"Weak SSH crypto allowed: {'; '.join(weak)}." + also + info_text, remediation)
+    if missing:
+        return ("WARNING", f"SSH crypto not fully restricted: {'; '.join(missing)}." + info_text, remediation)
+    return "PASS", f"SSH server algorithms strong; dh min size {dh_size}." + info_text, ""
+
+
 def _check_ip_verify_source(cfg):
     if not _has_switchports(cfg):
         return "N/A", _L2_NA_EVIDENCE, ""
@@ -910,6 +1014,7 @@ RULES = [
     ("1.2.9", "Domain name", "Access", "low", "1", _check_domain_name),
     ("1.2.10", "RSA key size", "Access", "high", "2", _check_rsa_key_size),
     ("1.2.11", "Login brute-force protection", "Access", "high", "1", _check_login_block_for),
+    ("1.2.12", "SSH cryptography", "Access", "high", "1", _check_ssh_crypto),
 
     # Services (2.x)
     ("2.1.1", "No HTTP server", "Services", "critical", "1", _check_no_http_server),
@@ -980,6 +1085,12 @@ REFERENCES = {
     "1.2.10": [_nsa("7.11 Configure remote network administration services"), CISCO_HARDEN],
     "1.2.11": [_nsa("4.6 Limit authentication attempts (attempt limit + login delay)"),
                "Cisco IOS XE Login Enhancements (login block-for; also DISA STIG V-215668)"],
+    # [VERIFY v1.2] 7.11 is the section 1.2.1 / 1.2.10 already cite for SSH; its
+    # wording on algorithm choice was not re-read for HARD-03. Algorithm names,
+    # releases and defaults come from the two Cisco documents.
+    "1.2.12": [_nsa("7.11 Configure remote network administration services"),
+               "Cisco IOS Security Command Reference D-L: ip ssh server algorithm, ip ssh dh min size",
+               "Cisco IOS XE 17.x: SSH Algorithms for Common Criteria Certification"],
     "2.1.1": [_nsa("7.1 Disable clear text administration services"), CISCO_HARDEN],
     "2.1.2": [_nsa("7.11 Configure remote network administration services")],
     "2.1.3": [_nsa("8.1 Disable IP source routing"), CISCO_HARDEN],

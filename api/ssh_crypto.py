@@ -1,8 +1,8 @@
 """
 Single source of SSH algorithm names for Cisco IOS / IOS XE (GC-FIX-01, 2026-10-04).
 
-Used by the Golden Config generator today; the future HARD-03 audit rule and
-Config Drift should read the same lists instead of keeping their own copies.
+Used by the Golden Config generator and the Hardening Audit rule 1.2.12 (HARD-03);
+Config Drift should read the same lists instead of keeping its own copy.
 
 Syntax on IOS / IOS XE is `ip ssh server algorithm encryption|mac|kex ...`.
 `ip ssh cipher ...` and `ip ssh key-exchange ...` do NOT exist on IOS or IOS XE
@@ -50,7 +50,7 @@ SSH_NEWER: Tuple[Tuple[str, Tuple[str, ...], str], ...] = (
     ("kex", ("curve25519-sha256", "diffie-hellman-group16-sha512"), "IOS XE 17.11.1a"),     # S2
 )
 
-# --- Weak (for the HARD-03 audit rule; never generated) ----------------------
+# --- Weak (read by audit rule 1.2.12, HARD-03; never generated) --------------
 SSH_ENC_WEAK = frozenset({"aes128-cbc", "aes192-cbc", "aes256-cbc", "3des-cbc"})
 SSH_KEX_WEAK = frozenset({
     "diffie-hellman-group1-sha1",
