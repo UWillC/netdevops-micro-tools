@@ -265,9 +265,25 @@
           "rule_id": "1.2.11",
           "severity": "high",
           "title": "Login brute-force protection"
+        },
+        {
+          "category": "Access",
+          "cis_ref": "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a77.11 Configure remote network administration services",
+          "description": "Hardening rule 1.2.12",
+          "evidence": "SSH crypto not fully restricted: no 'ip ssh server algorithm encryption' (IOS XE 16.x defaults include CBC and 3DES); no 'ip ssh server algorithm mac' (defaults before IOS XE 17.10 include hmac-sha1); no 'ip ssh server algorithm kex' (defaults before IOS XE 17.10 include diffie-hellman-group14-sha1); no 'ip ssh dh min size' (IOS default 2048).",
+          "references": [
+            "NSA Network Infrastructure Security Guide v1.2 (U/OO/118623-22) \u00a77.11 Configure remote network administration services",
+            "Cisco IOS Security Command Reference D-L: ip ssh server algorithm, ip ssh dh min size",
+            "Cisco IOS XE 17.x: SSH Algorithms for Common Criteria Certification"
+          ],
+          "remediation": "Use: ip ssh server algorithm encryption aes256-ctr aes192-ctr aes128-ctr; ip ssh server algorithm mac hmac-sha2-512 hmac-sha2-256 (IOS XE 16.5.1b+); ip ssh server algorithm kex ecdh-sha2-nistp521 ecdh-sha2-nistp384 ecdh-sha2-nistp256 (IOS XE 16.3+); ip ssh dh min size 4096",
+          "result": "WARNING",
+          "rule_id": "1.2.12",
+          "severity": "high",
+          "title": "SSH cryptography"
         }
       ],
-      "warnings": 3
+      "warnings": 4
     },
     {
       "failed": 4,
@@ -653,17 +669,17 @@
   "hostname": "BRANCH-RTR-01",
   "level": "2",
   "not_applicable": 10,
-  "parser_coverage": 75.0,
+  "parser_coverage": 73.2,
   "passed": 4,
-  "score": 18.5,
+  "score": 18.7,
   "score_capped": false,
   "summary": [
-    "Hardening Score: 18.5% (Grade F)",
-    "4 passed, 16 failed, 10 warnings, 10 N/A",
+    "Hardening Score: 18.7% (Grade F)",
+    "4 passed, 16 failed, 11 warnings, 10 N/A",
     "CRITICAL failures (7): Enable secret, No enable password, AAA new-model, SSH version 2, No telnet on VTY, No HTTP server, No SNMPv2c",
-    "Parser coverage 75.0% \u2014 10 rule(s) returned WARN (ambiguous); score may understate or overstate true posture.",
+    "Parser coverage 73.2% \u2014 11 rule(s) returned WARN (ambiguous); score may understate or overstate true posture.",
     "Critical compliance gaps. Immediate remediation needed."
   ],
-  "total_rules": 40,
-  "warnings": 10
+  "total_rules": 41,
+  "warnings": 11
 }

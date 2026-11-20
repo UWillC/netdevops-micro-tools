@@ -1,8 +1,8 @@
 """
 Single source of SSH algorithm names for Cisco IOS / IOS XE (GC-FIX-01, 2026-10-04).
 
-Used by the Golden Config generator today; the future HARD-03 audit rule and
-Config Drift should read the same lists instead of keeping their own copies.
+Used by the Golden Config generator and the Hardening Audit rule 1.2.12 (HARD-03);
+Config Drift should read the same lists instead of keeping its own copy.
 
 Syntax on IOS / IOS XE is `ip ssh server algorithm encryption|mac|kex ...`.
 `ip ssh cipher ...` and `ip ssh key-exchange ...` do NOT exist on IOS or IOS XE
@@ -50,7 +50,26 @@ SSH_NEWER: Tuple[Tuple[str, Tuple[str, ...], str], ...] = (
     ("kex", ("curve25519-sha256", "diffie-hellman-group16-sha512"), "IOS XE 17.11.1a"),     # S2
 )
 
-# --- Weak (for the HARD-03 audit rule; never generated) ----------------------
+# --- Every strong token IOS XE knows, per keyword (audit rule 1.2.12) ---------
+# The allowed + newer lists above, plus the other strong defaults that S2 lists
+# for IOS XE 17.x (chacha20, GCM without the @openssh suffix, -etm MACs,
+# curve25519@libssh, group14-sha256). Never generated. A token outside this set
+# and outside the weak sets is unknown to the audit: never a PASS.
+SSH_STRONG_KNOWN: Dict[str, frozenset] = {
+    "encryption": frozenset(SSH_ENC_ALLOWED) | {
+        "aes128-gcm@openssh.com", "aes256-gcm@openssh.com", "aes128-gcm", "aes256-gcm",
+        "chacha20-poly1305@openssh.com"},
+    "mac": frozenset(SSH_MAC_ALLOWED) | {
+        "hmac-sha2-256", "hmac-sha2-512",
+        "hmac-sha2-256-etm@openssh.com", "hmac-sha2-512-etm@openssh.com"},
+    "kex": frozenset(SSH_KEX_ALLOWED) | {
+        "curve25519-sha256", "curve25519-sha256@libssh.org",
+        "diffie-hellman-group14-sha256", "diffie-hellman-group16-sha512"},
+}
+for _kw, _algos, _release in SSH_NEWER:
+    assert set(_algos) <= SSH_STRONG_KNOWN[_kw], (_kw, _algos)
+
+# --- Weak (read by audit rule 1.2.12, HARD-03; never generated) --------------
 SSH_ENC_WEAK = frozenset({"aes128-cbc", "aes192-cbc", "aes256-cbc", "3des-cbc"})
 SSH_KEX_WEAK = frozenset({
     "diffie-hellman-group1-sha1",
