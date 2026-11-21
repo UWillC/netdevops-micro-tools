@@ -20,7 +20,7 @@ only automatic deploy path is the `deploy` job in `.github/workflows/tests.yml`.
   ```
 
   (A worktree has no `.venv`: use the interpreter of the main checkout,
-  `/Users/uwillc/SaaS/cisco-microtool-generator/.venv/bin/python`.)
+  `<main checkout>/.venv/bin/python`.)
 - Security-relevant changes are reviewed by @ciso first; the verdict (GO / GO with
   conditions / NO-GO) is named in the release commit message ("reviewed by @ciso, GO").
 
@@ -34,18 +34,20 @@ git merge --no-ff <branch> -m "Merge <ID>: <one-line summary>"
 Every merge in the history is a `--no-ff` merge commit named `Merge <ID>: ...`
 (for example `5e1cf9c Merge HARD-03: ...`, `f748267 Merge HARD-02: ...`).
 
-Two variants are in use:
+Three variants are in use (check: `git log --first-parent main`):
 
 | Variant | Where the version bump lives | Used for |
 |---|---|---|
-| A. Release commit on `main` after the merge | separate commit `vX.Y.Z: ...` on `main` right after `Merge ...` | v0.7.15, v0.7.16, v0.7.17, v0.7.18 |
+| A. Release commit on `main` after the merge | separate commit `vX.Y.Z: ...` on `main` right after `Merge ...` | v0.7.16, v0.7.18 |
 | B. Release commit on the branch | the branch carries a `vX.Y.Z: ...` commit; `Merge vX.Y.Z: ...` brings it to `main` | v0.7.9 to v0.7.14; with a PR and green CI on the PR first for v0.7.10 (PR #5), v0.7.11 (PR #6), v0.7.14 (PR #7) |
+| C. Commit straight on `main` | no branch, no PR, no merge: the `vX.Y.Z: ...` commit carries the code and the bump | v0.7.15 (`b5e9819`, then `cd08f2a`), v0.7.17 (`aa4c93e`); also non-release commits such as `e6b25c7`, `b1486fd` |
 
 The PR runs the same Tests workflow (`pull_request` trigger) before anything reaches
 `main`. The @cto rule since 02.11 asks for it ("branch -> PR -> green CI on the PR ->
 merge"), because a suite that passes on macOS is not proof for the Linux runner
 (v0.7.13: 392 MB on macOS, 499.75 MB in CI, red `main`). v0.7.14 followed it; v0.7.15
-to v0.7.18 used variant A without a PR. [VERIFY: which variant is the rule from now on.]
+to v0.7.18 used variants A and C without a PR. Variant C also skips review before
+`main`. [VERIFY: which variant is the rule from now on.]
 
 For variant B:
 
@@ -57,7 +59,9 @@ env -u GITHUB_TOKEN gh pr create --base main --head <branch> --title "vX.Y.Z: ..
 
 ## 2. Release commit `vX.Y.Z: <summary>`
 
-One commit touches exactly these four files (see `0acbd0c`, `4649b11`):
+In variant A the release commit touches exactly these four files (see `0acbd0c`,
+`4649b11`); in variants B and C the same four files change in the release commit next
+to the code:
 
 1. **`version.py`**: `APP_VERSION = "X.Y.Z"`. Single source of the version: OpenAPI,
    `/meta/version`, report provenance and the asset cache-buster read it
@@ -110,13 +114,16 @@ What happens (`.github/workflows/tests.yml`):
 3. Render builds the Docker image; the Dockerfile writes the build time to `BUILD_TIME`,
    which `/meta/version` reports as `build_time`.
 
-A red run deploys nothing. `ci_status.sh` exists because five releases (v0.6.52-56)
+Every green push to `main` deploys, whatever it contains: a merge pushed without its
+release commit goes to production under the old version number, and a variant C commit
+reaches production with no PR or review before `main`. Push the merge and the release
+commit together. A red run deploys nothing. `ci_status.sh` exists because five releases (v0.6.52-56)
 went out on 2026-09-18 with CI red while nobody looked at Actions.
 
 The weekly `Refresh Known Affected lists` workflow commits `data: ...` to `main` as
 `github-actions[bot]`. Those commits have no Tests run of their own in the run list and
-are not deployed by themselves; production picks them up with the next release.
-[VERIFY: that a push with the workflow's `GITHUB_TOKEN` never starts `tests.yml`.]
+are not deployed by themselves (GitHub does not start workflows for pushes made with a
+workflow's `GITHUB_TOKEN`); production picks them up with the next release.
 
 ## 4. Verify on production
 
