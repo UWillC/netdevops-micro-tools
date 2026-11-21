@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.7.20] – 2026-11-21 (Release check without email: preview endpoint behind a flag, OFF)
+
+### Platform
+- **Preview endpoint behind a flag, OFF:** `POST /analyze/cve/preview` returns counts only
+  (Critical, High, KEV, a safe upgrade target, data date), never CVE or KEV ids. It is
+  switched off in production (`PREVIEW_ENABLED` not set): the endpoint answers 404, the
+  home page card stays hidden and `/meta/version` does not list `cve_preview`. Nothing
+  changes for users in this release.
+- **Limits ready for later:** 5 checks per minute and 30 per hour per IP (IPv6 per /64),
+  windows of at most one hour, and a global budget of 10 per minute and 60 per hour for
+  uncached Cisco openVuln queries started from the preview.
+- **Sign-up source:** `/api/subscribe` accepts an optional `source`; it is ignored while the
+  flag is off. When the flag is on, a sign-up in the same page session as a preview can be
+  marked in MailerLite. The browser keeps that mark in page memory only, never in local
+  storage.
+
+### Tests
+- New `tests/test_preview_01.py`: flag off = 404, validation without echo, parity with the
+  full report, no gated field in the JSON, limits, budget, sign-up source, frontend copy and
+  the KEV warning line.
+
 ## [v0.7.19] – 2026-11-21 (Hardening Audit: hardened number parsing, banner-safe version)
 
 ### Security Tools
