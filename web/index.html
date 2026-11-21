@@ -162,6 +162,30 @@
           <p class="home-tagline">Small tools. Real automation. Zero friction.</p>
         </div>
 
+        <!-- PREVIEW-01: counts for one release without e-mail. Hidden until /meta/version
+             lists "cve_preview" (PREVIEW_ENABLED on the server). Copy: draft, @cmo final. -->
+        <div class="preview-card" id="preview" hidden>
+          <h2>Check your Cisco release</h2>
+          <p class="preview-lead">How many Critical and High advisories hit your release, how many are exploited in the wild, and where to upgrade. No email.</p>
+          <form id="preview-form" class="preview-form" novalidate>
+            <label for="preview-platform">Platform</label>
+            <select id="preview-platform" name="platform" class="form-select">
+              <option value="IOS XE" data-example="17.9.4a" selected>Cisco IOS XE</option>
+              <option value="IOS" data-example="15.2(7)E8">Cisco IOS (classic)</option>
+              <option value="NX-OS" data-example="10.2(6)">Cisco NX-OS (standalone)</option>
+              <option value="ISE" data-example="3.4 Patch 5">Cisco ISE / ISE-PIC</option>
+              <option value="Catalyst SD-WAN Manager" data-example="20.12.5">Cisco Catalyst SD-WAN Manager (vManage)</option>
+              <option value="Catalyst SD-WAN Controller" data-example="20.12.5">Cisco Catalyst SD-WAN Controller (vSmart)</option>
+              <option value="Catalyst SD-WAN Validator" data-example="20.12.5">Cisco Catalyst SD-WAN Validator (vBond)</option>
+            </select>
+            <label for="preview-version">Software release</label>
+            <input type="text" id="preview-version" name="version" maxlength="64" placeholder="17.9.4a" autocomplete="off" spellcheck="false" />
+            <button type="submit" class="btn-primary" id="preview-submit">Check</button>
+          </form>
+          <p class="preview-error" id="preview-error" role="alert"></p>
+          <div class="preview-result" id="preview-result" aria-live="polite"></div>
+        </div>
+
         <!-- Quickstart for first-time users (auto-hides after 3 visits, dismissible via X) -->
         <div class="quickstart-card" id="quickstart-card">
           <button class="quickstart-dismiss" id="quickstart-dismiss" title="Hide — I know the tools">×</button>

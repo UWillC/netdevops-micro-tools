@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.exceptions import RequestValidationError
 from fastapi.exception_handlers import request_validation_exception_handler
-from api.routers import snmpv3, ntp, golden_config, aaa, cve, profiles, iperf, subnet, mtu, config_parser, export, mitigation, timezone, ip_path_tracer, port_auditor, config_explainer, config_drift, cis_audit, subscribe, whoami, kev_watch, acl
+from api.routers import snmpv3, ntp, golden_config, aaa, cve, cve_preview, profiles, iperf, subnet, mtu, config_parser, export, mitigation, timezone, ip_path_tracer, port_auditor, config_explainer, config_drift, cis_audit, subscribe, whoami, kev_watch, acl
 from models.meta import MetaInfo
 import datetime
 import os
@@ -74,6 +74,7 @@ NO_ECHO_422_PATHS = frozenset({
     "/tools/config-explainer/explain",
     "/tools/port-auditor/analyze",
     "/tools/ip-path-tracer/analyze",
+    cve_preview.PREVIEW_PATH,  # PREVIEW-01 AC-10: no echo of what was typed
 })
 
 
@@ -90,6 +91,8 @@ app.include_router(ntp.router, prefix="/generate", tags=["NTP"])
 app.include_router(golden_config.router, prefix="/generate", tags=["Golden Config"])
 app.include_router(aaa.router, prefix="/generate", tags=["AAA / TACACS+"])
 app.include_router(cve.router, prefix="/analyze", tags=["CVE Analyzer"])
+# PREVIEW-01: counts-only preview without e-mail, behind PREVIEW_ENABLED (default off).
+app.include_router(cve_preview.router, prefix="/analyze", tags=["CVE Analyzer"])
 app.include_router(profiles.router, tags=["Profiles"])
 app.include_router(iperf.router, prefix="/generate", tags=["iPerf3"])
 app.include_router(subnet.router, prefix="/tools", tags=["IP Subnet Calculator"])
@@ -209,10 +212,13 @@ BUILD_TIME = _read_build_time()
 
 @app.get("/meta/version", response_model=MetaInfo)
 def meta_version():
+    # PREVIEW-01: the Home card shows only while the flag is on (read per request,
+    # so switching PREVIEW_ENABLED on Render needs a restart, not a deploy).
+    preview = ["cve_preview"] if cve_preview.enabled() else []
     return MetaInfo(
         version=APP_VERSION,
         build_time=BUILD_TIME,
-        feature_flags=["cve_engine_v3", "nvd_enrichment", "nvd_cache", "web_ui_v2", "profiles_v2", "profiles_cve", "security_score", "subnet_calc", "mtu_calc", "config_parser", "cloud_deploy", "export_pdf", "cve_mitigation_advisor", "timezone_converter", "ip_path_tracer", "port_auditor", "config_explainer", "config_drift", "cis_audit", "whoami", "ise_coverage", "threat_feed_local", "kev_badges", "ise_analyzer", "bundled_cve", "kev_catalog", "known_affected_match", "ise_full_coverage", "kev_watch", "acl_whatif", "cli_cheat_sheet"]
+        feature_flags=preview + ["cve_engine_v3", "nvd_enrichment", "nvd_cache", "web_ui_v2", "profiles_v2", "profiles_cve", "security_score", "subnet_calc", "mtu_calc", "config_parser", "cloud_deploy", "export_pdf", "cve_mitigation_advisor", "timezone_converter", "ip_path_tracer", "port_auditor", "config_explainer", "config_drift", "cis_audit", "whoami", "ise_coverage", "threat_feed_local", "kev_badges", "ise_analyzer", "bundled_cve", "kev_catalog", "known_affected_match", "ise_full_coverage", "kev_watch", "acl_whatif", "cli_cheat_sheet"]
     )
 
 # Mount static files (CSS, JS) - must be after all API routes
