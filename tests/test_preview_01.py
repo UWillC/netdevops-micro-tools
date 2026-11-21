@@ -564,6 +564,15 @@ def test_non_string_source_is_ignored_not_echoed(client, ml, source):
     assert _puts(ml) == []
 
 
+def test_flag_off_stores_no_source_even_from_a_crafted_request(client, ml, capsys, monkeypatch):
+    # @ciso W7: with the flag off nothing new reaches MailerLite.
+    monkeypatch.delenv("PREVIEW_ENABLED", raising=False)
+    r = client.post("/api/subscribe", json={"email": "a@example.com", "source": "preview"})
+    assert r.status_code == 200 and r.json()["success"] is True
+    assert _puts(ml) == []
+    assert "INFO subscribe new=1 source=none" in capsys.readouterr().out
+
+
 def test_failed_tag_still_subscribes(client, ml):
     ml.put_status = 500
     r = client.post("/api/subscribe", json={"email": "a@example.com", "source": "preview"})
@@ -649,18 +658,24 @@ function sandbox(store, search) {
 (async () => {
   const out = {};
   const now = Date.now();
-  let s = sandbox({ netdevops_preview_at: String(now - 3600e3) });
+  // @ciso W7 variant A: attribution lives in page memory for this session only.
+  let s = sandbox({});
+  vm.runInContext("markPreviewShown()", s.ctx);
   await vm.runInContext("submitEmail('a@b.co')", s.ctx);
-  out.recent = s.bodies.pop();
-  s = sandbox({ netdevops_preview_at: String(now - 8 * 86400e3) });
+  out.shown = { body: s.bodies.pop(), store: Object.keys(s.store) };
+  s = sandbox({ netdevops_preview_at: String(now) });   // old 7-day key is ignored
   await vm.runInContext("submitEmail('a@b.co')", s.ctx);
-  out.old = s.bodies.pop();
+  out.stale_key = s.bodies.pop();
   s = sandbox({});
   await vm.runInContext("submitEmail('a@b.co')", s.ctx);
   out.none = s.bodies.pop();
-  s = sandbox({ netdevops_preview_at: String(now) }, "?internal=1");
+  s = sandbox({}, "?internal=1");
+  vm.runInContext("initGate(); markPreviewShown()", s.ctx);
   await vm.runInContext("submitEmail('a@b.co')", s.ctx);
-  out.internal = { body: s.bodies.pop(), flag: s.store.netdevops_internal || null };
+  out.internal = { body: s.bodies.pop(), store: Object.keys(s.store) };
+  s = sandbox({});   // a new page load (reload, new tab) starts without the mark
+  await vm.runInContext("submitEmail('a@b.co')", s.ctx);
+  out.reloaded = s.bodies.pop();
 
   // previewLines from app-security.js: run only the pure function
   const fn = sec.slice(sec.indexOf("const PREVIEW_TRAIN_TEXT"), sec.indexOf("(function initPreview()"));
@@ -673,6 +688,11 @@ function sandbox(store, search) {
     critical_high_left: 0 } }, base)).map(l => l.text);
   out.clean = c2.previewLines(Object.assign({ state: "clean", critical: 0, high: 0, medium: 5, low: 0,
     kev: 0, note: "Our dataset covers Cisco PSIRT advisories; it is not a full scan of your device." }, base)).map(l => l.text);
+  out.kev0 = c2.previewLines(Object.assign({ state: "findings", critical: 1, high: 1, kev: 0 }, base)).map(l => l.text);
+  out.kev2 = c2.previewLines(Object.assign({ state: "findings", critical: 1, high: 1, kev: 2 }, base)).map(l => l.text);
+  out.kev_cls = c2.previewLines(Object.assign({ state: "findings", critical: 1, high: 1, kev: 2 }, base)).map(l => l.cls);
+  out.kev_eol = c2.previewLines(Object.assign({ state: "eol", critical: 1, high: 0, kev: 1,
+    eol_note: "Hardware replacement required, no software fix path." }, base)).map(l => l.text);
   out.unknown = c2.previewLines({ state: "unknown", note: "NOT EVALUATED: x", format_hint: "e.g. 17.9.4a" }).map(l => l.text);
   out.eol = c2.previewLines(Object.assign({ state: "eol", critical: 1, high: 2, kev: 0,
     eol_note: "Hardware replacement required, no software fix path.",
@@ -695,11 +715,37 @@ def node_out(tmp_path_factory):
     return json.loads(res.stdout.strip().splitlines()[-1])
 
 
-def test_source_sent_only_within_7_days_and_not_from_internal(node_out):
-    assert node_out["recent"] == {"email": "a@b.co", "source": "preview"}
-    assert node_out["old"] == {"email": "a@b.co"}
+def test_source_lives_in_page_memory_only(node_out):
+    # @ciso W7 variant A (user 21.11 "5 A"): same page session, no browser storage.
+    assert node_out["shown"] == {"body": {"email": "a@b.co", "source": "preview"}, "store": []}
+    assert node_out["stale_key"] == {"email": "a@b.co"}
     assert node_out["none"] == {"email": "a@b.co"}
-    assert node_out["internal"] == {"body": {"email": "a@b.co"}, "flag": "1"}
+    assert node_out["reloaded"] == {"email": "a@b.co"}
+    assert node_out["internal"] == {"body": {"email": "a@b.co"}, "store": []}
+
+
+def test_preview_js_touches_no_browser_storage_for_attribution():
+    gate = (WEB / "app-gate.js").read_text()
+    assert "netdevops_preview_at" not in gate and "netdevops_internal" not in gate
+    assert "PREVIEW_SOURCE_DAYS" not in gate
+    js = _preview_js()
+    assert "gateSet(" not in js and "localStorage" not in js and "sessionStorage" not in js
+
+
+def test_kev_warning_only_when_kev_above_zero(node_out):
+    # user 21.11 "6 nie": KEV count only, no ids; a clear warning when KEV > 0.
+    assert not any("Actively exploited" in l for l in node_out["kev0"])
+    assert "Actively exploited: upgrade now." in node_out["kev2"]
+    assert "preview-kev-warning" in node_out["kev_cls"]
+    assert "Actively exploited: replace this hardware now." in node_out["kev_eol"]
+    assert not any("upgrade now" in l for l in node_out["kev_eol"])
+    assert not any(re.search(r"CVE-\d{4}-\d+", l) for l in node_out["kev2"])
+
+
+def test_kev_warning_copy_is_marked_draft():
+    js = _preview_js()
+    i = js.index("PREVIEW_MSG_KEV =")
+    assert "copy: draft, @cmo final" in js[js.rindex("\n//", 0, i):i]
 
 
 def test_rendered_lines(node_out):

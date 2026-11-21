@@ -878,6 +878,7 @@
 .preview-count { font-size: 1.05rem; font-weight: 600; }
 .preview-sub, .preview-sources, .preview-hint { color: var(--muted); font-size: 0.9rem; }
 .preview-not-evaluated { font-weight: 600; }
+.preview-kev-warning { color: var(--danger); font-weight: 700; }
 .preview-cta { margin-top: 12px; }
 @media (max-width: 600px) {
   .preview-form { grid-template-columns: 1fr; }

@@ -737,6 +737,9 @@ const PREVIEW_TRAIN_TEXT = {
   change: "train change",
   migration: "migration to a supported train",
 };
+// KEV > 0 warning line (count only, no KEV ids). copy: draft, @cmo final
+const PREVIEW_MSG_KEV = "Actively exploited: upgrade now.";
+const PREVIEW_MSG_KEV_EOL = "Actively exploited: replace this hardware now.";
 
 function previewEl(tag, className, text) {
   const el = document.createElement(tag);
@@ -768,6 +771,10 @@ function previewLines(data) {
     add("preview-count preview-high", high);
   }
   add("preview-count preview-kev", `KEV: ${data.kev || 0}, listed by CISA as exploited in the wild`);
+  if ((data.kev || 0) > 0) {
+    // copy: draft, @cmo final. Count only, never KEV ids (user 21.11).
+    add("preview-kev-warning", data.state === "eol" ? PREVIEW_MSG_KEV_EOL : PREVIEW_MSG_KEV);
+  }
   if (data.state !== "eol") {
     const up = data.upgrade;
     if (up && up.target) {
@@ -869,8 +876,9 @@ function previewLines(data) {
       }
       if (!res.ok) { result.textContent = ""; showError(PREVIEW_MSG_FAILED); return; }
       const data = await res.json();
-      if (PREVIEW_SHOWN_STATES.includes(data.state) && typeof gateSet === "function") {
-        gateSet(PREVIEW_AT_KEY, String(Date.now()));
+      // @ciso W7 variant A: page memory only, never browser storage.
+      if (PREVIEW_SHOWN_STATES.includes(data.state) && typeof markPreviewShown === "function") {
+        markPreviewShown();
       }
       render(data, platform, version);
     } catch (err) {

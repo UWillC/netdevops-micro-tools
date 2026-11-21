@@ -10,11 +10,13 @@ const GATE_UNLOCKED_KEY = "netdevops_unlocked";
 const GATE_TOKEN_KEY = "netdevops_beta_token";
 const GATE_BACKFILL_KEY = "netdevops_beta_backfill_day";
 const PRIVACY_URL = "https://netdevops.thebackroom.ai/legal/privacy.html";
-// PREVIEW-01: when this browser last saw a preview result (ms since epoch), and
-// the owner's own browsers (?internal=1), which never send a signup source.
-const PREVIEW_AT_KEY = "netdevops_preview_at";
-const INTERNAL_KEY = "netdevops_internal";
-const PREVIEW_SOURCE_DAYS = 7;
+// PREVIEW-01 (@ciso W7, variant A): the signup source lives in page memory only.
+// A preview result shown in this page session marks it; a reload, a new tab or a
+// closed browser forgets it. Nothing about the preview is written to or read from
+// browser storage. ?internal=1 in the page address marks the owner's own test
+// sessions, which never send a signup source (also memory only).
+let previewShownThisSession = false;
+let internalSession = false;
 
 // Tool paths that carry X-Beta-Token (mirror of api/beta.py TOOL_PREFIXES).
 // Tools live at the root, not under /api. Page-load fetches are excluded.
@@ -112,15 +114,16 @@ function unlockGate(email) {
 }
 
 // -----------------------------
-// PREVIEW-01 T7: "preview" when a preview result was shown here in the last
-// 7 days and this is not one of the owner's browsers; otherwise null.
+// PREVIEW-01 T7: "preview" when a preview result was shown in this page session
+// and this is not one of the owner's test sessions; otherwise null.
 // -----------------------------
-function signupSource(now) {
-  if (gateGet(INTERNAL_KEY) === "1") return null;
-  const at = parseInt(gateGet(PREVIEW_AT_KEY) || "", 10);
-  if (!at || Number.isNaN(at)) return null;
-  const age = (now || Date.now()) - at;
-  return age >= 0 && age <= PREVIEW_SOURCE_DAYS * 24 * 3600 * 1000 ? "preview" : null;
+function markPreviewShown() {
+  previewShownThisSession = true;
+}
+
+function signupSource() {
+  if (internalSession) return null;
+  return previewShownThisSession ? "preview" : null;
 }
 
 // -----------------------------
@@ -340,7 +343,7 @@ function updateHomeFooter() {
 // -----------------------------
 function markInternalBrowser() {
   try {
-    if (new URLSearchParams(window.location.search).get("internal") === "1") gateSet(INTERNAL_KEY, "1");
+    if (new URLSearchParams(window.location.search).get("internal") === "1") internalSession = true;
   } catch (e) { /* no URLSearchParams: nothing to mark */ }
 }
 

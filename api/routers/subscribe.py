@@ -29,8 +29,9 @@ GATED_TOOLS_GROUP_ID = "184092079999157302"
 
 class SubscribeRequest(BaseModel):
     email: EmailStr
-    # PREVIEW-01 T7: "preview" when this browser saw a preview result in the last
-    # 7 days. Any other value is ignored, never stored and never an error.
+    # PREVIEW-01 T7: "preview" when this page session showed a preview result
+    # (@ciso W7 variant A: page memory only). Any other value is ignored, never
+    # stored and never an error.
     # Any, not str (@ciso W9): a non-string must not turn into a 422 that echoes the body.
     source: Any = None
 
@@ -57,6 +58,11 @@ def _ok(message: str, token: Optional[str]) -> dict:
 
 
 def _source(value) -> Optional[str]:
+    # With PREVIEW_ENABLED off nothing new is stored, even from a hand-made request:
+    # the privacy policy describes signup_source only once the flag goes on (@ciso W7).
+    from api.routers import cve_preview
+    if not cve_preview.enabled():
+        return None
     return value if isinstance(value, str) and value in SIGNUP_SOURCES else None
 
 
