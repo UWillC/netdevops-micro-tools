@@ -24,6 +24,27 @@ only automatic deploy path is the `deploy` job in `.github/workflows/tests.yml`.
 - Security-relevant changes are reviewed by @ciso first; the verdict (GO / GO with
   conditions / NO-GO) is named in the release commit message ("reviewed by @ciso, GO").
 
+## Default variant: PR (since 2026-11-21)
+
+Every release goes through a pull request (variant B below): the branch carries the code
+and the `vX.Y.Z: ...` release commit, the PR runs the Tests workflow, and only a green PR
+is merged into `main` with `--no-ff`. Decided by the owner on 2026-11-21 (first release:
+v0.7.19). Variants A and C stay in the table as history; use them only when the owner
+asks for it explicitly.
+
+```sh
+# on the release branch, after the release commit (step 2) and a green local suite
+git push -u origin <branch>
+env -u GITHUB_TOKEN gh pr create --base main --head <branch> --title "vX.Y.Z: ..." --body "..."
+env -u GITHUB_TOKEN gh pr checks <pr-number> --watch    # Tests must be green; red = stop
+git checkout main && git pull --ff-only origin main
+git merge --no-ff <branch> -m "Merge vX.Y.Z: <one-line summary>"
+git push origin main                                     # one push: merge + release commit
+sh scripts/dev/ci_status.sh                              # Tests on main green -> deploy job
+```
+
+The PR is closed as merged by the push (GitHub detects the branch commits on `main`).
+
 ## 1. Merge into `main` with `--no-ff`
 
 ```sh
@@ -39,7 +60,7 @@ Three variants are in use (check: `git log --first-parent main`):
 | Variant | Where the version bump lives | Used for |
 |---|---|---|
 | A. Release commit on `main` after the merge | separate commit `vX.Y.Z: ...` on `main` right after `Merge ...` | v0.7.16, v0.7.18 |
-| B. Release commit on the branch | the branch carries a `vX.Y.Z: ...` commit; `Merge vX.Y.Z: ...` brings it to `main` | v0.7.9 to v0.7.14; with a PR and green CI on the PR first for v0.7.10 (PR #5), v0.7.11 (PR #6), v0.7.14 (PR #7) |
+| B. Release commit on the branch (**default, with a PR**) | the branch carries a `vX.Y.Z: ...` commit; `Merge vX.Y.Z: ...` brings it to `main` | v0.7.9 to v0.7.14; with a PR and green CI on the PR first for v0.7.10 (PR #5), v0.7.11 (PR #6), v0.7.14 (PR #7) |
 | C. Commit straight on `main` | no branch, no PR, no merge: the `vX.Y.Z: ...` commit carries the code and the bump | v0.7.15 (`b5e9819`, then `cd08f2a`), v0.7.17 (`aa4c93e`); also non-release commits such as `e6b25c7`, `b1486fd` |
 
 The PR runs the same Tests workflow (`pull_request` trigger) before anything reaches
@@ -47,7 +68,7 @@ The PR runs the same Tests workflow (`pull_request` trigger) before anything rea
 merge"), because a suite that passes on macOS is not proof for the Linux runner
 (v0.7.13: 392 MB on macOS, 499.75 MB in CI, red `main`). v0.7.14 followed it; v0.7.15
 to v0.7.18 used variants A and C without a PR. Variant C also skips review before
-`main`. [VERIFY: which variant is the rule from now on.]
+`main`. From v0.7.19 the rule is variant B with a PR (see "Default variant" above).
 
 For variant B:
 
