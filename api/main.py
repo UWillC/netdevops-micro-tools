@@ -81,7 +81,8 @@ NO_ECHO_422_PATHS = frozenset({
 @app.exception_handler(RequestValidationError)
 async def _validation_error(request, exc):
     """A 422 on a paste endpoint carries no ``input`` echo; other tools keep FastAPI's default."""
-    if request.url.path in NO_ECHO_422_PATHS:
+    # scope["path"], not request.url.path: the URL is built from the Host header (@ciso W4).
+    if request.scope["path"] in NO_ECHO_422_PATHS:
         return JSONResponse(status_code=422, content=acl.validation_error_body(exc.errors()))
     return await request_validation_exception_handler(request, exc)
 

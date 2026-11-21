@@ -10,7 +10,7 @@ and never creates a subscriber or touches its groups.
 """
 
 import re
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter
 from pydantic import BaseModel, EmailStr
@@ -31,7 +31,8 @@ class SubscribeRequest(BaseModel):
     email: EmailStr
     # PREVIEW-01 T7: "preview" when this browser saw a preview result in the last
     # 7 days. Any other value is ignored, never stored and never an error.
-    source: Optional[str] = None
+    # Any, not str (@ciso W9): a non-string must not turn into a 422 that echoes the body.
+    source: Any = None
 
 
 # MailerLite text field, created in the MailerLite panel before the flag goes on.
@@ -55,11 +56,11 @@ def _ok(message: str, token: Optional[str]) -> dict:
     return {"success": True, "message": message, "token": token}
 
 
-def _source(value: Optional[str]) -> Optional[str]:
-    return value if value in SIGNUP_SOURCES else None
+def _source(value) -> Optional[str]:
+    return value if isinstance(value, str) and value in SIGNUP_SOURCES else None
 
 
-async def _tag_new_subscriber(sid: Optional[str], source: Optional[str], headers: dict) -> None:
+async def _tag_new_subscriber(sid: Optional[str], source, headers: dict) -> None:
     """PREVIEW-01 T7: log every new subscriber; tag one that came from the preview.
 
     Only after a 201 (new address), as a second call, so an existing subscriber's

@@ -304,12 +304,22 @@ def test_syncing_shows_note_without_numbers(client, monkeypatch):
     assert d["critical"] is None and d["upgrade"] is None
 
 
-def test_not_evaluated_note_passed_through(client, monkeypatch):
+def test_not_evaluated_note_is_fixed_text(client, monkeypatch):
     monkeypatch.setattr(cve_router, "platform_coverage_note",
-                        lambda p, v=None: "NOT EVALUATED: test note.")
+                        lambda p, v=None: "NOT EVALUATED: CVE-2026-20122 secret.")
     d = _preview(client, "IOS XE", "17.9.4").json()
-    assert d["state"] == "not_evaluated" and d["note"] == "NOT EVALUATED: test note."
+    assert d["state"] == "not_evaluated" and d["note"] == pv.NOTE_NOT_EVALUATED
     assert d["critical"] is None
+
+
+# @ciso W1: on real data the SD-WAN NOT EVALUATED note names every CVE in the dataset.
+@pytest.mark.parametrize("platform", ["Catalyst SD-WAN Manager", "Catalyst SD-WAN Controller",
+                                      "Catalyst SD-WAN Validator"])
+@pytest.mark.parametrize("version", ["26.9.1", "9", "20,1", "20.x9", "20.12.5", "20.99.1"])
+def test_sdwan_every_state_has_no_leak(client, platform, version):
+    r = _preview(client, platform, version)
+    assert r.status_code in (200, 400)
+    assert not LEAKS.search(r.text), LEAKS.search(r.text).group(0)
 
 
 # ---------------------------------------------------------------- openVuln down (AC-13)
@@ -403,8 +413,8 @@ def test_preview_windows_stay_within_an_hour():
 
 # ---------------------------------------------------------------- global openVuln budget (AC-16)
 
-def test_budget_caps_uncached_passes_and_keeps_answering(client, openvuln, monkeypatch, capsys):
-    monkeypatch.setattr(pv, "budget", pv.OpenVulnBudget(cap=(1, 3600)))
+def test_budget_caps_uncached_queries_and_keeps_answering(client, openvuln, monkeypatch, capsys):
+    monkeypatch.setattr(pv, "budget", pv.OpenVulnBudget(cap=((2, 3600),)))
     first = _preview(client, "IOS XE", "17.9.4").json()
     assert first["upgrade"]["source"] == "cisco"
     n = len(openvuln.calls)
@@ -421,28 +431,53 @@ def test_budget_caps_uncached_passes_and_keeps_answering(client, openvuln, monke
 
 
 def test_cached_release_costs_no_budget(client, openvuln, monkeypatch):
-    monkeypatch.setattr(pv, "budget", pv.OpenVulnBudget(cap=(1, 3600)))
+    monkeypatch.setattr(pv, "budget", pv.OpenVulnBudget(cap=((2, 3600),)))
     _preview(client, "IOS XE", "17.9.4")
     again = _preview(client, "IOS XE", "17.9.4").json()
     assert again["upgrade"]["source"] == "cisco"
 
 
-def test_one_pass_is_one_unit_even_with_several_queries(client, openvuln, monkeypatch):
-    monkeypatch.setattr(pv, "budget", pv.OpenVulnBudget(cap=(1, 3600)))
-    d = _preview(client, "IOS XE", "17.9.4").json()   # 17.9.4 then 17.9.10: two queries
-    assert len(openvuln.calls) == 2 and d["upgrade"]["target"] == "17.9.10"
+def test_every_query_costs_one_unit(client, openvuln, monkeypatch):
+    # @ciso W2: a pass of 2 queries does not fit a budget of 1
+    monkeypatch.setattr(pv, "budget", pv.OpenVulnBudget(cap=((1, 3600),)))
+    d = _preview(client, "IOS XE", "17.9.4").json()   # 17.9.4 then 17.9.10
+    assert len(openvuln.calls) == 1
+    assert d["upgrade"]["source"] == "dataset"
+    assert csc._failed_at is None
 
 
-def test_budget_window():
+def test_four_query_pass_fits_and_fifth_query_is_refused(client, monkeypatch):
+    table = {"17.9.1": [dict(XMCP, firstFixed=["17.9.2"])], "17.9.2": [dict(XMCP, firstFixed=["17.9.3"])],
+             "17.9.3": [dict(XMCP, firstFixed=["17.9.4"])], "17.9.4": [MEDIUM]}
+    fake = FakeOpenVuln(table=table)
+    monkeypatch.delenv("CISCO_CHECKER_OFFLINE", raising=False)
+    monkeypatch.setattr(csc, "_live_fetch", fake)
+    b = pv.OpenVulnBudget(cap=((4, 3600),))
+    monkeypatch.setattr(pv, "budget", b)
+    gate = pv._RequestGate()
+    assert csc.first_fixed_path("iosxe", "17.9.1", live_gate=gate)["target"] == "17.9.4"
+    assert len(fake.calls) == 4 and not b.take()
+
+
+def test_budget_windows():
     c = Clock()
-    b = pv.OpenVulnBudget(cap=(2, 3600), clock=c)
-    assert b.take() and b.take() and not b.take()
-    c.t += 3601
+    b = pv.OpenVulnBudget(cap=((2, 60), (3, 3600)), clock=c)
+    assert b.take() and b.take() and not b.take()   # per minute
+    c.t += 61
+    assert b.take() and not b.take()                # per hour
+    c.t += 3600
     assert b.take()
 
 
-def test_default_budget_is_60_per_hour():
-    assert pv.OPENVULN_CAP == (60, 3600)
+def test_default_budget():
+    assert pv.OPENVULN_CAP == ((10, 60), (60, 3600))
+
+
+def test_422_no_echo_ignores_the_host_header(client):
+    # @ciso W4
+    r = client.post(PATH, json={"platform": "IOS XE", "version": ["SECRET"]},
+                    headers={"Host": "evil/x"})
+    assert r.status_code == 422 and "SECRET" not in r.text
 
 
 # ---------------------------------------------------------------- logging (T8, AC-17)
@@ -519,6 +554,14 @@ def test_other_sources_are_ignored(client, ml, capsys, body):
     assert r.status_code == 200
     assert _puts(ml) == []
     assert "INFO subscribe new=1 source=none" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("source", [{"x": "SECRET"}, ["preview"], 7, True])
+def test_non_string_source_is_ignored_not_echoed(client, ml, source):
+    # @ciso W9
+    r = client.post("/api/subscribe", json={"email": "a@example.com", "source": source})
+    assert r.status_code == 200 and "SECRET" not in r.text
+    assert _puts(ml) == []
 
 
 def test_failed_tag_still_subscribes(client, ml):

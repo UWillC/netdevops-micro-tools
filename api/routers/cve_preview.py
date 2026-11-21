@@ -18,7 +18,7 @@ the openVuln quota. Hence:
   - per-IP 5/min + 30/h in api/rate_limit.py PATH_LIMITS (AC-14);
   - input rejected before the engine: platform from the analyzer's list,
     release <= 64 characters with a digit and a narrow character set (AC-3/9/10/15);
-  - a global budget of uncached openVuln passes per hour, independent of IP
+  - a global budget of uncached openVuln queries (10/min, 60/h), independent of IP
     (AC-16). Over budget the preview still answers, with the dataset's own
     upgrade check and "Cisco check unavailable right now" (AC-13).
 
@@ -80,6 +80,10 @@ NOTE_UNKNOWN = ("NOT EVALUATED: we have no data for this release. An empty resul
                 "not checked, not not vulnerable.")
 NOTE_UNCONFIRMED = " Cisco's own release list could not be confirmed right now."
 NOTE_SYNCING = "Dataset is syncing, try again in a minute."
+# @ciso W1: the engine's own NOT EVALUATED notes can name CVE ids (SD-WAN), so
+# the preview never passes them through.
+NOTE_NOT_EVALUATED = ("NOT EVALUATED: our dataset cannot evaluate this release on this platform. "
+                      "An empty result means not checked, not not vulnerable.")
 NOTE_CLEAN = ("Our dataset covers Cisco PSIRT advisories; it is not a full scan of your "
               "device.")
 NOTE_EOL = "Hardware replacement required, no software fix path."
@@ -89,8 +93,10 @@ SOURCES = "Cisco PSIRT advisories (openVuln API), CISA KEV catalog"
 
 SEVERE = ("Critical", "High")
 
-# AC-16: uncached openVuln passes started from the preview, all callers together.
-OPENVULN_CAP = (60, 60 * 60)
+# AC-16: uncached openVuln QUERIES started from the preview, all callers together
+# (@ciso W2: one pass is up to 4 queries, so the budget counts queries), with a
+# per-minute sub-limit so a burst cannot spend the hour at once.
+OPENVULN_CAP = ((10, 60), (60, 60 * 60))
 
 
 def enabled() -> bool:
@@ -98,10 +104,11 @@ def enabled() -> bool:
 
 
 class OpenVulnBudget:
-    """Sliding-window count of preview requests that needed an uncached openVuln query."""
+    """Sliding-window count of uncached openVuln queries made for the preview."""
 
     def __init__(self, cap=OPENVULN_CAP, clock: Callable[[], float] = time.monotonic):
-        self.max, self.window = cap
+        self.limits = tuple(cap)
+        self._horizon = max(w for _, w in self.limits)
         self._clock = clock
         self._spent = deque()
         self._lock = threading.Lock()
@@ -109,10 +116,11 @@ class OpenVulnBudget:
     def take(self) -> bool:
         now = self._clock()
         with self._lock:
-            while self._spent and self._spent[0] <= now - self.window:
+            while self._spent and self._spent[0] <= now - self._horizon:
                 self._spent.popleft()
-            if len(self._spent) >= self.max:
-                return False
+            for max_count, window in self.limits:
+                if sum(1 for t in self._spent if t > now - window) >= max_count:
+                    return False
             self._spent.append(now)
             return True
 
@@ -121,19 +129,15 @@ budget = OpenVulnBudget()
 
 
 class _RequestGate:
-    """live_gate for one preview request: one budget unit covers the whole pass."""
+    """live_gate for one preview request: every uncached query costs one unit."""
 
     def __init__(self):
-        self.paid = False
         self.denied = False
 
     def __call__(self) -> bool:
-        if self.paid:
-            return True
         if self.denied:
             return False
         if budget.take():   # module global: tests swap the budget
-            self.paid = True
             return True
         self.denied = True
         print("INFO preview openvuln_cap_hit")
@@ -290,7 +294,8 @@ def analyze_cve_preview(req: CVEPreviewRequest):
         _log("not_evaluated", platform)
         return CVEPreviewResponse(
             state="not_evaluated",
-            note=NOTE_SYNCING if full.dataset_syncing else full.coverage_note, **base)
+            note=NOTE_SYNCING if full.dataset_syncing else NOTE_NOT_EVALUATED,
+            format_hint=None if full.dataset_syncing else FORMAT_HINTS[platform], **base)
 
     s = full.summary or {}
     crit, high = int(s.get("critical", 0)), int(s.get("high", 0))
