@@ -333,8 +333,17 @@ def _check_ssh_version_2(cfg):
         )
     return "WARNING", "SSH version not pinned; verify platform default", "Add: ip ssh version 2"
 
+# HARD-03b R1 (@ciso 19.11): every number a rule passes to int() is capped in
+# the regex (MAX_DIGITS, followed by (?!\d)). A longer number is not a valid IOS
+# value, and int() raises on > 4300 digits (HTTP 500 for the whole audit); the
+# line counts as no line, or as out of range where "no line" would be a PASS.
+MAX_DIGITS = 5       # values whose IOS range fits in 5 digits (time-out, retries, ...)
+MAX_DIGITS_WIDE = 10  # 32-bit values (logging buffer size, exec-timeout seconds)
+_N = r"(\d{1,%d})(?!\d)" % MAX_DIGITS
+
+
 def _check_ssh_timeout(cfg):
-    m = re.search(r"^ip ssh time-out\s+(\d+)", cfg, re.M)
+    m = re.search(r"^ip ssh time-out\s+" + _N, cfg, re.M)
     if m:
         timeout = int(m.group(1))
         if timeout <= 60:
@@ -343,7 +352,7 @@ def _check_ssh_timeout(cfg):
     return "WARNING", "SSH timeout not set (default 120s)", "Add: ip ssh time-out 60"
 
 def _check_ssh_retries(cfg):
-    m = re.search(r"^ip ssh authentication-retries\s+(\d+)", cfg, re.M)
+    m = re.search(r"^ip ssh authentication-retries\s+" + _N, cfg, re.M)
     if m:
         retries = int(m.group(1))
         if retries <= 3:
@@ -396,7 +405,16 @@ def _check_exec_timeout(cfg):
     longest = 0.0
     for block in all_blocks:
         for m in re.finditer(r"^\s*exec-timeout\s+(\d+)(?:\s+(\d+))?", block, re.M):
-            longest = max(longest, int(m.group(1)) + int(m.group(2) or 0) / 60.0)
+            mins, secs = m.group(1), m.group(2) or "0"
+            if len(mins) > MAX_DIGITS_WIDE or len(secs) > MAX_DIGITS_WIDE:
+                # R1: not a valid value; never a PASS (no line here would read as one)
+                return (
+                    "WARNING",
+                    f"exec-timeout value longer than {MAX_DIGITS_WIDE} digits on a management "
+                    "line (not a valid IOS value; the device rejects it)",
+                    "Set: exec-timeout 5 0 (NSA recommends five minutes or less)",
+                )
+            longest = max(longest, int(mins) + int(secs) / 60.0)
     if longest > EXEC_TIMEOUT_WARN_MINUTES:
         return (
             "WARNING",
@@ -470,9 +488,9 @@ def _check_tcp_keepalives(cfg):
 
 LOG_BUF_RE = re.compile(
     r"^\s*logging\s+buffered"
-    r"(?:\s+(?P<size>\d+))?"
-    r"(?:\s+(?P<sev>emergencies|alerts|critical|errors|warnings|notifications|informational|debugging|\d+))?"
-    r"\s*$",
+    r"(?:\s+(?P<size>\d{1,%d}))?"
+    r"(?:\s+(?P<sev>emergencies|alerts|critical|errors|warnings|notifications|informational|debugging|\d{1,%d}))?"
+    r"\s*$" % (MAX_DIGITS_WIDE, MAX_DIGITS_WIDE),
     re.MULTILINE,
 )
 
@@ -736,7 +754,7 @@ def _check_domain_name(cfg):
     return "WARNING", "No domain name set (needed for SSH key generation)", "Add: ip domain-name <domain>"
 
 def _check_rsa_key_size(cfg):
-    m = re.search(r"^crypto key generate rsa.*modulus\s+(\d+)", cfg, re.M)
+    m = re.search(r"^crypto key generate rsa.*modulus\s+" + _N, cfg, re.M)
     if m:
         bits = int(m.group(1))
         if bits >= 2048:
@@ -787,14 +805,14 @@ def _check_login_local(cfg):
 # STIG. [VERIFY v1.2] section 4.6 checked in the v1.0 text (PP-22-0266, 03.2022);
 # numbering in v1.2 assumed the same.
 LOGIN_BLOCK_FOR_RE = re.compile(
-    r"^login block-for\s+(\d+)\s+attempts\s+(\d+)\s+within\s+(\d+)\b", re.M)
+    r"^login block-for\s+%s\s+attempts\s+%s\s+within\s+%s\b" % (_N, _N, _N), re.M)
 LOGIN_BLOCK_FOR_FIX = "Add: login block-for 120 attempts 3 within 60"
 LOGIN_LOG_LINES = ("login on-failure log", "login on-success log")
 LOGIN_MAX_ATTEMPTS = 3       # NSA NISG 4.6: three or fewer
 LOGIN_MIN_BLOCK_SECONDS = 60
-AAA_ATTEMPTS_RE = re.compile(r"^aaa authentication attempts login\s+(\d+)\b", re.M)
-SSH_RETRIES_RE = re.compile(r"^ip ssh authentication-retries\s+(\d+)\b", re.M)
-LOGIN_DELAY_RE = re.compile(r"^login delay\s+(\d+)\b", re.M)
+AAA_ATTEMPTS_RE = re.compile(r"^aaa authentication attempts login\s+" + _N + r"\b", re.M)
+SSH_RETRIES_RE = re.compile(r"^ip ssh authentication-retries\s+" + _N + r"\b", re.M)
+LOGIN_DELAY_RE = re.compile(r"^login delay\s+" + _N + r"\b", re.M)
 
 
 def _nsa_attempt_limit(cfg):
@@ -895,6 +913,11 @@ SSH_DH_MIN_RE = re.compile(r"^(no[ \t]+)?ip ssh dh min size\b(?:[ \t]+(\d{1,5})\
 IOS_VERSION_RE = re.compile(r"^version[ \t]+(\d{1,5})\.(\d{1,5})\b", re.M)
 SSH_TOKEN_SPLIT_RE = re.compile(r"[\s,]+")
 SSH_UNKNOWN_SHOWN = 40  # characters of an unknown token echoed in the evidence
+SSH_TOKENS_SHOWN = 5    # tokens per list in the evidence, then "and N more" (@ciso R5)
+# Banner text is free text: a `version 17.12` line inside it must not decide the
+# release (@ciso R2). Header `banner <kind> <delim>...`; the banner ends on the
+# first line holding the delimiter again (running-config shows `^C`, delim `^`).
+BANNER_START_RE = re.compile(r"^banner[ \t]+\S+[ \t]+(\S)(.*)$")
 SSH_WEAK = {"encryption": ssh_crypto.SSH_ENC_WEAK,
             "mac": ssh_crypto.SSH_MAC_WEAK,
             "kex": ssh_crypto.SSH_KEX_WEAK}
@@ -914,9 +937,34 @@ SSH_FIX = {
 }
 
 
+def _outside_banners(cfg):
+    """The config without banner blocks (header and body). One pass, linear."""
+    kept, delim = [], None
+    for ln in cfg.split("\n"):
+        if delim is not None:
+            if delim in ln:
+                delim = None
+            continue
+        m = BANNER_START_RE.match(ln)
+        if m:
+            if m.group(1) not in m.group(2):
+                delim = m.group(1)
+            continue
+        kept.append(ln)
+    return "\n".join(kept)
+
+
 def _ios_version(cfg):
-    m = IOS_VERSION_RE.search(cfg)
+    m = IOS_VERSION_RE.search(_outside_banners(cfg))
     return (int(m.group(1)), int(m.group(2))) if m else None
+
+
+def _shown_tokens(tokens):
+    """Deduplicated, at most SSH_TOKENS_SHOWN tokens of SSH_UNKNOWN_SHOWN chars, + "and N more"."""
+    unique = list(dict.fromkeys(t[:SSH_UNKNOWN_SHOWN] for t in tokens))
+    shown = " ".join(unique[:SSH_TOKENS_SHOWN])
+    rest = len(unique) - SSH_TOKENS_SHOWN
+    return shown + (f" and {rest} more" if rest > 0 else "")
 
 
 def _check_ssh_crypto(cfg):
@@ -955,10 +1003,9 @@ def _check_ssh_crypto(cfg):
                 elif part not in ssh_crypto.SSH_STRONG_KNOWN[kw] and "," not in tok:
                     unknown.append(tok)
         if bad:
-            weak.append(f"{kw} {' '.join(bad)}")
+            weak.append(f"{kw} {_shown_tokens(bad)}")
         if unknown:
-            shown = " ".join(t[:SSH_UNKNOWN_SHOWN] for t in unknown)
-            missing.append(f"unknown {kw} algorithm {shown} (not an IOS / IOS XE token;"
+            missing.append(f"unknown {kw} algorithm {_shown_tokens(unknown)} (not an IOS / IOS XE token;"
                            " the device may reject the whole line and keep its defaults)")
         if bad or unknown:
             fix.append(SSH_FIX[kw])

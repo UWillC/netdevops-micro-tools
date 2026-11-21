@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.7.19] – 2026-11-21 (Hardening Audit: hardened number parsing, banner-safe version)
+
+### Security Tools
+- **Hardening Audit, oversized numbers:** every number the audit reads from a config
+  (SSH time-out and authentication retries, exec-timeout, RSA modulus, login block-for,
+  login delay, AAA attempts, logging buffer size) is length-limited before it is parsed.
+  A value with thousands of digits used to return an HTTP 500; now the audit returns a
+  normal report and such a value never passes (an out-of-range exec-timeout is a WARNING).
+- **Rule 1.2.12 SSH cryptography, release detection:** the IOS XE release is read outside
+  `banner` blocks, so a `version 17.12` line inside a banner no longer grants the 17.10+
+  strong-defaults exemption.
+- **Rule 1.2.12 evidence:** the evidence lists at most 5 distinct algorithm tokens, then
+  "and N more", so a long list stays readable.
+- **Rule 1.2.12 references:** the strong-algorithm names were re-checked against Cisco
+  IOS XE 17.x "SSH Algorithms for Common Criteria Certification"; no rule change.
+
+### Tests
+- 41 new tests for the changes above (oversized numbers through the endpoint, banner
+  version, evidence cap, algorithm names).
+
+### Docs
+- `RELEASE.md`: the release procedure as practiced, with the pull request as the default
+  path from this release on.
+
+---
+
 ## [v0.7.18] – 2026-11-20 (Hardening Audit: SSH cryptography rule)
 
 ### Security Tools
