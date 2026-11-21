@@ -9,7 +9,8 @@ backfill for browsers unlocked before tokens existed: it looks the address up
 and never creates a subscriber or touches its groups.
 """
 
-from typing import Optional
+import re
+from typing import Any, Optional
 
 from fastapi import APIRouter
 from pydantic import BaseModel, EmailStr
@@ -28,6 +29,16 @@ GATED_TOOLS_GROUP_ID = "184092079999157302"
 
 class SubscribeRequest(BaseModel):
     email: EmailStr
+    # PREVIEW-01 T7: "preview" when this page session showed a preview result
+    # (@ciso W7 variant A: page memory only). Any other value is ignored, never
+    # stored and never an error.
+    # Any, not str (@ciso W9): a non-string must not turn into a 422 that echoes the body.
+    source: Any = None
+
+
+# MailerLite text field, created in the MailerLite panel before the flag goes on.
+FIELD_SIGNUP_SOURCE = "signup_source"
+SIGNUP_SOURCES = frozenset({"preview"})
 
 
 def _client() -> httpx.AsyncClient:
@@ -44,6 +55,39 @@ def _subscriber_id(resp) -> Optional[str]:
 
 def _ok(message: str, token: Optional[str]) -> dict:
     return {"success": True, "message": message, "token": token}
+
+
+def _source(value) -> Optional[str]:
+    # With PREVIEW_ENABLED off nothing new is stored, even from a hand-made request:
+    # the privacy policy describes signup_source only once the flag goes on (@ciso W7).
+    from api.routers import cve_preview
+    if not cve_preview.enabled():
+        return None
+    return value if isinstance(value, str) and value in SIGNUP_SOURCES else None
+
+
+async def _tag_new_subscriber(sid: Optional[str], source, headers: dict) -> None:
+    """PREVIEW-01 T7: log every new subscriber; tag one that came from the preview.
+
+    Only after a 201 (new address), as a second call, so an existing subscriber's
+    field is never overwritten by a later sign-up from the preview. The log line
+    carries no address, id or body (SUB-LOG rule). A failed PUT costs the tag only.
+    """
+    tag = _source(source)
+    print(f"INFO subscribe new=1 source={tag or 'none'}")
+    if not tag or not sid or not re.fullmatch(r"[0-9]{1,32}", sid):
+        return
+    try:
+        async with _client() as client:
+            put = await client.put(
+                f"{MAILERLITE_API_URL}/subscribers/{sid}",
+                json={"fields": {FIELD_SIGNUP_SOURCE: tag}},
+                headers=headers,
+            )
+        if put.status_code != 200:
+            print(f"[WARN] subscribe: signup_source not saved, status={put.status_code}")
+    except Exception as exc:
+        print(f"[WARN] subscribe: signup_source not saved, {type(exc).__name__}")
 
 
 @router.post("/subscribe")
@@ -74,7 +118,10 @@ async def subscribe(req: SubscribeRequest):
 
         # MailerLite returns 200 (existing) or 201 (new); same answer for both
         if resp.status_code in (200, 201):
-            return _ok("Subscribed", beta.issue_token(_subscriber_id(resp)))
+            sid = _subscriber_id(resp)
+            if resp.status_code == 201:
+                await _tag_new_subscriber(sid, req.source, headers)
+            return _ok("Subscribed", beta.issue_token(sid))
 
         # 422 = validation error (bad email format etc.)
         if resp.status_code == 422:

@@ -239,6 +239,14 @@ MAX_VERSION_LENGTH = 256
 
 @router.post("/cve", response_model=CVEAnalyzeResponse)
 def analyze_cve(req: CVEAnalyzeRequest):
+    return run_analysis(req)
+
+
+def run_analysis(req: CVEAnalyzeRequest, live_gate=None,
+                 engine_out: Optional[dict] = None) -> CVEAnalyzeResponse:
+    """The full analysis. PREVIEW-01 calls it with a live_gate (openVuln budget, AC-16)
+    and engine_out, which receives the loaded engine so the preview can tell an
+    unknown release from a clean one without loading the dataset twice."""
     # WEBSEC-01e: the release parsers are quadratic on a long run of digits or spaces
     # (256 KB held the process for minutes). Manual check because a max_length error
     # would send the whole value back. A pasted "show version" line fits easily.
@@ -273,6 +281,8 @@ def analyze_cve(req: CVEAnalyzeRequest):
         if _age is None or _age * 3600 > PLATFORM_CACHE_TTL:
             _refresh_platform_cache_in_background(_sync_platform)
     matched_base = base_engine.match(platform, version)
+    if engine_out is not None:
+        engine_out.update(engine=base_engine, platform=platform, version=version)
     # MATCH-03: judge "verified" / "exact hit" on the list the match used, not
     # on a Known Affected list for some other family (classic IOS vs IOS XE).
     ka_family = base_engine.known_affected_family
@@ -358,7 +368,8 @@ def analyze_cve(req: CVEAnalyzeRequest):
     if not (eol_status and eol_status.get("is_eol")) and matched:
         _ostype = _openvuln_ostype(platform, version)
         if _ostype:
-            cisco_upgrade_path = first_fixed_path(_ostype, version)
+            cisco_upgrade_path = (first_fixed_path(_ostype, version) if live_gate is None
+                                  else first_fixed_path(_ostype, version, live_gate=live_gate))
 
     # v0.6.19 XCUT-002: provenance footer.
     provenance = cve_provenance(

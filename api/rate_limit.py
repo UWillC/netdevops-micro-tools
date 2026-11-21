@@ -63,6 +63,9 @@ PATH_LIMITS = {
     **{path: ((10, 60), (120, 3600)) for path in PASTE_PATHS},
     # @ciso W20: a list of up to 1000 timestamps, 5 MB of response before that cap.
     "/tools/timezone/batch": ((10, 60), (120, 3600)),
+    # PREVIEW-01 AC-14: CVE counts without e-mail. A person checks 1-5 releases;
+    # a script gets 429 after 5. Windows stay <= 1 h (privacy policy retention).
+    "/analyze/cve/preview": ((5, 60), (30, 3600)),
 }
 MAX_KEYS_BEFORE_SWEEP = 10_000
 SWEEP_INTERVAL = 5 * 60  # seconds between retention sweeps of inactive addresses

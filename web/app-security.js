@@ -719,3 +719,182 @@ if (cveForm && cveOutput) {
     if (hint) hint.innerHTML = `Example for this platform: <code>${ex}</code>`;
   });
 })();
+
+// -----------------------------
+// PREVIEW-01 "Check your Cisco release" (Home, no email). Counts only: the
+// server sends no CVE ids, so there is nothing more to hide here. Every value
+// is written with textContent, never parsed as HTML. The card stays hidden unless
+// /meta/version lists "cve_preview" (PREVIEW_ENABLED on the server).
+// -----------------------------
+const PREVIEW_MAX_VERSION = 64;
+const PREVIEW_SHOWN_STATES = ["findings", "clean", "eol"];
+const PREVIEW_MSG_EMPTY = "Enter a software release, e.g. 17.9.4";
+const PREVIEW_MSG_NOT_RELEASE = "This does not look like a Cisco release.";
+const PREVIEW_MSG_LIMIT = "Limit reached for checks without email. Try again in a minute, or unlock the full analyzer with your email.";
+const PREVIEW_MSG_FAILED = "The check did not complete. Try again in a minute.";
+const PREVIEW_TRAIN_TEXT = {
+  same: "same train",
+  change: "train change",
+  migration: "migration to a supported train",
+};
+// KEV > 0 warning line (count only, no KEV ids). copy: draft, @cmo final
+const PREVIEW_MSG_KEV = "Actively exploited: upgrade now.";
+const PREVIEW_MSG_KEV_EOL = "Actively exploited: replace this hardware now.";
+
+function previewEl(tag, className, text) {
+  const el = document.createElement(tag);
+  if (className) el.className = className;
+  if (text !== undefined && text !== null) el.textContent = String(text);
+  return el;
+}
+
+// Pure: the lines a preview answer becomes. Exported for the Node test harness.
+function previewLines(data) {
+  const lines = [];
+  const add = (cls, text) => lines.push({ cls: cls, text: text });
+  if (!data || typeof data !== "object") return lines;
+  if (data.state === "unknown" || data.state === "not_evaluated") {
+    add("preview-note preview-not-evaluated", data.note || "NOT EVALUATED.");
+    if (data.format_hint) add("preview-hint", data.format_hint);
+    return lines;
+  }
+  if (data.interpreted_as) add("preview-interpreted", `Interpreted as: ${data.interpreted_as}`);
+  if (data.state === "eol" && data.eol_note) add("preview-eol eol-banner", data.eol_note);
+  if (data.state === "clean") {
+    add("preview-count", "0 Critical, 0 High in our dataset for this release");
+    add("preview-sub", `Medium: ${data.medium || 0}, Low: ${data.low || 0}`);
+    if (data.note) add("preview-note", data.note);
+  } else {
+    add("preview-count preview-critical", `Critical: ${data.critical}`);
+    let high = `High: ${data.high}`;
+    if (data.need_confirmation) high += ` (${data.need_confirmation} of them need confirmation)`;
+    add("preview-count preview-high", high);
+  }
+  add("preview-count preview-kev", `KEV: ${data.kev || 0}, listed by CISA as exploited in the wild`);
+  if ((data.kev || 0) > 0) {
+    // copy: draft, @cmo final. Count only, never KEV ids (user 21.11).
+    add("preview-kev-warning", data.state === "eol" ? PREVIEW_MSG_KEV_EOL : PREVIEW_MSG_KEV);
+  }
+  if (data.state !== "eol") {
+    const up = data.upgrade;
+    if (up && up.target) {
+      const train = PREVIEW_TRAIN_TEXT[up.train] || "";
+      const by = up.source === "cisco" ? "Cisco" : "our dataset";
+      add("preview-upgrade",
+        `Safe upgrade path: ${up.target}${train ? ` (${train})` : ""}. Critical/High left at target: ${up.critical_high_left}. Source: ${by}.`);
+    } else if (up && up.note) {
+      add("preview-upgrade", up.note);
+    }
+    if (data.upgrade_note) add("preview-sub", data.upgrade_note);
+  }
+  const asOf = data.data_as_of ? `Data as of ${data.data_as_of}. ` : "";
+  add("preview-sources", `${asOf}Sources: ${data.sources || ""}`);
+  return lines;
+}
+
+(function initPreview() {
+  const card = document.getElementById("preview");
+  const form = document.getElementById("preview-form");
+  if (!card || !form) return;
+  const sel = document.getElementById("preview-platform");
+  const ver = document.getElementById("preview-version");
+  const btn = document.getElementById("preview-submit");
+  const errBox = document.getElementById("preview-error");
+  const result = document.getElementById("preview-result");
+
+  function showError(text) {
+    errBox.textContent = text || "";
+  }
+
+  function runFullAnalyzer(platform, version) {
+    const tabBtn = document.querySelector('.tab-button[data-tab="cve"]');
+    if (tabBtn) tabBtn.click();
+    const p = document.getElementById("cve-platform");
+    const v = document.getElementById("cve-version");
+    if (!cveForm || !p || !v) return;
+    p.value = platform;
+    p.dispatchEvent(new Event("change"));
+    v.value = version;
+    if (typeof cveForm.requestSubmit === "function") cveForm.requestSubmit();
+    else cveForm.dispatchEvent(new Event("submit", { cancelable: true }));
+  }
+
+  function render(data, platform, version) {
+    result.textContent = "";
+    for (const line of previewLines(data)) result.appendChild(previewEl("p", line.cls, line.text));
+    if (PREVIEW_SHOWN_STATES.includes(data.state)) {
+      // copy: draft, @cmo final
+      const cta = previewEl("button", "btn-primary preview-cta", "See the full report: CVE list, KEV ids, fixes");
+      cta.type = "button";
+      cta.addEventListener("click", () => {
+        if (typeof isGateUnlocked === "function" && isGateUnlocked()) {
+          runFullAnalyzer(platform, version);
+        } else if (typeof showGateModal === "function") {
+          showGateModal("cve", () => runFullAnalyzer(platform, version));
+        }
+      });
+      result.appendChild(cta);
+    }
+  }
+
+  function focusIfLinked() {
+    if (window.location.hash !== "#preview") return;
+    card.scrollIntoView({ block: "start" });
+    ver.focus();
+  }
+
+  sel.addEventListener("change", () => {
+    ver.placeholder = sel.options[sel.selectedIndex].dataset.example || "";
+  });
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    showError("");
+    const version = (ver.value || "").trim();
+    if (!version) { showError(PREVIEW_MSG_EMPTY); return; }
+    if (ver.value.length > PREVIEW_MAX_VERSION || !/\d/.test(version)) {
+      showError(PREVIEW_MSG_NOT_RELEASE);
+      return;
+    }
+    const platform = sel.value;
+    btn.disabled = true;
+    result.textContent = "Checking...";
+    try {
+      const res = await fetch(`${API_BASE_URL}/analyze/cve/preview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ platform: platform, version: version }),
+      });
+      if (res.status === 429) { result.textContent = ""; showError(PREVIEW_MSG_LIMIT); return; }
+      if (res.status === 404) { result.textContent = ""; card.hidden = true; return; }
+      if (res.status === 400) {
+        let detail = PREVIEW_MSG_NOT_RELEASE;
+        try { const b = await res.json(); if (typeof b.detail === "string") detail = b.detail; } catch (_) {}
+        result.textContent = "";
+        showError(detail);
+        return;
+      }
+      if (!res.ok) { result.textContent = ""; showError(PREVIEW_MSG_FAILED); return; }
+      const data = await res.json();
+      // @ciso W7 variant A: page memory only, never browser storage.
+      if (PREVIEW_SHOWN_STATES.includes(data.state) && typeof markPreviewShown === "function") {
+        markPreviewShown();
+      }
+      render(data, platform, version);
+    } catch (err) {
+      result.textContent = "";
+      showError(PREVIEW_MSG_FAILED);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  fetch(`${API_BASE_URL}/meta/version`)
+    .then((r) => (r.ok ? r.json() : null))
+    .then((meta) => {
+      if (!meta || !Array.isArray(meta.feature_flags) || !meta.feature_flags.includes("cve_preview")) return;
+      card.hidden = false;
+      focusIfLinked();
+    })
+    .catch(() => {});
+})();

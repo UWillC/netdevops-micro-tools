@@ -53,6 +53,12 @@ def reset_for_tests() -> None:
 
 
 UNKNOWN_RELEASE = "unknown-release"   # openVuln 404: Cisco has no data for it
+# PREVIEW-01 (AC-16): the caller's live_gate refused an uncached query. Not a
+# failure, so it is never cached and never sets _failed_at: testers on the full
+# analyzer must not lose the Cisco path because the preview ran out of budget.
+GATE_CLOSED = "gate-closed"
+
+LiveGate = Callable[[], bool]
 
 
 def _live_fetch(ostype: str, release: str):
@@ -82,7 +88,8 @@ def _live_fetch(ostype: str, release: str):
     return data.get("advisories") or []
 
 
-def _advisories(ostype: str, release: str, fetch: Fetch) -> Optional[List[dict]]:
+def _advisories(ostype: str, release: str, fetch: Fetch,
+                live_gate: Optional[LiveGate] = None):
     global _failed_at
     key = (ostype, release)
     hit = _cache.get(key)
@@ -90,6 +97,8 @@ def _advisories(ostype: str, release: str, fetch: Fetch) -> Optional[List[dict]]
         return hit[1]
     if _failed_at and time.time() - _failed_at < FAILURE_TTL:
         return None
+    if live_gate is not None and not live_gate():
+        return GATE_CLOSED
     result = fetch(ostype, release)
     if result is None:
         _failed_at = time.time()
@@ -108,13 +117,40 @@ def _key(release: str):
     return (_tokenize_version(release), release)
 
 
+def cached_result(ostype: str, release: str):
+    """What the cache holds for one release (list or UNKNOWN_RELEASE), else None. No network."""
+    hit = _cache.get((ostype, release))
+    if hit and time.time() - hit[0] < CACHE_TTL:
+        return hit[1]
+    return None
+
+
+def release_known(ostype: str, release: str, fetch: Optional[Fetch] = None,
+                  live_gate: Optional[LiveGate] = None) -> Optional[bool]:
+    """Does openVuln know this release? True / False (404, NO_DATA_FOUND) / None (no answer).
+
+    PREVIEW-01 AC-11. Same cache as the path walk, so a release the walk has
+    just queried costs nothing here.
+    """
+    if os.environ.get("CISCO_CHECKER_OFFLINE") == "1" and fetch is None:
+        return None
+    result = _advisories(ostype, release, fetch or _live_fetch, live_gate)
+    if result is None or result == GATE_CLOSED:
+        return None
+    return result != UNKNOWN_RELEASE
+
+
 def first_fixed_path(ostype: str, release: str,
-                     fetch: Optional[Fetch] = None) -> Optional[dict]:
+                     fetch: Optional[Fetch] = None,
+                     live_gate: Optional[LiveGate] = None) -> Optional[dict]:
     """Walk Cisco's first-fixed releases until no Critical/High is listed.
 
     Returns None when the lookup is off or failed; otherwise a dict with the
     target (None when Cisco names no fix on the train), the steps taken, what
     stays listed at the target, and one statement for the report.
+
+    live_gate (PREVIEW-01 AC-16): called before every uncached query; False
+    ends the walk with None, as if offline, without caching anything.
     """
     if os.environ.get("CISCO_CHECKER_OFFLINE") == "1" and fetch is None:
         return None
@@ -126,8 +162,8 @@ def first_fixed_path(ostype: str, release: str,
     for _ in range(MAX_STEPS):
         if time.time() - started > TIME_BUDGET:
             return None   # too slow today: the dataset answer stands alone
-        advisories = _advisories(ostype, current, fetch)
-        if advisories is None:
+        advisories = _advisories(ostype, current, fetch, live_gate)
+        if advisories is None or advisories == GATE_CLOSED:
             return None
         if advisories == UNKNOWN_RELEASE:
             if current == release:

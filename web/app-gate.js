@@ -10,6 +10,13 @@ const GATE_UNLOCKED_KEY = "netdevops_unlocked";
 const GATE_TOKEN_KEY = "netdevops_beta_token";
 const GATE_BACKFILL_KEY = "netdevops_beta_backfill_day";
 const PRIVACY_URL = "https://netdevops.thebackroom.ai/legal/privacy.html";
+// PREVIEW-01 (@ciso W7, variant A): the signup source lives in page memory only.
+// A preview result shown in this page session marks it; a reload, a new tab or a
+// closed browser forgets it. Nothing about the preview is written to or read from
+// browser storage. ?internal=1 in the page address marks the owner's own test
+// sessions, which never send a signup source (also memory only).
+let previewShownThisSession = false;
+let internalSession = false;
 
 // Tool paths that carry X-Beta-Token (mirror of api/beta.py TOOL_PREFIXES).
 // Tools live at the root, not under /api. Page-load fetches are excluded.
@@ -107,6 +114,19 @@ function unlockGate(email) {
 }
 
 // -----------------------------
+// PREVIEW-01 T7: "preview" when a preview result was shown in this page session
+// and this is not one of the owner's test sessions; otherwise null.
+// -----------------------------
+function markPreviewShown() {
+  previewShownThisSession = true;
+}
+
+function signupSource() {
+  if (internalSession) return null;
+  return previewShownThisSession ? "preview" : null;
+}
+
+// -----------------------------
 // Submit email via backend → MailerLite
 // API key stays server-side (never exposed to frontend)
 // -----------------------------
@@ -116,7 +136,7 @@ async function submitEmail(email) {
     const resp = await fetch(`${baseUrl}/api/subscribe`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: email })
+      body: JSON.stringify(signupSource() ? { email: email, source: "preview" } : { email: email })
     });
     const data = await resp.json();
     if (data && typeof data.token === "string" && data.token) {
@@ -161,7 +181,9 @@ async function backfillBetaToken() {
 // -----------------------------
 // Gate Modal
 // -----------------------------
-function showGateModal(targetTab) {
+// onUnlocked (PREVIEW-01): runs after the unlock and the tab switch, e.g. to start
+// the full CVE Analyzer on the release the preview just checked.
+function showGateModal(targetTab, onUnlocked) {
   const existing = document.getElementById("gate-modal-overlay");
   if (existing) existing.remove();
 
@@ -233,6 +255,9 @@ function showGateModal(targetTab) {
     if (targetTab) {
       const tabBtn = document.querySelector(`.tab-button[data-tab="${targetTab}"]`);
       if (tabBtn) tabBtn.click();
+    }
+    if (typeof onUnlocked === "function") {
+      try { onUnlocked(); } catch (err) { console.warn("after unlock:", err); }
     }
   });
 }
@@ -316,7 +341,14 @@ function updateHomeFooter() {
 // -----------------------------
 // Initialize gate system
 // -----------------------------
+function markInternalBrowser() {
+  try {
+    if (new URLSearchParams(window.location.search).get("internal") === "1") internalSession = true;
+  } catch (e) { /* no URLSearchParams: nothing to mark */ }
+}
+
 function initGate() {
+  markInternalBrowser();
   addLockBadges();
   addGateBanner();
   updateHomeFooter();

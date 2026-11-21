@@ -34,6 +34,9 @@ PASTE_ENDPOINTS = [
     ("/tools/port-auditor/analyze", {"interface_status": "Gi1/0/1 up"}, "interface_status"),
     ("/tools/ip-path-tracer/analyze", {"traceroute_output": "1 10.0.0.1"}, "traceroute_output"),
     ("/tools/acl/analyze", {"config_text": CONFIG}, "config_text"),
+    # PREVIEW-01 AC-10: not a paste tool, but nothing typed into it comes back either.
+    ("/analyze/cve/preview", {"platform": "IOS XE", "version": "17.9.4"}, "version"),
+    ("/analyze/cve/preview", {"platform": "IOS XE", "version": "17.9.4"}, "platform"),
 ]
 
 

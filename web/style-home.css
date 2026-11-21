@@ -853,3 +853,34 @@
   word-break: break-all;
   font-size: 0.8rem;
 }
+
+/* PREVIEW-01: "Check your Cisco release" card on Home (no email). */
+.preview-card {
+  background: var(--card);
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  padding: 20px 24px;
+  margin-bottom: 28px;
+}
+.preview-card[hidden] { display: none; }
+.preview-card h2 { margin: 0 0 6px; font-size: 1.25rem; }
+.preview-lead { margin: 0 0 14px; color: var(--muted); }
+.preview-form {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 12px;
+  align-items: center;
+  max-width: 560px;
+}
+.preview-form button { grid-column: 2; justify-self: start; }
+.preview-error { color: var(--danger); min-height: 1.2em; margin: 10px 0 0; }
+.preview-result p { margin: 6px 0; }
+.preview-count { font-size: 1.05rem; font-weight: 600; }
+.preview-sub, .preview-sources, .preview-hint { color: var(--muted); font-size: 0.9rem; }
+.preview-not-evaluated { font-weight: 600; }
+.preview-kev-warning { color: var(--danger); font-weight: 700; }
+.preview-cta { margin-top: 12px; }
+@media (max-width: 600px) {
+  .preview-form { grid-template-columns: 1fr; }
+  .preview-form button { grid-column: 1; }
+}
