@@ -591,6 +591,12 @@ def _shown_cisco_texts():
             yield cid, cw.text
 
 
+def _intro_next_is_colon_only(text):
+    paras = [q for q in (pp.RAW_LINK.sub("", p).strip() for p in
+             pp.PARAGRAPH_BREAK.split(text.replace("\r\n", "\n").strip())) if q]
+    return len(paras) > 1 and paras[1].endswith(":") and not pp._drop_colon_sentence(paras[1])
+
+
 def test_every_cisco_text_excerpt_is_short_complete_and_without_links():
     seen = 0
     for cid, text in _shown_cisco_texts():
@@ -600,7 +606,8 @@ def test_every_cisco_text_excerpt_is_short_complete_and_without_links():
         assert len(excerpt) <= pp.EXCERPT_MAX_CHARS, (cid, len(excerpt))   # @ciso W2, after _scrub
         assert not re.search(r"https?://", excerpt, re.I), cid          # @ciso D2: any link form
         assert not excerpt.endswith(":"), cid                         # PREVIEW-INTRO-01 / @ciso D1
-        assert not pp.INTRO_ONLY.match(excerpt), cid
+        if pp.INTRO_ONLY.match(excerpt):   # PREVIEW-INTRO-02: only when the next paragraph
+            assert _intro_next_is_colon_only(text), cid   # is a lone colon sentence (2-para limit)
         flat = re.sub(r"\s+", " ", pp._scrub(pp.RAW_LINK.sub("", text), cid))
         assert all(re.sub(r"\s+", " ", p).rstrip(pp.ELLIPSIS) in flat for p in paras), cid   # Cisco's words
         seen += 1
@@ -672,6 +679,53 @@ def test_preview_intro_01_real_texts(cid, starts, ends):
     excerpt, shortened = pp.cisco_excerpt(text)
     assert shortened and excerpt.startswith(starts) and excerpt.endswith(ends), excerpt[-120:]
     assert len(excerpt) <= pp.EXCERPT_MAX_CHARS
+
+
+@pytest.mark.parametrize("sentence", [
+    "There is a workaround that addresses this vulnerability.",
+    "There is a workaround and a mitigation that address this vulnerability.",
+    "There are workarounds that address this vulnerability.",
+    "There are workarounds that address these vulnerabilities.",
+    "There are no workarounds that address these vulnerabilities.",
+])
+def test_preview_intro_02_intro_sentences_take_the_next_paragraph(sentence):
+    # PREVIEW-INTRO-02 (user 23.11 "3 tak"): same rule as "There are no workarounds ...".
+    assert pp.cisco_excerpt(f"{sentence}\n\nDisable X.\n\nThird.") == \
+        (f"{sentence}\n\nDisable X.", True)
+
+
+@pytest.mark.parametrize("text", [
+    "There is a workaround that addresses this vulnerability: Add an IPv4 ACL.",  # CVE-2024-20510
+    "There is a workaround that addresses this vulnerability. Disable IKEv1 fragmentation.",
+    "There are no workarounds that address this vulnerability. However, there is a mitigation.",
+    "There is a workaround that addresses this issue.",
+])
+def test_preview_intro_02_not_only_the_intro_sentence(text):
+    assert not pp.INTRO_ONLY.match(text)
+    assert pp.cisco_excerpt(f"{text}\n\nSecond.")[0] == text
+
+
+@pytest.mark.parametrize("cid,second", [
+    ("CVE-2024-20316", "Manage ACLs directly on the device CLI"),
+    ("CVE-2024-20373", "There is no support for extended IPv4 ACLs against SNMP."),
+    ("CVE-2024-20291", "After performing configuration changes to port channel member ports"),
+    ("CVE-2023-20186", "As a workaround for this vulnerability, enable privilege level 0"),
+])
+def test_preview_intro_02_real_texts(cid, second):
+    text = get_mitigation_service().get_mitigation(cid).mitigation.cisco_workaround.text
+    excerpt, shortened = pp.cisco_excerpt(text, cid)
+    first, nxt = excerpt.split("\n\n")
+    assert shortened and pp.INTRO_ONLY.match(first) and nxt.startswith(second), excerpt
+    assert len(excerpt) <= pp.EXCERPT_MAX_CHARS
+
+
+@pytest.mark.parametrize("cid", ["CVE-2024-20309", "CVE-2025-20151", "CVE-2025-20221"])
+def test_preview_intro_02_colon_paragraph_after_intro_is_dropped(cid):
+    # Intro + a lone "... as shown in the following example:" paragraph: the 2-paragraph
+    # limit leaves no room for the example, the colon sentence goes (@ciso D1), the intro stays.
+    text = get_mitigation_service().get_mitigation(cid).mitigation.cisco_workaround.text
+    excerpt, shortened = pp.cisco_excerpt(text, cid)
+    assert shortened and pp.INTRO_ONLY.match(excerpt) and _intro_next_is_colon_only(text)
 
 
 def test_d2_no_url_in_preview_json_except_the_links(ios_xe_cves):
