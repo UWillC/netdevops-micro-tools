@@ -1,0 +1,432 @@
+"""
+PREVIEW-01, version of 22.11: ONE finding with a change plan before the e-mail gate.
+Spec (CEO repo) projects/netdevops/specs/2026-11-20_podglad-bez-konta.md, AC-6, AC-18,
+AC-19, T12-T14. No network: KEV and openVuln stay offline (conftest), KEV hits come from
+the kev_index fixture.
+"""
+import json
+import re
+import shutil
+import subprocess
+from pathlib import Path
+from types import SimpleNamespace
+from urllib.parse import urlparse
+
+import pytest
+from fastapi.testclient import TestClient
+
+from api.main import app
+from api.routers import cve as cve_router
+from api.routers import cve_preview as pv
+from services import preview_plan as pp
+from services.cve_engine import CVEEngine, CVEEngineConfig
+from services.mitigation_service import get_mitigation_service
+
+ROOT = Path(__file__).resolve().parent.parent
+WEB = ROOT / "web"
+PATH = "/analyze/cve/preview"
+CVE_IDS = re.compile(r"CVE-\d{4}-\d+", re.I)
+SECTION_IDS = ["applies", "workaround", "target", "upgrade", "verify", "sources", "rollback"]
+
+
+@pytest.fixture(autouse=True)
+def _preview_env(monkeypatch):
+    monkeypatch.setenv("PREVIEW_ENABLED", "1")
+    monkeypatch.setattr(cve_router, "dataset_is_syncing", lambda key: False)
+    monkeypatch.setattr(pv, "budget", pv.OpenVulnBudget())
+
+
+@pytest.fixture
+def client():
+    return TestClient(app)
+
+
+def _preview(client, platform, version):
+    r = client.post(PATH, json={"platform": platform, "version": version})
+    assert r.status_code == 200, r.text
+    return r
+
+
+def _ids(text):
+    return {i.upper() for i in CVE_IDS.findall(text)}
+
+
+@pytest.fixture(scope="module")
+def ios_xe_cves():
+    e = CVEEngine(config=CVEEngineConfig(engine_version="0.3.7", data_dir="cve_data/ios_xe"))
+    e.load_all()
+    return {c.cve_id.upper(): c for c in e.cves}
+
+
+# ------------------------------------------------------------------ AC-6
+
+def test_ac6_exactly_one_cve_id_in_the_whole_json(client):
+    r = _preview(client, "IOS XE", "17.9.4")
+    d = r.json()
+    assert d["state"] == "findings" and d["top_finding"]
+    assert _ids(r.text) == {d["top_finding"]["cve_id"].upper()}
+    assert d["more_findings"] == d["critical"] + d["high"] - 1
+
+
+@pytest.mark.parametrize("platform,version", [
+    ("IOS XE", "17.6.3"), ("ISE", "3.2 Patch 4"), ("NX-OS", "10.2(6)"), ("IOS", "15.2(7)E8"),
+    ("IOS", "15.7(3)M5"), ("Catalyst SD-WAN Manager", "20.12.5"),
+    ("Catalyst SD-WAN Controller", "20.12.5"), ("IOS XE", "17.15.4a")])
+def test_ac6_never_more_than_one_id(client, platform, version):
+    r = _preview(client, platform, version)
+    d = r.json()
+    top = d.get("top_finding")
+    assert _ids(r.text) == ({top["cve_id"].upper()} if top else set())
+
+
+def test_ac6_sibling_ids_in_cisco_text_are_replaced(ios_xe_cves):
+    # CVE-2023-20273's texts name CVE-2023-20198 (same advisory chain).
+    entry = ios_xe_cves["CVE-2023-20273"]
+    full = SimpleNamespace(matched=[entry], coverage_uncertain=[])
+    tf = pp.build_top_finding(full, "IOS XE", "17.9.4", None, "2026-11-22", eol=False)
+    text = tf.model_dump_json()
+    assert _ids(text) == {"CVE-2023-20273"}
+    assert pp.OTHER_CVE in text
+
+
+def test_link_filter():
+    own = "CVE-2023-20198"
+    assert pp._link("x", "https://sec.cloudapps.cisco.com/security/center/x", own)
+    assert pp._link("x", "https://www.cisa.gov/known-exploited", own)
+    for bad in ["javascript:alert(1)", "http://www.cisco.com/x", "https://evil.example/x",
+                "https://cisco.com.evil.example/x", "https://www.cisa.gov/x?q=CVE-2023-20273", None, 7]:
+        assert pp._link("x", bad, own) is None, bad
+
+
+# ------------------------------------------------------------------ AC-18
+
+def _cve(cid, cvss, kev=False, published="2025-01-01", severity="high"):
+    return SimpleNamespace(cve_id=cid, cvss_score=cvss, kev=object() if kev else None,
+                           published=published, severity=severity)
+
+
+def test_ac18_kev_beats_higher_cvss():
+    a = _cve("CVE-2025-0001", 10.0)
+    b = _cve("CVE-2025-0002", 7.5, kev=True)
+    assert pp.pick_top([a, b], []).cve_id == "CVE-2025-0002"
+
+
+def test_ac18_cvss_tie_newest_publication_wins_then_id():
+    old = _cve("CVE-2025-0001", 9.8, published="2024-03-01")
+    new = _cve("CVE-2025-0009", 9.8, published="2025-09-24")
+    assert pp.pick_top([old, new], []).cve_id == "CVE-2025-0009"
+    x = _cve("CVE-2025-0005", 9.8, published="2025-09-24")
+    assert pp.pick_top([new, x, old], []).cve_id == "CVE-2025-0005"
+
+
+def test_ac18_only_uncertain_gets_needs_confirmation(ios_xe_cves):
+    entry = ios_xe_cves["CVE-2023-20198"]
+    full = SimpleNamespace(matched=[entry], coverage_uncertain=["CVE-2023-20198"])
+    tf = pp.build_top_finding(full, "IOS XE", "17.9.4", None, None, eol=False)
+    assert tf.needs_confirmation is True and tf.header == "Needs confirmation on your device"
+    assert tf.plan[0].id == "applies"
+
+
+def test_ac18_certain_beats_uncertain_kev():
+    sure = _cve("CVE-2025-0001", 7.0)
+    unsure = _cve("CVE-2025-0002", 10.0, kev=True)
+    assert pp.pick_top([unsure, sure], ["CVE-2025-0002"]).cve_id == "CVE-2025-0001"
+
+
+def test_ac18_medium_low_never_picked_and_clean_has_no_plan(client, monkeypatch):
+    monkeypatch.setattr(pv, "release_listed", lambda engine, version: True)
+    assert pp.pick_top([_cve("CVE-2025-0001", 6.0, kev=True, severity="medium")], []) is None
+    d = _preview(client, "IOS XE", "17.15.4a").json()
+    assert d["state"] == "clean" and d["top_finding"] is None and d["more_findings"] is None
+
+
+def test_ac18_eol_plan_has_sections_1_2_6_only(client):
+    d = _preview(client, "IOS", "15.7(3)M5").json()
+    assert d["state"] == "eol" and d["upgrade"] is None
+    assert [s["id"] for s in d["top_finding"]["plan"]] == ["applies", "workaround", "sources"]
+
+
+def test_ac18_live_answer_follows_the_rule(client, kev_index):
+    kev_index({"CVE-2023-20198": {"date_added": "2023-10-16"}})
+    d = _preview(client, "IOS XE", "17.9.4").json()
+    assert d["top_finding"]["cve_id"] == "CVE-2023-20198" and d["top_finding"]["kev"] is True
+
+
+# ------------------------------------------------------------------ AC-19
+
+def _plan(d):
+    return {s["id"]: s for s in d["top_finding"]["plan"]}
+
+
+def _has_content(sec):
+    return any(b.get("text") or b.get("commands") for b in sec["blocks"])
+
+
+def test_ac19a_kev_with_mitigation_file_has_seven_filled_sections(client, kev_index):
+    kev_index({"CVE-2023-20198": {"date_added": "2023-10-16"}})
+    d = _preview(client, "IOS XE", "17.9.4").json()
+    plan = _plan(d)
+    assert list(plan) == SECTION_IDS
+    for sid, sec in plan.items():
+        assert sec["title"] == pp.TITLES[sid] and sec["source"], sid
+        assert _has_content(sec), sid
+    m = get_mitigation_service().get_mitigation("CVE-2023-20198").mitigation
+    assert plan["applies"]["blocks"][0]["commands"] == m.detection.commands
+    assert plan["applies"]["blocks"][1]["text"] == m.detection.vulnerable_if
+    assert plan["verify"]["blocks"][0]["commands"] == m.verification.commands
+    assert plan["verify"]["blocks"][1]["text"] == m.verification.expected_output
+    assert plan["workaround"]["blocks"][0]["text"] == m.cisco_workaround.text
+    assert any(b["label"] and m.steps_reviewed in b["label"] for b in plan["workaround"]["blocks"][1:])
+    # Target = the value the counts show (AC-4) and the full report (AC-5).
+    assert d["upgrade"]["target"] in plan["target"]["blocks"][0]["text"]
+    assert plan["sources"]["links"][0]["url"] == m.cisco_psirt
+    assert any(l["url"] == m.cisa_alert for l in plan["sources"]["links"])
+
+
+def test_ac19b_no_mitigation_file_says_so(client):
+    d = _preview(client, "ISE", "3.2 Patch 4").json()
+    cid = d["top_finding"]["cve_id"]
+    assert not get_mitigation_service().get_mitigation(cid).found
+    plan = _plan(d)
+    for sid in ("applies", "workaround", "verify"):
+        assert plan[sid]["blocks"] == [{"label": None, "text": pp.MSG_NO_STEPS, "commands": []}]
+        assert plan[sid]["links"] and plan[sid]["links"][0]["url"].startswith("https://")
+    for sid in ("target", "upgrade", "sources", "rollback"):
+        assert _has_content(plan[sid]) or plan[sid]["links"], sid
+
+
+def test_ac19c_cisco_lists_no_workaround(ios_xe_cves):
+    svc = get_mitigation_service()
+    none_ids = [c for c in svc.list_available()
+                if svc.get_mitigation(c).mitigation.cisco_workaround
+                and svc.get_mitigation(c).mitigation.cisco_workaround.status == "none"
+                and c in ios_xe_cves]
+    assert none_ids
+    full = SimpleNamespace(matched=[ios_xe_cves[none_ids[0]]], coverage_uncertain=[])
+    tf = pp.build_top_finding(full, "IOS XE", "17.9.4", None, None, eol=False)
+    wk = next(s for s in tf.plan if s.id == "workaround")
+    assert wk.blocks[0].text == "Cisco lists no workaround for this vulnerability. Upgrade is the fix."
+
+
+def test_ac19_our_steps_hidden_without_review(ios_xe_cves, monkeypatch):
+    svc = get_mitigation_service()
+    m = svc.get_mitigation("CVE-2023-20198").mitigation.model_copy(update={"steps_reviewed": None})
+    real = svc.get_mitigation_for_platform
+
+    def fake(cve_id, platform=None, version=None):
+        resp = real(cve_id, platform, version)
+        return resp.model_copy(update={"mitigation": m})
+    monkeypatch.setattr(svc, "get_mitigation_for_platform", fake)
+    full = SimpleNamespace(matched=[ios_xe_cves["CVE-2023-20198"]], coverage_uncertain=[])
+    tf = pp.build_top_finding(full, "IOS XE", "17.9.4", None, None, eol=False)
+    wk = next(s for s in tf.plan if s.id == "workaround")
+    assert len(wk.blocks) == 1 and wk.blocks[0].label.startswith("Cisco:")
+
+
+def _strings(obj):
+    if isinstance(obj, str):
+        yield obj
+    elif isinstance(obj, dict):
+        for v in obj.values():
+            yield from _strings(v)
+    elif isinstance(obj, list):
+        for v in obj:
+            yield from _strings(v)
+
+
+def _data_strings(cid, entry):
+    """Every string the plan may carry: data files and the CVE record, with the AC-6 scrub."""
+    out = set()
+    m = get_mitigation_service().get_mitigation(cid).mitigation
+    if m:
+        out |= {pp._scrub(s, cid) for s in _strings(json.loads(m.model_dump_json()))}
+    out |= {pp._scrub(s, cid) for s in _strings(json.loads(entry.model_dump_json()))}
+    out |= set(_strings(pp.rollback_data()))
+    return out
+
+
+FIXED = ({v for k, v in vars(pp).items() if k.startswith(("MSG_", "HEADER_")) and isinstance(v, str)}
+         | set(pp.TITLES.values()) | {"Cisco", "NetDevOps", "Dataset", "Critical", "High",
+                                       "Cisco advisory", "CISA alert", pp.LABEL_VULNERABLE_IF,
+                                       pp.LABEL_EXPECTED, pp.LABEL_APPLICABILITY,
+                                       pp.LABEL_OUR_NOTES} | set(SECTION_IDS))
+FORMATTED = [
+    re.compile(r"^Data as of \d{4}-\d{2}-\d{2}\.$"),
+    re.compile(r"^Cisco: (mitigation|workaround)$"),
+    re.compile(r"^Our (steps|ACL), checked against Cisco's text on \d{4}-\d{2}-\d{2}$"),
+    re.compile(r"^Cisco: .+"),                                    # rollback link labels
+    re.compile(r"^Rollback: follow Cisco's upgrade guide for .+\.$"),
+    re.compile(r"^CVE engine (confirms|does not match) "),        # mitigation_service text
+    re.compile(r"^\d{4}-\d{2}-\d{2}$"),
+]
+
+
+@pytest.mark.parametrize("platform,version", [
+    ("IOS XE", "17.9.4"), ("ISE", "3.2 Patch 4"), ("NX-OS", "10.2(6)"),
+    ("Catalyst SD-WAN Manager", "20.12.5"), ("IOS", "15.7(3)M5")])
+def test_ac19d_no_string_from_outside_the_data(client, kev_index, platform, version):
+    kev_index({"CVE-2023-20198": {"date_added": "2023-10-16"}})
+    d = _preview(client, platform, version).json()
+    tf = d["top_finding"]
+    full = cve_router.run_analysis(cve_router.CVEAnalyzeRequest(platform=platform, version=version))
+    entry = next(c for c in full.matched if c.cve_id == tf["cve_id"])
+    allowed = _data_strings(tf["cve_id"], entry) | FIXED | {tf["cve_id"]}
+    for s in _strings(tf):
+        if s in allowed or any(p.match(s) for p in FORMATTED):
+            continue
+        up = d.get("upgrade") or {}
+        if up.get("note") == s:
+            continue
+        if up.get("target") and re.fullmatch(
+                re.escape(up["target"]) + r" \((same train|train change|migration to a supported train)\)\. "
+                r"Critical/High left at target: \d+\.", s):
+            continue
+        raise AssertionError(f"string not from data: {s!r}")
+
+
+# ------------------------------------------------------------------ T14 rollback
+
+def test_t14_every_rollback_entry_has_a_cisco_source():
+    data = pp.rollback_data()
+    assert data["checked"]
+    for fam in data["families"]:
+        assert fam["source"], fam["id"]
+        u = urlparse(fam["source"])
+        assert u.scheme == "https" and u.hostname == "www.cisco.com", fam["id"]
+        assert fam["source_title"] and fam["label"]
+        for step in fam["steps"]:
+            assert step["text"] and step["commands"] and all(c.strip() for c in step["commands"])
+
+
+def test_t14_every_preview_platform_has_a_rollback():
+    data = pp.rollback_data()
+    ids = {f["id"] for f in data["families"]}
+    assert set(data["platforms"]) == set(pv.PLATFORMS)
+    for platform, fams in data["platforms"].items():
+        assert fams and set(fams) <= ids, platform
+        sec = pp.rollback_section(platform, "CVE-2023-20198")
+        assert sec.links and all(l.url.startswith("https://www.cisco.com/") for l in sec.links)
+        assert sec.blocks
+
+
+def test_t14_family_without_commands_gets_the_fallback_sentence():
+    sec = pp.rollback_section("IOS", "CVE-2023-20198")
+    assert [b.text for b in sec.blocks] == ["Rollback: follow Cisco's upgrade guide for IOS (classic)."]
+    assert all(not b.commands for b in sec.blocks)
+
+
+def test_t14_rollback_file_is_shipped():
+    assert pp.ROLLBACK_FILE.exists()
+    ignore = (ROOT / ".dockerignore").read_text() if (ROOT / ".dockerignore").exists() else ""
+    assert "cve_rollback" not in ignore
+
+
+# ------------------------------------------------------------------ T13 frontend
+
+def _js():
+    return (WEB / "app-security.js").read_text()
+
+
+def test_plan_js_writes_text_only():
+    js = _js().split("PREVIEW-01", 1)[1]
+    for bad in ("innerHTML", "insertAdjacentHTML", "outerHTML", "document.write"):
+        assert bad not in js
+    assert "—" not in js
+
+
+PLAN_HARNESS = r"""
+const fs = require("fs");
+const vm = require("vm");
+const sec = fs.readFileSync(process.argv[2], "utf8");
+function el(tag) {
+  return { tag, className: "", textContent: "", children: [], attrs: {},
+           appendChild(c) { this.children.push(c); return c; },
+           addEventListener() {},
+           set href(v) { this.attrs.href = v; }, get href() { return this.attrs.href; } };
+}
+const ctx = { String, JSON, Object, Array, Number, document: { createElement: el } };
+vm.createContext(ctx);
+const fn = sec.slice(sec.indexOf("const PREVIEW_TRAIN_TEXT"), sec.indexOf("(function initPreview()"));
+vm.runInContext(fn + "\nthis.previewPlanEl = previewPlanEl;", ctx);
+function flat(n, out) { out.push({ tag: n.tag, cls: n.className, text: n.textContent, href: n.attrs.href });
+                        n.children.forEach(c => flat(c, out)); return out; }
+const data = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));
+const out = { plan: flat(ctx.previewPlanEl(data), []), none: ctx.previewPlanEl({ state: "clean" }) };
+console.log(JSON.stringify(out));
+"""
+
+SAMPLE = {
+    "state": "findings", "more_findings": 3,
+    "top_finding": {
+        "cve_id": "CVE-2023-20198", "title": "<img src=x onerror=alert(1)>", "severity": "Critical",
+        "cvss": 10.0, "kev": True, "published": "2023-10-16", "needs_confirmation": True,
+        "header": "Needs confirmation on your device",
+        "plan": [
+            {"id": "applies", "title": "Does this apply to you", "source": "NetDevOps",
+             "blocks": [{"label": None, "text": "t", "commands": ["show ip http server status", "<b>x</b>"]}],
+             "links": [{"label": "bad", "url": "javascript:alert(1)"},
+                       {"label": "Cisco advisory", "url": "https://sec.cloudapps.cisco.com/a"}]},
+            {"id": "rollback", "title": "Rollback", "source": "Cisco",
+             "blocks": [{"label": "IOS XE, install mode", "text": "x", "commands": ["install abort"]}],
+             "links": []},
+        ],
+    },
+}
+
+
+@pytest.fixture(scope="module")
+def plan_dom(tmp_path_factory):
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node not installed")
+    d = tmp_path_factory.mktemp("plan")
+    (d / "h.js").write_text(PLAN_HARNESS)
+    (d / "sample.json").write_text(json.dumps(SAMPLE))
+    res = subprocess.run([node, str(d / "h.js"), str(WEB / "app-security.js"), str(d / "sample.json")],
+                         capture_output=True, text=True, timeout=60)
+    assert res.returncode == 0, res.stderr
+    return json.loads(res.stdout.strip().splitlines()[-1])
+
+
+def test_plan_dom(plan_dom):
+    nodes = plan_dom["plan"]
+    assert plan_dom["none"] is None
+    texts = [n["text"] for n in nodes]
+    assert "Needs confirmation on your device" in texts
+    assert "Fix this one first: listed by CISA as exploited in the wild" not in texts
+    assert "CVE-2023-20198 | Critical | CVSS 10 | KEV" in texts
+    assert "<img src=x onerror=alert(1)>" in texts           # as text, never as markup
+    codes = [n["text"] for n in nodes if n["tag"] == "code"]
+    assert codes == ["show ip http server status\n<b>x</b>", "install abort"]
+    assert sum(1 for n in nodes if n["cls"] and "preview-copy" in n["cls"]) == 2
+    hrefs = [n["href"] for n in nodes if n["tag"] == "a"]
+    assert hrefs == ["https://sec.cloudapps.cisco.com/a"]     # javascript: dropped
+    assert "3 more Critical/High findings for this release are in the full report." in texts
+    heads = [n for n in nodes if n["tag"] == "h4"]
+    assert [h["text"] for h in heads] == ["1. Does this apply to you", "7. Rollback"]
+    assert ("Built from Cisco PSIRT data and steps we checked against Cisco's text. "
+            "Test in a lab or a maintenance window first.") in texts
+    assert sum(1 for n in nodes if n["text"] == "Copy commands") == 2
+    assert {"NetDevOps", "Cisco"} <= {n["text"] for n in nodes if n["cls"] == "preview-plan-source"}
+
+
+def test_copy_v1_strings_in_place():
+    # @cmo copy v1, spec section 9 (22.11): strings 1:1.
+    js = _js()
+    html = (WEB / "index.html").read_text()
+    for s in ["Enter your release. See the one vulnerability to fix first and the plan for it: does it "
+              "apply, the workaround, the target release, how to verify, how to roll back. No email."]:
+        assert s in html
+    assert 'id="preview-submit">Show the plan</button>' in html
+    for s in ["Fix this one first: listed by CISA as exploited in the wild",
+              "Fix this one first: highest CVSS for this release",
+              "Copy commands", '"Copied"',
+              "Built from Cisco PSIRT data and steps we checked against Cisco's text. "
+              "Test in a lab or a maintenance window first.",
+              "more Critical/High findings for this release are in the full report.",
+              "See every finding with its fix, KEV ids and export. Free with email.",
+              "Actively exploited: upgrade now.", "Actively exploited: replace this hardware now."]:
+        assert s in js, s
+    assert pp.MSG_NO_STEPS == "No reviewed steps for this CVE yet. See the Cisco advisory."
+    assert pp.MSG_ROLLBACK_FALLBACK == "Rollback: follow Cisco's upgrade guide for {family}."
+    assert "See the full report: CVE list" not in js

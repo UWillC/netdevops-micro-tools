@@ -166,7 +166,7 @@
              lists "cve_preview" (PREVIEW_ENABLED on the server). Copy: draft, @cmo final. -->
         <div class="preview-card" id="preview" hidden>
           <h2>Check your Cisco release</h2>
-          <p class="preview-lead">How many Critical and High advisories hit your release, how many are exploited in the wild, and where to upgrade. No email.</p>
+          <p class="preview-lead">Enter your release. See the one vulnerability to fix first and the plan for it: does it apply, the workaround, the target release, how to verify, how to roll back. No email.</p>
           <form id="preview-form" class="preview-form" novalidate>
             <label for="preview-platform">Platform</label>
             <select id="preview-platform" name="platform" class="form-select">
@@ -180,7 +180,7 @@
             </select>
             <label for="preview-version">Software release</label>
             <input type="text" id="preview-version" name="version" maxlength="64" placeholder="17.9.4a" autocomplete="off" spellcheck="false" />
-            <button type="submit" class="btn-primary" id="preview-submit">Check</button>
+            <button type="submit" class="btn-primary" id="preview-submit">Show the plan</button>
           </form>
           <p class="preview-error" id="preview-error" role="alert"></p>
           <div class="preview-result" id="preview-result" aria-live="polite"></div>

@@ -1,0 +1,95 @@
+{
+  "_about": "PREVIEW-01 AC-19 section 7 (T14). Rollback per platform family. Every entry names the Cisco page it comes from; every command is copied character for character from that page (checked 2026-11-22 by @cto, reviewed by @ciso). An entry without commands is the fallback: 'Rollback: follow Cisco's upgrade guide for <family>' plus the link. Never add a command that is not printed on the cited page.",
+  "checked": "2026-11-22",
+  "families": [
+    {
+      "id": "ios-xe-install",
+      "family": "IOS XE",
+      "label": "IOS XE, install mode",
+      "source": "https://www.cisco.com/c/en/us/support/docs/switches/catalyst-9300-series-switches/216231-upgrade-guide-for-cisco-catalyst-9000-sw.html",
+      "source_title": "Upgrade Guide for Catalyst 9000 Switches (Cisco), sections Install Abort and Roll Back Install Mode",
+      "steps": [
+        {
+          "text": "Before install commit: abort the upgrade. The device reloads into the previous version.",
+          "commands": ["install abort"]
+        },
+        {
+          "text": "After install commit: list the rollback points and roll back to one (1 is the id in Cisco's example; use the id from your list).",
+          "commands": ["show install rollback", "install rollback to id 1"]
+        }
+      ]
+    },
+    {
+      "id": "ios-xe-bundle",
+      "family": "IOS XE",
+      "label": "IOS XE, bundle mode",
+      "source": "https://www.cisco.com/c/en/us/support/docs/switches/catalyst-9300-series-switches/216231-upgrade-guide-for-cisco-catalyst-9000-sw.html",
+      "source_title": "Upgrade Guide for Catalyst 9000 Switches (Cisco)",
+      "steps": []
+    },
+    {
+      "id": "ios",
+      "family": "IOS",
+      "label": "IOS (classic)",
+      "source": "https://www.cisco.com/c/en/us/td/docs/routers/access/1900/software/configuration/guide/Software_Configuration/upgrade.html",
+      "source_title": "Upgrading the Cisco IOS Software (Cisco 3900, 2900 and 1900 Series Software Configuration Guide)",
+      "steps": []
+    },
+    {
+      "id": "nx-os",
+      "family": "NX-OS",
+      "label": "NX-OS (Nexus 9000)",
+      "source": "https://www.cisco.com/c/en/us/td/docs/dcn/nx-os/nexus9000/105x/upgrade/cisco-nexus-9000-series-nx-os-software-upgrade-and-downgrade-guide-105x/m-upgrade-or-downgrade-the-cisco-nexus-9000-series-nx-os-software.html",
+      "source_title": "Cisco Nexus 9000 Series NX-OS Software Upgrade and Downgrade Guide, Release 10.5(x), Downgrade to an earlier software release",
+      "steps": [
+        {
+          "text": "Rollback on NX-OS is a downgrade, and it is disruptive. Cisco: the only supported method is the install all command. Save the configuration first, then install the previous image and watch the status.",
+          "commands": ["copy running-config startup-config", "install all nxos bootflash:filename", "show install all status", "show version"]
+        }
+      ]
+    },
+    {
+      "id": "ise",
+      "family": "ISE",
+      "label": "ISE patch",
+      "source": "https://www.cisco.com/c/en/us/support/docs/security/identity-services-engine/215406-patch-installation-on-ise-and-faq-durin.html",
+      "source_title": "Install Patch on ISE (Cisco TechNote 215406)",
+      "steps": [
+        {
+          "text": "Removes a patch from this node only, and the node reboots. In a deployment, roll back from the PAN first (GUI: Administration > System > Maintenance > Patch Management, Rollback). Patches are cumulative: remove the newest one first. A release upgrade (not a patch) follows Cisco's upgrade guide.",
+          "commands": ["show version", "patch remove <application name> <patch file number to be removed>"]
+        }
+      ]
+    },
+    {
+      "id": "sdwan-controller",
+      "family": "Catalyst SD-WAN",
+      "label": "Catalyst SD-WAN Controller and Validator (vSmart, vBond)",
+      "source": "https://www.cisco.com/c/en/us/support/docs/wan/dpt/220424-upgrade-sd-wan-controllers-with-the-use.html",
+      "source_title": "Upgrade SD-WAN Controllers with the Use of vManage GUI or CLI (Cisco), Rollback Plan",
+      "steps": [
+        {
+          "text": "Cisco's rollback plan for vSmart and vBond: activate the older image on the affected device.",
+          "commands": ["request software activate <older image version>"]
+        }
+      ]
+    },
+    {
+      "id": "sdwan-manager",
+      "family": "Catalyst SD-WAN",
+      "label": "Catalyst SD-WAN Manager (vManage)",
+      "source": "https://www.cisco.com/c/en/us/support/docs/wan/dpt/220424-upgrade-sd-wan-controllers-with-the-use.html",
+      "source_title": "Upgrade SD-WAN Controllers with the Use of vManage GUI or CLI (Cisco), Rollback Plan",
+      "steps": []
+    }
+  ],
+  "platforms": {
+    "IOS XE": ["ios-xe-install", "ios-xe-bundle"],
+    "IOS": ["ios"],
+    "NX-OS": ["nx-os"],
+    "ISE": ["ise"],
+    "Catalyst SD-WAN Manager": ["sdwan-manager"],
+    "Catalyst SD-WAN Controller": ["sdwan-controller"],
+    "Catalyst SD-WAN Validator": ["sdwan-controller"]
+  }
+}

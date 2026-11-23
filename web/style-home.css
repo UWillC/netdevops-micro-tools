@@ -880,7 +880,41 @@
 .preview-not-evaluated { font-weight: 600; }
 .preview-kev-warning { color: var(--danger); font-weight: 700; }
 .preview-cta { margin-top: 12px; }
+/* PREVIEW-01 22.11: change plan for one finding (AC-19). */
+.preview-plan { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
+.preview-plan-header { color: var(--danger); font-weight: 700; }
+.preview-plan-title { margin: 4px 0; font-size: 1.1rem; overflow-wrap: anywhere; }
+.preview-plan-subtitle { color: var(--muted); }
+.preview-plan-section { margin: 14px 0 0; }
+.preview-plan-heading { margin: 0 0 4px; font-size: 1rem; }
+.preview-plan-source {
+  margin-left: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 6px;
+}
+.preview-result .preview-plan-label { margin: 8px 0 2px; font-size: 0.85rem; color: var(--muted); }
+.preview-plan-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.preview-plan-commands { display: flex; gap: 8px; align-items: flex-start; margin: 4px 0; }
+.preview-plan-pre {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 8px 10px;
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow-x: auto;
+}
+.preview-copy { flex: none; }
+.preview-plan-link { overflow-wrap: anywhere; }
+.preview-plan-caution { color: var(--muted); font-size: 0.9rem; margin-top: 14px; }
+.preview-more { font-weight: 600; margin-top: 14px; }
 @media (max-width: 600px) {
+  .preview-plan-commands { flex-direction: column; }
   .preview-form { grid-template-columns: 1fr; }
   .preview-form button { grid-column: 1; }
 }
