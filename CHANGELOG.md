@@ -4,6 +4,44 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.7.21] – 2026-11-23 (Release check without email: change plan for one finding, flag still OFF)
+
+### Platform
+- **Flag still OFF, nothing changes for users:** everything below sits behind
+  `PREVIEW_ENABLED`, which stays unset in production. The preview endpoint keeps answering
+  404 and the home page card stays hidden.
+- **Change plan for one finding:** the preview answer can carry one `top_finding`, the most
+  dangerous Critical/High match (in KEV first, then highest CVSS, newest advisory, CVE id),
+  with a plan in up to seven sections: does it apply to you, workaround, target release,
+  upgrade, verify, sources, rollback. Everything is taken from data we already have (the
+  full analysis, the reviewed mitigation files, Cisco rollback templates). A CVE without a
+  mitigation file says so and links the Cisco advisory. End-of-life releases get sections
+  1, 2 and 6 only. The answer names exactly one CVE id: other ids inside Cisco's texts are
+  replaced and links naming them are dropped.
+- **Rollback templates:** new `cve_rollback/rollback_templates.json`, every entry with a
+  cisco.com source; commands only where Cisco prints them, otherwise one sentence and the
+  link to Cisco's upgrade guide.
+- **Folded sections:** section 1 stays open under "Fix this one first"; sections 2-7 are
+  native `<details>` elements. The card at 390 px is about a third of its first length.
+- **Excerpt of Cisco's text:** the workaround section shows the start of Cisco's text with
+  the label "Excerpt from Cisco's advisory" and a "Read Cisco's full text" link to the
+  advisory. A first paragraph that ends with a colon or is only "There are no workarounds
+  ..." takes the next paragraph with it (at most two paragraphs and 900 characters); raw
+  links pasted in Cisco's text are removed.
+- **Upgrade shows the target only:** the target release computed for all findings plus the
+  Software Download sentence; per-CVE upgrade notes stay in the full report.
+- **Security review fixes (@ciso P2, P5):** links pass one strict pattern (https,
+  cisco.com or cisa.gov host, no userinfo, backslash or percent-encoding); other CVE ids are
+  replaced in loose spellings too (spaces, underscores, dash variants).
+- **Smoke fixes:** plan links readable on the dark card; "Copy commands" falls back to
+  selecting the text when the clipboard API refuses.
+
+### Tests
+- New `tests/test_preview_plan.py`: one CVE id per answer (on every mitigation file), choice
+  of the finding, seven sections and EoL, no string from outside the data, rollback
+  templates, folded DOM, the Cisco excerpt rules on every Cisco text (no colon at the end,
+  no intro-only excerpt, no `http(s)://` outside the plan's own links).
+
 ## [v0.7.20] – 2026-11-21 (Release check without email: preview endpoint behind a flag, OFF)
 
 ### Platform
