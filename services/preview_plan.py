@@ -69,7 +69,10 @@ PARAGRAPH_BREAK = re.compile(r"\n[ \t]*\n")
 # PREVIEW-INTRO-01: a first paragraph that is only Cisco's "no workarounds" sentence, or that
 # ends with a colon ("... do the following:"), takes the next paragraph with it, within limits
 # so the card does not grow back to the full text.
-INTRO_ONLY = re.compile(r"^There (?:are|is) no workarounds? that address(?:es)? "
+# PREVIEW-INTRO-02 (user 23.11 "3 tak"): the same rule for the positive intro sentences
+# ("There is a workaround ...", "There are workarounds ...", "... and a mitigation ...").
+INTRO_ONLY = re.compile(r"^There (?:(?:are|is) no workarounds?|is a workaround(?: and a mitigation)?"
+                        r"|are workarounds) that address(?:es)? "
                         r"(?:this|these) vulnerabilit(?:y|ies)\.?$", re.I)
 EXCERPT_MAX_PARAS = 2
 EXCERPT_MAX_CHARS = 900
@@ -181,7 +184,8 @@ def cisco_excerpt(text: Optional[str], own_id: Optional[str] = None):
     """User decision 23.11 (1): the preview shows the start of a Cisco text, without the
     raw ["https://..."] links; the rest stays behind "Read Cisco's full text".
     PREVIEW-INTRO-01 (user 23.11 "2 tak"): a first paragraph that ends with a colon or is
-    only "There are no workarounds ..." takes the next one (at most EXCERPT_MAX_PARAS,
+    only "There are no workarounds ..." (PREVIEW-INTRO-02, user 23.11 "3 tak": or "There is
+    a workaround ...", "There are workarounds ...") takes the next one (at most EXCERPT_MAX_PARAS,
     EXCERPT_MAX_CHARS). An excerpt that still ends with a colon loses that last sentence.
     @ciso W2: the result is never longer than EXCERPT_MAX_CHARS, measured after the AC-6
     scrub when own_id is given (OTHER_CVE is longer than a CVE id; the scrub is idempotent).
