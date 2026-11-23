@@ -74,6 +74,8 @@ INTRO_ONLY = re.compile(r"^There (?:are|is) no workarounds? that address(?:es)? 
 EXCERPT_MAX_PARAS = 2
 EXCERPT_MAX_CHARS = 900
 SENTENCE_END = re.compile(r"[.!?](?=\s)")
+SENTENCE_END_OR_EOS = re.compile(r"[.!?](?=\s|$)")
+ELLIPSIS = "\u2026"
 TRAIN_TEXT = {"same": "same train", "change": "train change",
               "migration": "migration to a supported train"}
 
@@ -162,12 +164,27 @@ def _drop_colon_sentence(paragraph: str) -> str:
     return paragraph[:ends[-1].end()].rstrip() if ends else ""
 
 
-def cisco_excerpt(text: Optional[str]):
+def _cap(excerpt: str, limit: int) -> str:
+    """@ciso W2 (v0.7.21 review): hard length limit. Cut at the last sentence end within
+    the limit; with no sentence end there, cut at a word boundary and add an ellipsis."""
+    if len(excerpt) <= limit:
+        return excerpt
+    ends = [m.end() for m in SENTENCE_END_OR_EOS.finditer(excerpt[:limit])]
+    if ends:
+        return excerpt[:ends[-1]].rstrip()
+    head = excerpt[:limit - len(ELLIPSIS)]
+    space = max(head.rfind(" "), head.rfind("\n"))
+    return (head[:space] if space > 0 else head).rstrip() + ELLIPSIS
+
+
+def cisco_excerpt(text: Optional[str], own_id: Optional[str] = None):
     """User decision 23.11 (1): the preview shows the start of a Cisco text, without the
     raw ["https://..."] links; the rest stays behind "Read Cisco's full text".
     PREVIEW-INTRO-01 (user 23.11 "2 tak"): a first paragraph that ends with a colon or is
     only "There are no workarounds ..." takes the next one (at most EXCERPT_MAX_PARAS,
     EXCERPT_MAX_CHARS). An excerpt that still ends with a colon loses that last sentence.
+    @ciso W2: the result is never longer than EXCERPT_MAX_CHARS, measured after the AC-6
+    scrub when own_id is given (OTHER_CVE is longer than a CVE id; the scrub is idempotent).
     Returns (excerpt, shortened)."""
     if not text:
         return text, False
@@ -187,7 +204,10 @@ def cisco_excerpt(text: Optional[str]):
         elif len(take) > 1:
             take.pop()
     excerpt = "\n\n".join(take)
-    return excerpt, len(take) < len(raw) or excerpt != "\n\n".join(raw)
+    if own_id:
+        excerpt = _scrub(excerpt, own_id)
+    capped = _cap(excerpt, EXCERPT_MAX_CHARS)
+    return capped, capped != excerpt or len(take) < len(raw) or excerpt != "\n\n".join(raw)
 
 
 def _block(own_id: str, label=None, text=None, commands=None) -> PlanBlock:
@@ -276,7 +296,7 @@ def build_top_finding(full, platform: str, version: str, upgrade, data_as_of: Op
         elif cw.status == "none":
             blocks.append(PlanBlock(text=MSG_NO_WORKAROUND))
         else:
-            excerpt, shortened = cisco_excerpt(cw.text)
+            excerpt, shortened = cisco_excerpt(cw.text, cid)
             blocks.append(_block(cid, label=LABEL_CISCO_EXCERPT if shortened else f"Cisco: {cw.status}",
                                  text=excerpt))
             full_text = _link(LINK_FULL_TEXT, advisory.url, cid) if (shortened and advisory) else None

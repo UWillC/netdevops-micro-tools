@@ -265,7 +265,7 @@ def _data_strings(cid, entry):
     if m:
         out |= {pp._scrub(s, cid) for s in _strings(json.loads(m.model_dump_json()))}
         if m.cisco_workaround and m.cisco_workaround.text:
-            out.add(pp._scrub(pp.cisco_excerpt(m.cisco_workaround.text)[0], cid))
+            out.add(pp.cisco_excerpt(m.cisco_workaround.text, cid)[0])
     out |= {pp._scrub(s, cid) for s in _strings(json.loads(entry.model_dump_json()))}
     out |= set(_strings(pp.rollback_data()))
     return out
@@ -513,16 +513,51 @@ def _shown_cisco_texts():
 def test_every_cisco_text_excerpt_is_short_complete_and_without_links():
     seen = 0
     for cid, text in _shown_cisco_texts():
-        excerpt, _ = pp.cisco_excerpt(text)
+        excerpt, _ = pp.cisco_excerpt(text, cid)
         paras = excerpt.split("\n\n")
         assert excerpt and len(paras) <= pp.EXCERPT_MAX_PARAS, cid
+        assert len(excerpt) <= pp.EXCERPT_MAX_CHARS, (cid, len(excerpt))   # @ciso W2, after _scrub
         assert not re.search(r"https?://", excerpt, re.I), cid          # @ciso D2: any link form
         assert not excerpt.endswith(":"), cid                         # PREVIEW-INTRO-01 / @ciso D1
         assert not pp.INTRO_ONLY.match(excerpt), cid
-        flat = re.sub(r"\s+", " ", pp.RAW_LINK.sub("", text))
-        assert all(re.sub(r"\s+", " ", p) in flat for p in paras), cid   # Cisco's words, not ours
+        flat = re.sub(r"\s+", " ", pp._scrub(pp.RAW_LINK.sub("", text), cid))
+        assert all(re.sub(r"\s+", " ", p).rstrip(pp.ELLIPSIS) in flat for p in paras), cid   # Cisco's words
         seen += 1
     assert seen >= 50
+
+
+def test_w2_every_cisco_text_within_the_limit_after_scrub():
+    # @ciso W2 (v0.7.21 review): all 150 files, every status, length measured after _scrub.
+    svc = get_mitigation_service()
+    n = 0
+    for cid in svc.list_available():
+        cw = svc.get_mitigation(cid).mitigation.cisco_workaround
+        if cw and cw.text:
+            assert len(pp.cisco_excerpt(cw.text, cid)[0]) <= pp.EXCERPT_MAX_CHARS, cid
+            n += 1
+    assert n >= 100
+
+
+def test_w2_cve_2026_20127_long_first_paragraph_is_cut_at_a_sentence():
+    text = get_mitigation_service().get_mitigation("CVE-2026-20127").mitigation.cisco_workaround.text
+    first = pp.PARAGRAPH_BREAK.split(text.replace("\r\n", "\n").strip())[0]
+    assert len(first) > pp.EXCERPT_MAX_CHARS            # the case @ciso found (2004 chars)
+    excerpt, shortened = pp.cisco_excerpt(text, "CVE-2026-20127")
+    assert shortened and len(excerpt) <= pp.EXCERPT_MAX_CHARS and excerpt[-1] in ".!?"
+
+
+def test_w2_cap_rules():
+    long_sentences = "Short one. " + "word " * 300
+    assert pp._cap(long_sentences, 900) == "Short one."
+    no_end = "word " * 300
+    out = pp._cap(no_end, 900)
+    assert len(out) <= 900 and out.endswith(pp.ELLIPSIS) and out[:-1].endswith("word")
+    assert pp._cap("x" * 1000, 900) == "x" * 899 + pp.ELLIPSIS
+    assert pp._cap("Fits.", 900) == "Fits."
+    # Scrub before measuring: OTHER_CVE is longer than the id it replaces.
+    text = "A" * 880 + " CVE-2023-20273."
+    excerpt, shortened = pp.cisco_excerpt(text, "CVE-2023-20198")
+    assert shortened and len(excerpt) <= pp.EXCERPT_MAX_CHARS
 
 
 def test_cisco_excerpt_colon_and_intro_take_the_next_paragraph():

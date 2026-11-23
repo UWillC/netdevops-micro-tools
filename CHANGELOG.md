@@ -26,8 +26,11 @@ All notable changes to this project will be documented in this file.
 - **Excerpt of Cisco's text:** the workaround section shows the start of Cisco's text with
   the label "Excerpt from Cisco's advisory" and a "Read Cisco's full text" link to the
   advisory. A first paragraph that ends with a colon or is only "There are no workarounds
-  ..." takes the next paragraph with it (at most two paragraphs and 900 characters); raw
-  links pasted in Cisco's text are removed.
+  ..." takes the next paragraph with it, only while the excerpt stays within 900
+  characters. Every excerpt is at most two paragraphs and 900 characters (counted after
+  other CVE ids are replaced): a longer text is cut at the last full sentence within the
+  limit, or at a word with "…" when there is none. Raw links pasted in Cisco's text are
+  removed.
 - **Upgrade shows the target only:** the target release computed for all findings plus the
   Software Download sentence; per-CVE upgrade notes stay in the full report.
 - **Security review fixes (@ciso P2, P5):** links pass one strict pattern (https,
