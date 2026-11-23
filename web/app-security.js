@@ -823,8 +823,23 @@ function previewCommandsEl(commands) {
   copy.type = "button";
   copy.addEventListener("click", () => {
     const done = () => { copy.textContent = PREVIEW_COPIED; };
+    // Smoke 22.11: without clipboard permission (unfocused page, http, old browser)
+    // writeText rejects and the button used to do nothing. Fallback: select the
+    // commands (so Cmd/Ctrl+C works) and try the legacy copy command.
+    const fallback = () => {
+      try {
+        const sel = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(code);
+        sel.removeAllRanges();
+        sel.addRange(range);
+        if (document.execCommand && document.execCommand("copy")) done();
+      } catch (_) { /* the selection stays for a manual copy */ }
+    };
     if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(commands.join("\n")).then(done, () => {});
+      navigator.clipboard.writeText(commands.join("\n")).then(done, fallback);
+    } else {
+      fallback();
     }
   });
   wrap.appendChild(copy);

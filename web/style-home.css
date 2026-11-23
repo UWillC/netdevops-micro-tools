@@ -911,6 +911,12 @@
 }
 .preview-copy { flex: none; }
 .preview-plan-link { overflow-wrap: anywhere; }
+/* Smoke 22.11: the browser default link blue was unreadable on the dark card. */
+.preview-plan-link,
+.preview-plan-link:visited { color: #60a5fa; text-decoration: underline; }
+.preview-plan-link:hover { color: var(--text); }
+[data-theme="light"] .preview-plan-link,
+[data-theme="light"] .preview-plan-link:visited { color: #1d4ed8; }
 .preview-plan-caution { color: var(--muted); font-size: 0.9rem; margin-top: 14px; }
 .preview-more { font-weight: 600; margin-top: 14px; }
 @media (max-width: 600px) {
