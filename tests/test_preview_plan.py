@@ -194,6 +194,7 @@ def test_ac19a_kev_with_mitigation_file_has_seven_filled_sections(client, kev_in
     # User decision 23.11 (1): first paragraph of Cisco's text + "Read Cisco's full text".
     excerpt, shortened = pp.cisco_excerpt(m.cisco_workaround.text)
     assert shortened and plan["workaround"]["blocks"][0]["text"] == pp._scrub(excerpt, "CVE-2023-20198")
+    assert plan["workaround"]["blocks"][0]["label"] == pp.LABEL_CISCO_EXCERPT == "Excerpt from Cisco's advisory"
     assert plan["workaround"]["links"] == [{"label": pp.LINK_FULL_TEXT, "url": m.cisco_psirt}]
     # User decision 23.11 (3): Upgrade shows the target for all findings, no per-CVE notes.
     assert plan["upgrade"]["blocks"][0] == {"label": pp.TITLES["target"], "text": d["upgrade"]["target"],
@@ -243,7 +244,7 @@ def test_ac19_our_steps_hidden_without_review(ios_xe_cves, monkeypatch):
     full = SimpleNamespace(matched=[ios_xe_cves["CVE-2023-20198"]], coverage_uncertain=[])
     tf = pp.build_top_finding(full, "IOS XE", "17.9.4", None, None, eol=False)
     wk = next(s for s in tf.plan if s.id == "workaround")
-    assert len(wk.blocks) == 1 and wk.blocks[0].label.startswith("Cisco:")
+    assert len(wk.blocks) == 1 and wk.blocks[0].label == pp.LABEL_CISCO_EXCERPT
 
 
 def _strings(obj):
@@ -274,7 +275,7 @@ FIXED = ({v for k, v in vars(pp).items() if k.startswith(("MSG_", "HEADER_")) an
          | set(pp.TITLES.values()) | {"Cisco", "NetDevOps", "Dataset", "Critical", "High",
                                        "Cisco advisory", "CISA alert", pp.LABEL_VULNERABLE_IF,
                                        pp.LABEL_EXPECTED, pp.LABEL_APPLICABILITY,
-                                       pp.LINK_FULL_TEXT} | set(SECTION_IDS))
+                                       pp.LINK_FULL_TEXT, pp.LABEL_CISCO_EXCERPT} | set(SECTION_IDS))
 FORMATTED = [
     re.compile(r"^Data as of \d{4}-\d{2}-\d{2}\.$"),
     re.compile(r"^Cisco: (mitigation|workaround)$"),
@@ -500,18 +501,84 @@ def test_cisco_excerpt_first_paragraph_without_raw_links():
     assert pp.cisco_excerpt(None) == (None, False)
 
 
-def test_every_cisco_text_excerpt_is_one_paragraph_without_links():
+def _shown_cisco_texts():
+    """(cve_id, Cisco text) for every mitigation file whose Cisco text the preview shows."""
     svc = get_mitigation_service()
-    seen = 0
     for cid in svc.list_available():
         cw = svc.get_mitigation(cid).mitigation.cisco_workaround
-        if not cw or not cw.text:
-            continue
-        excerpt, _ = pp.cisco_excerpt(cw.text)
-        assert excerpt and "\n\n" not in excerpt and '["http' not in excerpt, cid
-        assert excerpt in cw.text.replace("\r\n", "\n") or "[" in cw.text, cid
+        if cw and cw.text and cw.status not in ("none", "unknown"):
+            yield cid, cw.text
+
+
+def test_every_cisco_text_excerpt_is_short_complete_and_without_links():
+    seen = 0
+    for cid, text in _shown_cisco_texts():
+        excerpt, _ = pp.cisco_excerpt(text)
+        paras = excerpt.split("\n\n")
+        assert excerpt and len(paras) <= pp.EXCERPT_MAX_PARAS, cid
+        assert not re.search(r"https?://", excerpt, re.I), cid          # @ciso D2: any link form
+        assert not excerpt.endswith(":"), cid                         # PREVIEW-INTRO-01 / @ciso D1
+        assert not pp.INTRO_ONLY.match(excerpt), cid
+        flat = re.sub(r"\s+", " ", pp.RAW_LINK.sub("", text))
+        assert all(re.sub(r"\s+", " ", p) in flat for p in paras), cid   # Cisco's words, not ours
         seen += 1
     assert seen >= 50
+
+
+def test_cisco_excerpt_colon_and_intro_take_the_next_paragraph():
+    assert pp.cisco_excerpt("Do this:\n\nRouter(config)# no x\n\nMore.") == \
+        ("Do this:\n\nRouter(config)# no x", True)
+    assert pp.cisco_excerpt("There are no workarounds that address this vulnerability.\n\n"
+                            "However, disable X.\n\nThird.") == \
+        ("There are no workarounds that address this vulnerability.\n\nHowever, disable X.", True)
+    # Not only the sentence: stays one paragraph.
+    assert pp.cisco_excerpt("There are no workarounds that address this vulnerability. However, "
+                            "disable X.\n\nSecond.")[0].count("\n\n") == 0
+    # At most two paragraphs; a colon left at the end loses its sentence.
+    assert pp.cisco_excerpt("A:\n\nB. Then do this:\n\nC") == ("A:\n\nB.", True)
+    # Character limit: the next paragraph does not fit, the colon sentence goes.
+    long_next = "x " * pp.EXCERPT_MAX_CHARS
+    assert pp.cisco_excerpt(f"Done. Then do this:\n\n{long_next}") == ("Done.", True)
+    # Paragraph that is only a link is skipped (@ciso D3).
+    assert pp.cisco_excerpt('["https://www.cisco.com/x"]\n\nSecond.') == ("Second.", True)
+
+
+@pytest.mark.parametrize("cid,starts,ends", [
+    ("CVE-2023-20187", "Administrators may disable mLRE", "Router#"),
+    ("CVE-2023-20025", "There are no workarounds that address these vulnerabilities. However,",
+     "predefined in the services list."),
+    ("CVE-2023-20198", "There are no workarounds that address these vulnerabilities.\n\n"
+                       "Disabling the HTTP Server feature",
+     "both commands are required to disable the HTTP Server feature."),
+])
+def test_preview_intro_01_real_texts(cid, starts, ends):
+    text = get_mitigation_service().get_mitigation(cid).mitigation.cisco_workaround.text
+    excerpt, shortened = pp.cisco_excerpt(text)
+    assert shortened and excerpt.startswith(starts) and excerpt.endswith(ends), excerpt[-120:]
+    assert len(excerpt) <= pp.EXCERPT_MAX_CHARS
+
+
+def test_d2_no_url_in_preview_json_except_the_links(ios_xe_cves):
+    # @ciso D2: every https?:// in the top finding is one of its own links, on all files.
+    url = re.compile(r"https?://[^\s\"'\])]*", re.I)
+    checked = 0
+    for cid in get_mitigation_service().list_available():
+        entry = ios_xe_cves.get(cid)
+        if entry is None:
+            continue
+        full = SimpleNamespace(matched=[entry], coverage_uncertain=[])
+        tf = pp.build_top_finding(full, "IOS XE", "17.9.4", None, "2026-11-22", eol=False)
+        if tf is None:
+            continue
+        d = json.loads(tf.model_dump_json())
+        links = {l["url"] for sec in d["plan"] for l in sec["links"]}
+        found = set(url.findall(json.dumps(d)))
+        # Allowed: the plan's own (filtered) links, which our "Vulnerable if" texts repeat as
+        # plain text, and placeholders in our verify steps ("https://<WAN-IP>").
+        leaked = {u for u in found if u not in links and not re.match(r"https?://<", u)}
+        assert not leaked, (cid, leaked)
+        checked += 1
+    assert checked > 50
 
 
 @pytest.mark.parametrize("platform,version", [

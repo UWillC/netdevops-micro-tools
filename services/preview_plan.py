@@ -59,12 +59,21 @@ MSG_ROLLBACK_FALLBACK = "Rollback: follow Cisco's upgrade guide for {family}."
 LABEL_OUR_STEPS = "Our steps, checked against Cisco's text on {date}"
 LABEL_OUR_ACL = "Our ACL, checked against Cisco's text on {date}"
 LINK_FULL_TEXT = "Read Cisco's full text"   # user decision 23.11 (1)
+LABEL_CISCO_EXCERPT = "Excerpt from Cisco's advisory"   # user decision 23.11 ("2 tak", PREVIEW-INTRO-01)
 LABEL_APPLICABILITY = "Applicability"
 LABEL_VULNERABLE_IF = "Vulnerable if"
 LABEL_EXPECTED = "Expected"
 # Cisco's texts paste links as ["https://..."]; the preview drops them (the advisory link stays).
 RAW_LINK = re.compile(r'\s*\[\s*"https?://[^"\]]*"\s*\]')
 PARAGRAPH_BREAK = re.compile(r"\n[ \t]*\n")
+# PREVIEW-INTRO-01: a first paragraph that is only Cisco's "no workarounds" sentence, or that
+# ends with a colon ("... do the following:"), takes the next paragraph with it, within limits
+# so the card does not grow back to the full text.
+INTRO_ONLY = re.compile(r"^There (?:are|is) no workarounds? that address(?:es)? "
+                        r"(?:this|these) vulnerabilit(?:y|ies)\.?$", re.I)
+EXCERPT_MAX_PARAS = 2
+EXCERPT_MAX_CHARS = 900
+SENTENCE_END = re.compile(r"[.!?](?=\s)")
 TRAIN_TEXT = {"same": "same train", "change": "train change",
               "migration": "migration to a supported train"}
 
@@ -143,17 +152,42 @@ def _link(label: str, url: Optional[str], own_id: str) -> Optional[PlanLink]:
     return PlanLink(label=label, url=url)
 
 
+def _needs_next(paragraph: str) -> bool:
+    return paragraph.endswith(":") or bool(INTRO_ONLY.match(paragraph))
+
+
+def _drop_colon_sentence(paragraph: str) -> str:
+    """'... received. The following is an example:' -> '... received.' ('' if nothing is left)."""
+    ends = list(SENTENCE_END.finditer(paragraph))
+    return paragraph[:ends[-1].end()].rstrip() if ends else ""
+
+
 def cisco_excerpt(text: Optional[str]):
-    """User decision 23.11 (1): the preview shows only the first paragraph of a Cisco
-    text, without the raw ["https://..."] links; the rest stays behind "Read Cisco's full
-    text". Returns (excerpt, shortened)."""
+    """User decision 23.11 (1): the preview shows the start of a Cisco text, without the
+    raw ["https://..."] links; the rest stays behind "Read Cisco's full text".
+    PREVIEW-INTRO-01 (user 23.11 "2 tak"): a first paragraph that ends with a colon or is
+    only "There are no workarounds ..." takes the next one (at most EXCERPT_MAX_PARAS,
+    EXCERPT_MAX_CHARS). An excerpt that still ends with a colon loses that last sentence.
+    Returns (excerpt, shortened)."""
     if not text:
         return text, False
     full = str(text).replace("\r\n", "\n").replace("\r", "\n").strip()
-    paras = [p.strip() for p in PARAGRAPH_BREAK.split(full) if p.strip()]
-    first = paras[0] if paras else full
-    excerpt = RAW_LINK.sub("", first).strip()
-    return excerpt, len(paras) > 1 or excerpt != first
+    raw = [p.strip() for p in PARAGRAPH_BREAK.split(full) if p.strip()] or [full]
+    paras = [q for q in (RAW_LINK.sub("", p).strip() for p in raw) if q]
+    if not paras:
+        return "", True
+    take = [paras[0]]
+    while (len(take) < min(EXCERPT_MAX_PARAS, len(paras)) and _needs_next(take[-1])
+           and sum(map(len, take)) + len(paras[len(take)]) <= EXCERPT_MAX_CHARS):
+        take.append(paras[len(take)])
+    if take[-1].endswith(":"):
+        cut = _drop_colon_sentence(take[-1])
+        if cut:
+            take[-1] = cut
+        elif len(take) > 1:
+            take.pop()
+    excerpt = "\n\n".join(take)
+    return excerpt, len(take) < len(raw) or excerpt != "\n\n".join(raw)
 
 
 def _block(own_id: str, label=None, text=None, commands=None) -> PlanBlock:
@@ -243,7 +277,8 @@ def build_top_finding(full, platform: str, version: str, upgrade, data_as_of: Op
             blocks.append(PlanBlock(text=MSG_NO_WORKAROUND))
         else:
             excerpt, shortened = cisco_excerpt(cw.text)
-            blocks.append(_block(cid, label=f"Cisco: {cw.status}", text=excerpt))
+            blocks.append(_block(cid, label=LABEL_CISCO_EXCERPT if shortened else f"Cisco: {cw.status}",
+                                 text=excerpt))
             full_text = _link(LINK_FULL_TEXT, advisory.url, cid) if (shortened and advisory) else None
             if full_text:
                 wk_links = [full_text]
