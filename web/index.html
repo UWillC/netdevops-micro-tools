@@ -24,11 +24,11 @@
   <meta name="twitter:description" content="22 live modules: CVE exposure, hardening audit, config drift, hardened Cisco configs. Browser-based, free, no install." />
   <meta name="twitter:image" content="https://netdevops-tools.thebackroom.ai/static/og-card.jpg" />
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
-  <link rel="stylesheet" href="style-base.css?v=0.7.20" />
-  <link rel="stylesheet" href="style-home.css?v=0.7.20" />
-  <link rel="stylesheet" href="style-tools.css?v=0.7.20" />
-  <link rel="stylesheet" href="style-kev.css?v=0.7.20" />
-  <link rel="stylesheet" href="style-acl.css?v=0.7.20" />
+  <link rel="stylesheet" href="style-base.css?v=0.7.21" />
+  <link rel="stylesheet" href="style-home.css?v=0.7.21" />
+  <link rel="stylesheet" href="style-tools.css?v=0.7.21" />
+  <link rel="stylesheet" href="style-kev.css?v=0.7.21" />
+  <link rel="stylesheet" href="style-acl.css?v=0.7.21" />
 
   <!-- Feedback widget -->
   <script async src="https://www.thebackroom.ai/widget.js"></script>
@@ -166,7 +166,7 @@
              lists "cve_preview" (PREVIEW_ENABLED on the server). Copy: draft, @cmo final. -->
         <div class="preview-card" id="preview" hidden>
           <h2>Check your Cisco release</h2>
-          <p class="preview-lead">How many Critical and High advisories hit your release, how many are exploited in the wild, and where to upgrade. No email.</p>
+          <p class="preview-lead">Enter your release. See the one vulnerability to fix first and the plan for it: does it apply, the workaround, the target release, how to verify, how to roll back. No email.</p>
           <form id="preview-form" class="preview-form" novalidate>
             <label for="preview-platform">Platform</label>
             <select id="preview-platform" name="platform" class="form-select">
@@ -180,7 +180,7 @@
             </select>
             <label for="preview-version">Software release</label>
             <input type="text" id="preview-version" name="version" maxlength="64" placeholder="17.9.4a" autocomplete="off" spellcheck="false" />
-            <button type="submit" class="btn-primary" id="preview-submit">Check</button>
+            <button type="submit" class="btn-primary" id="preview-submit">Show the plan</button>
           </form>
           <p class="preview-error" id="preview-error" role="alert"></p>
           <div class="preview-result" id="preview-result" aria-live="polite"></div>
@@ -3424,26 +3424,26 @@ line vty 0 15
   </footer>
 
   <!-- Gate: email gate for pro tools (must load BEFORE core) -->
-  <script src="app-gate.js?v=0.7.20"></script>
+  <script src="app-gate.js?v=0.7.21"></script>
   <!-- Core: theme, tabs, navigation, utilities -->
-  <script src="app-core.js?v=0.7.20"></script>
+  <script src="app-core.js?v=0.7.21"></script>
   <!-- Config Generators: SNMPv3, NTP, AAA, iPerf3 -->
-  <script src="app-config.js?v=0.7.20"></script>
+  <script src="app-config.js?v=0.7.21"></script>
   <!-- Golden Config form -->
-  <script src="app-golden.js?v=0.7.20"></script>
+  <script src="app-golden.js?v=0.7.21"></script>
   <!-- CVE Analyzer -->
-  <script src="app-security.js?v=0.7.20"></script>
+  <script src="app-security.js?v=0.7.21"></script>
   <!-- Profiles, Vuln Widget, Security Score, Export -->
-  <script src="app-profiles.js?v=0.7.20"></script>
+  <script src="app-profiles.js?v=0.7.21"></script>
   <!-- Hints, Tooltips, Golden Config UI, SNMP Multi-Host -->
-  <script src="app-ui.js?v=0.7.20"></script>
+  <script src="app-ui.js?v=0.7.21"></script>
   <!-- Subnet, MTU, Config Parser, CVE Mitigation, Timezone, DTG format, IP Path Tracer -->
-  <script src="app-network.js?v=0.7.20"></script>
+  <script src="app-network.js?v=0.7.21"></script>
   <!-- Threat Feed, Port Auditor -->
-  <script src="app-feeds.js?v=0.7.20"></script>
+  <script src="app-feeds.js?v=0.7.21"></script>
   <!-- KEV Watch (KW-01) -->
-  <script src="app-kev.js?v=0.7.20"></script>
+  <script src="app-kev.js?v=0.7.21"></script>
   <!-- ACL What-If (ACL-01.4) -->
-  <script src="app-acl.js?v=0.7.20"></script>
+  <script src="app-acl.js?v=0.7.21"></script>
 </body>
 </html>

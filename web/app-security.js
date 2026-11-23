@@ -721,9 +721,10 @@ if (cveForm && cveOutput) {
 })();
 
 // -----------------------------
-// PREVIEW-01 "Check your Cisco release" (Home, no email). Counts only: the
-// server sends no CVE ids, so there is nothing more to hide here. Every value
-// is written with textContent, never parsed as HTML. The card stays hidden unless
+// PREVIEW-01 "Check your Cisco release" (Home, no email). Counts, plus (22.11,
+// AC-18/AC-19) the change plan for ONE finding; the server sends no other CVE
+// id, so there is nothing more to hide here. Every value is written with
+// textContent, never parsed as HTML; links only when they are https. The card stays hidden unless
 // /meta/version lists "cve_preview" (PREVIEW_ENABLED on the server).
 // -----------------------------
 const PREVIEW_MAX_VERSION = 64;
@@ -792,6 +793,103 @@ function previewLines(data) {
   return lines;
 }
 
+// Copy v1 (@cmo 22.11, spec section 9): strings 1:1, change them only with a new spec version.
+const PREVIEW_MSG_MORE = (n) => `${n} more Critical/High findings for this release are in the full report.`;
+const PREVIEW_COPY = "Copy commands";
+const PREVIEW_COPIED = "Copied";
+const PREVIEW_PLAN_ORDER = ["applies", "workaround", "target", "upgrade", "verify", "sources", "rollback"];
+const PREVIEW_HEAD_KEV = "Fix this one first: listed by CISA as exploited in the wild";
+const PREVIEW_HEAD_CVSS = "Fix this one first: highest CVSS for this release";
+const PREVIEW_PLAN_CAUTION = "Built from Cisco PSIRT data and steps we checked against Cisco's text. Test in a lab or a maintenance window first.";
+const PREVIEW_MSG_CTA = "See every finding with its fix, KEV ids and export. Free with email.";
+
+function previewLinkEl(link) {
+  const url = link && typeof link.url === "string" ? link.url : "";
+  if (!/^https:\/\//i.test(url)) return null;
+  const a = previewEl("a", "preview-plan-link", link.label || url);
+  a.href = url;
+  a.target = "_blank";
+  a.rel = "noopener noreferrer";
+  return a;
+}
+
+function previewCommandsEl(commands) {
+  const wrap = previewEl("div", "preview-plan-commands");
+  const pre = previewEl("pre", "preview-plan-pre");
+  const code = previewEl("code", null, commands.join("\n"));
+  pre.appendChild(code);
+  wrap.appendChild(pre);
+  const copy = previewEl("button", "btn-secondary preview-copy", PREVIEW_COPY);
+  copy.type = "button";
+  copy.addEventListener("click", () => {
+    const done = () => { copy.textContent = PREVIEW_COPIED; };
+    // Smoke 22.11: without clipboard permission (unfocused page, http, old browser)
+    // writeText rejects and the button used to do nothing. Fallback: select the
+    // commands (so Cmd/Ctrl+C works) and try the legacy copy command.
+    const fallback = () => {
+      try {
+        const sel = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(code);
+        sel.removeAllRanges();
+        sel.addRange(range);
+        if (document.execCommand && document.execCommand("copy")) done();
+      } catch (_) { /* the selection stays for a manual copy */ }
+    };
+    if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(commands.join("\n")).then(done, fallback);
+    } else {
+      fallback();
+    }
+  });
+  wrap.appendChild(copy);
+  return wrap;
+}
+
+// The plan for the one finding (AC-19): 7 sections (3 on EoL), each with its
+// source word next to the heading. Returns a DOM node, or null without a plan.
+function previewPlanEl(data) {
+  const tf = data && data.top_finding;
+  if (!tf || !Array.isArray(tf.plan)) return null;
+  const box = previewEl("div", "preview-plan");
+  // tf.header = "Needs confirmation on your device" (uncertain match only, AC-18).
+  box.appendChild(previewEl("p", "preview-plan-header", tf.header || (tf.kev ? PREVIEW_HEAD_KEV : PREVIEW_HEAD_CVSS)));
+  const head = [tf.cve_id, tf.severity, tf.cvss != null ? `CVSS ${tf.cvss}` : null,
+    tf.kev ? "KEV" : null].filter(Boolean).join(" | ");
+  box.appendChild(previewEl("h3", "preview-plan-title", head));
+  if (tf.title) box.appendChild(previewEl("p", "preview-plan-subtitle", tf.title));
+  for (const sec of tf.plan) {
+    const num = PREVIEW_PLAN_ORDER.indexOf(sec.id) + 1;   // EoL plan keeps 1, 2, 6
+    const h = previewEl("h4", "preview-plan-heading", num > 0 ? `${num}. ${sec.title}` : sec.title);
+    h.appendChild(previewEl("span", "preview-plan-source", sec.source));
+    // User decision 23.11 (1): section 1 stays open under "Fix this one first",
+    // sections 2-7 are folded in a native <details> (no script needed to open them).
+    let s;
+    if (sec.id === PREVIEW_PLAN_ORDER[0]) {
+      s = previewEl("section", "preview-plan-section");
+      s.appendChild(h);
+    } else {
+      s = previewEl("details", "preview-plan-section preview-plan-fold");
+      const sum = previewEl("summary", "preview-plan-summary");
+      sum.appendChild(h);
+      s.appendChild(sum);
+    }
+    for (const b of sec.blocks || []) {
+      if (b.label) s.appendChild(previewEl("p", "preview-plan-label", b.label));
+      if (b.text) s.appendChild(previewEl("p", "preview-plan-text", b.text));
+      if (Array.isArray(b.commands) && b.commands.length) s.appendChild(previewCommandsEl(b.commands.map(String)));
+    }
+    for (const l of sec.links || []) {
+      const a = previewLinkEl(l);
+      if (a) { const p = previewEl("p", "preview-plan-linkrow"); p.appendChild(a); s.appendChild(p); }
+    }
+    box.appendChild(s);
+  }
+  box.appendChild(previewEl("p", "preview-plan-caution", PREVIEW_PLAN_CAUTION));
+  if (data.more_findings > 0) box.appendChild(previewEl("p", "preview-more", PREVIEW_MSG_MORE(data.more_findings)));
+  return box;
+}
+
 (function initPreview() {
   const card = document.getElementById("preview");
   const form = document.getElementById("preview-form");
@@ -822,9 +920,11 @@ function previewLines(data) {
   function render(data, platform, version) {
     result.textContent = "";
     for (const line of previewLines(data)) result.appendChild(previewEl("p", line.cls, line.text));
+    const plan = previewPlanEl(data);
+    if (plan) result.appendChild(plan);
     if (PREVIEW_SHOWN_STATES.includes(data.state)) {
-      // copy: draft, @cmo final
-      const cta = previewEl("button", "btn-primary preview-cta", "See the full report: CVE list, KEV ids, fixes");
+      // copy v1 (@cmo 22.11, spec section 9)
+      const cta = previewEl("button", "btn-primary preview-cta", PREVIEW_MSG_CTA);
       cta.type = "button";
       cta.addEventListener("click", () => {
         if (typeof isGateUnlocked === "function" && isGateUnlocked()) {

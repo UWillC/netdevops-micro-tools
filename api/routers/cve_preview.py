@@ -2,8 +2,10 @@
 PREVIEW-01 "Check your release, no email" (spec 2026-11-20, CEO repo
 projects/netdevops/specs/2026-11-20_podglad-bez-konta.md).
 
-POST /analyze/cve/preview answers with counts only: Critical / High / Medium /
-Low, KEV, the upgrade target with its train flag, and the date of the data. It
+POST /analyze/cve/preview answers with counts: Critical / High / Medium /
+Low, KEV, the upgrade target with its train flag, and the date of the data, plus
+(version of 22.11, AC-18/AC-19) ONE finding with its change plan, built in
+services/preview_plan.py. It
 is a PROJECTION of the full analysis (api.routers.cve.run_analysis), never a
 second engine, so the numbers cannot drift from the report behind the gate
 (AC-5). Everything that lets someone act without the report stays out of the
@@ -43,6 +45,7 @@ from pydantic import BaseModel
 from api.routers import cve as cve_router
 from services import cisco_software_checker as csc
 from services.known_affected import version_is_listed
+from services.preview_plan import TopFinding, build_top_finding
 
 router = APIRouter()
 
@@ -174,6 +177,10 @@ class CVEPreviewResponse(BaseModel):
     format_hint: Optional[str] = None
     data_as_of: Optional[str] = None
     sources: str = SOURCES
+    # AC-18/AC-19 (22.11): one finding with its change plan, and how many other
+    # Critical/High findings stay behind the gate. Nothing else names a CVE (AC-6).
+    top_finding: Optional[TopFinding] = None
+    more_findings: Optional[int] = None
 
 
 def _log(state: str, platform: Optional[str]) -> None:
@@ -322,11 +329,14 @@ def analyze_cve_preview(req: CVEPreviewRequest):
     )
 
     eol = bool(full.eol_status and full.eol_status.get("is_eol"))
+    upgrade = None if eol else project_upgrade(full)
+    top = build_top_finding(full, platform,
+                            bare, upgrade, base["data_as_of"], eol)
+    plan = dict(top_finding=top, more_findings=(crit + high - 1) if top else None)
     if eol:
         _log("eol", platform)
-        return CVEPreviewResponse(state="eol", eol_note=NOTE_EOL, **counts, **base)
+        return CVEPreviewResponse(state="eol", eol_note=NOTE_EOL, **counts, **plan, **base)
 
-    upgrade = project_upgrade(full)
     upgrade_note = None
     if upgrade is None:
         upgrade_note = NOTE_NO_PATH
@@ -339,4 +349,4 @@ def analyze_cve_preview(req: CVEPreviewRequest):
     _log(state, platform)
     return CVEPreviewResponse(
         state=state, upgrade=upgrade, upgrade_note=upgrade_note,
-        note=NOTE_CLEAN if state == "clean" else None, **counts, **base)
+        note=NOTE_CLEAN if state == "clean" else None, **counts, **plan, **base)

@@ -215,9 +215,19 @@ def test_parity_inputs_cover_the_spec_list():
 
 ALLOWED_KEYS = {"state", "interpreted_as", "critical", "high", "medium", "low", "kev",
                 "need_confirmation", "upgrade", "upgrade_note", "eol_note", "note",
-                "format_hint", "data_as_of", "sources"}
+                "format_hint", "data_as_of", "sources", "top_finding", "more_findings"}
 UPGRADE_KEYS = {"source", "target", "train", "critical_high_left", "note"}
 LEAKS = re.compile(r"CVE-\d{4}-\d+|cisco-sa-|cvss|https?://|\bsir\b|due_date|directive", re.I)
+CVE_IDS = re.compile(r"CVE-\d{4}-\d+", re.I)
+
+
+def _outside_top(r):
+    """The answer without its one allowed finding (AC-6, version of 22.11)."""
+    d = r.json()
+    top = d.pop("top_finding", None)
+    ids = {i.upper() for i in CVE_IDS.findall(r.text)}
+    assert ids == ({top["cve_id"].upper()} if top else set()), ids
+    return json.dumps(d)
 
 
 @pytest.mark.parametrize("platform,version", PARITY_INPUTS + [
@@ -229,10 +239,11 @@ def test_no_gated_field_in_the_json(client, openvuln, platform, version):
     assert set(d) == ALLOWED_KEYS
     if d["upgrade"]:
         assert set(d["upgrade"]) == UPGRADE_KEYS
-    assert not LEAKS.search(r.text), LEAKS.search(r.text).group(0)
+    rest = _outside_top(r)
+    assert not LEAKS.search(rest), LEAKS.search(rest).group(0)
     for key in ("matched", "severity_details", "provenance", "remaining", "remaining_ids",
                 "statement", "coverage_uncertain", "bundles", "excluded_not_listed"):
-        assert key not in r.text
+        assert key not in rest
 
 
 def test_free_tools_unchanged():
@@ -319,7 +330,8 @@ def test_not_evaluated_note_is_fixed_text(client, monkeypatch):
 def test_sdwan_every_state_has_no_leak(client, platform, version):
     r = _preview(client, platform, version)
     assert r.status_code in (200, 400)
-    assert not LEAKS.search(r.text), LEAKS.search(r.text).group(0)
+    rest = _outside_top(r) if r.status_code == 200 else r.text
+    assert not LEAKS.search(rest), LEAKS.search(rest).group(0)
 
 
 # ---------------------------------------------------------------- openVuln down (AC-13)
