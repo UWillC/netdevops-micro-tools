@@ -58,10 +58,13 @@ MSG_NO_TARGET = "No upgrade path computed for this release, see the full report.
 MSG_ROLLBACK_FALLBACK = "Rollback: follow Cisco's upgrade guide for {family}."
 LABEL_OUR_STEPS = "Our steps, checked against Cisco's text on {date}"
 LABEL_OUR_ACL = "Our ACL, checked against Cisco's text on {date}"
-LABEL_OUR_NOTES = "Our notes for this CVE only; the target release above is computed for all findings on your release"
+LINK_FULL_TEXT = "Read Cisco's full text"   # user decision 23.11 (1)
 LABEL_APPLICABILITY = "Applicability"
 LABEL_VULNERABLE_IF = "Vulnerable if"
 LABEL_EXPECTED = "Expected"
+# Cisco's texts paste links as ["https://..."]; the preview drops them (the advisory link stays).
+RAW_LINK = re.compile(r'\s*\[\s*"https?://[^"\]]*"\s*\]')
+PARAGRAPH_BREAK = re.compile(r"\n[ \t]*\n")
 TRAIN_TEXT = {"same": "same train", "change": "train change",
               "migration": "migration to a supported train"}
 
@@ -138,6 +141,19 @@ def _link(label: str, url: Optional[str], own_id: str) -> Optional[PlanLink]:
     if any(f"CVE-{a}-{b}" != own_id.upper() for a, b in CVE_LOOSE.findall(url)):
         return None
     return PlanLink(label=label, url=url)
+
+
+def cisco_excerpt(text: Optional[str]):
+    """User decision 23.11 (1): the preview shows only the first paragraph of a Cisco
+    text, without the raw ["https://..."] links; the rest stays behind "Read Cisco's full
+    text". Returns (excerpt, shortened)."""
+    if not text:
+        return text, False
+    full = str(text).replace("\r\n", "\n").replace("\r", "\n").strip()
+    paras = [p.strip() for p in PARAGRAPH_BREAK.split(full) if p.strip()]
+    first = paras[0] if paras else full
+    excerpt = RAW_LINK.sub("", first).strip()
+    return excerpt, len(paras) > 1 or excerpt != first
 
 
 def _block(own_id: str, label=None, text=None, commands=None) -> PlanBlock:
@@ -220,13 +236,17 @@ def build_top_finding(full, platform: str, version: str, upgrade, data_as_of: Op
     # 2. Workaround: Cisco's text 1:1, ours under it only when reviewed.
     if m:
         cw = m.cisco_workaround
-        blocks = []
+        blocks, wk_links = [], adv_links
         if cw is None or cw.status == "unknown":
             blocks.append(PlanBlock(text=MSG_UNKNOWN_WORKAROUND))
         elif cw.status == "none":
             blocks.append(PlanBlock(text=MSG_NO_WORKAROUND))
         else:
-            blocks.append(_block(cid, label=f"Cisco: {cw.status}", text=cw.text))
+            excerpt, shortened = cisco_excerpt(cw.text)
+            blocks.append(_block(cid, label=f"Cisco: {cw.status}", text=excerpt))
+            full_text = _link(LINK_FULL_TEXT, advisory.url, cid) if (shortened and advisory) else None
+            if full_text:
+                wk_links = [full_text]
         if m.steps_reviewed:
             for step in m.workaround_steps:
                 blocks.append(_block(cid, label=LABEL_OUR_STEPS.format(date=m.steps_reviewed),
@@ -237,7 +257,7 @@ def build_top_finding(full, platform: str, version: str, upgrade, data_as_of: Op
                                      commands=m.acl_mitigation.commands))
         # cw.source is the machine-readable CSAF file; people get the advisory page.
         workaround = PlanSection(id="workaround", title=TITLES["workaround"], source="Cisco",
-                                 blocks=blocks, links=adv_links)
+                                 blocks=blocks, links=wk_links)
     else:
         workaround = no_steps("workaround")
 
@@ -267,14 +287,13 @@ def build_top_finding(full, platform: str, version: str, upgrade, data_as_of: Op
                                  source="Cisco" if (upgrade and upgrade.source == "cisco") else "Dataset",
                                  blocks=[PlanBlock(text=(upgrade.note if upgrade and upgrade.note
                                                          else MSG_NO_TARGET))])
-        # 4. Upgrade
-        if m and m.upgrade_path:
-            up = PlanSection(id="upgrade", title=TITLES["upgrade"], source="NetDevOps",
-                             blocks=[_block(cid, label=LABEL_OUR_NOTES, text=m.upgrade_path)],
-                             links=adv_links)
-        else:
-            up = PlanSection(id="upgrade", title=TITLES["upgrade"], source="Cisco",
-                             blocks=[PlanBlock(text=MSG_UPGRADE_LINK)], links=adv_links)
+        # 4. Upgrade. User decision 23.11 (3): only the target computed for all findings;
+        # the per-CVE notes (mitigation file `upgrade_path`) stay in the full report.
+        up_blocks = [PlanBlock(text=MSG_UPGRADE_LINK)]
+        if upgrade is not None and upgrade.target:
+            up_blocks.insert(0, PlanBlock(label=TITLES["target"], text=upgrade.target))
+        up = PlanSection(id="upgrade", title=TITLES["upgrade"], source="Cisco",
+                         blocks=up_blocks, links=adv_links)
         # 5. Verify
         if m:
             verify = PlanSection(id="verify", title=TITLES["verify"], source="NetDevOps", blocks=[

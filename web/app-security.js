@@ -859,11 +859,21 @@ function previewPlanEl(data) {
   box.appendChild(previewEl("h3", "preview-plan-title", head));
   if (tf.title) box.appendChild(previewEl("p", "preview-plan-subtitle", tf.title));
   for (const sec of tf.plan) {
-    const s = previewEl("section", "preview-plan-section");
     const num = PREVIEW_PLAN_ORDER.indexOf(sec.id) + 1;   // EoL plan keeps 1, 2, 6
     const h = previewEl("h4", "preview-plan-heading", num > 0 ? `${num}. ${sec.title}` : sec.title);
     h.appendChild(previewEl("span", "preview-plan-source", sec.source));
-    s.appendChild(h);
+    // User decision 23.11 (1): section 1 stays open under "Fix this one first",
+    // sections 2-7 are folded in a native <details> (no script needed to open them).
+    let s;
+    if (sec.id === PREVIEW_PLAN_ORDER[0]) {
+      s = previewEl("section", "preview-plan-section");
+      s.appendChild(h);
+    } else {
+      s = previewEl("details", "preview-plan-section preview-plan-fold");
+      const sum = previewEl("summary", "preview-plan-summary");
+      sum.appendChild(h);
+      s.appendChild(sum);
+    }
     for (const b of sec.blocks || []) {
       if (b.label) s.appendChild(previewEl("p", "preview-plan-label", b.label));
       if (b.text) s.appendChild(previewEl("p", "preview-plan-text", b.text));

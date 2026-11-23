@@ -79,8 +79,21 @@ def test_ac6_never_more_than_one_id(client, platform, version):
     assert _ids(r.text) == ({top["cve_id"].upper()} if top else set())
 
 
-def test_ac6_sibling_ids_in_cisco_text_are_replaced(ios_xe_cves):
-    # CVE-2023-20273's texts name CVE-2023-20198 (same advisory chain).
+def test_ac6_sibling_ids_in_cisco_text_are_replaced(ios_xe_cves, monkeypatch):
+    # CVE-2023-20273's texts name CVE-2023-20198 (same advisory chain). Since the user
+    # decision 23.11 (1) only the first Cisco paragraph is shown, which for this CVE no
+    # longer names the sibling, so the shown texts get one on purpose.
+    svc = get_mitigation_service()
+    m = svc.get_mitigation("CVE-2023-20273").mitigation
+    cw = m.cisco_workaround.model_copy(update={
+        "text": "Also see CVE-2023-20198 and cve 2023 20199.\r\n\r\nRest names CVE-2023-20200."})
+    m = m.model_copy(update={"cisco_workaround": cw, "detection": m.detection.model_copy(
+        update={"description": m.detection.description + " Chained with CVE-2023-20198."})})
+    real = svc.get_mitigation_for_platform
+
+    def fake(cve_id, platform=None, version=None):
+        return real(cve_id, platform, version).model_copy(update={"mitigation": m})
+    monkeypatch.setattr(svc, "get_mitigation_for_platform", fake)
     entry = ios_xe_cves["CVE-2023-20273"]
     full = SimpleNamespace(matched=[entry], coverage_uncertain=[])
     tf = pp.build_top_finding(full, "IOS XE", "17.9.4", None, "2026-11-22", eol=False)
@@ -178,7 +191,14 @@ def test_ac19a_kev_with_mitigation_file_has_seven_filled_sections(client, kev_in
     assert plan["applies"]["blocks"][1]["text"] == m.detection.vulnerable_if
     assert plan["verify"]["blocks"][0]["commands"] == m.verification.commands
     assert plan["verify"]["blocks"][1]["text"] == m.verification.expected_output
-    assert plan["workaround"]["blocks"][0]["text"] == m.cisco_workaround.text
+    # User decision 23.11 (1): first paragraph of Cisco's text + "Read Cisco's full text".
+    excerpt, shortened = pp.cisco_excerpt(m.cisco_workaround.text)
+    assert shortened and plan["workaround"]["blocks"][0]["text"] == pp._scrub(excerpt, "CVE-2023-20198")
+    assert plan["workaround"]["links"] == [{"label": pp.LINK_FULL_TEXT, "url": m.cisco_psirt}]
+    # User decision 23.11 (3): Upgrade shows the target for all findings, no per-CVE notes.
+    assert plan["upgrade"]["blocks"][0] == {"label": pp.TITLES["target"], "text": d["upgrade"]["target"],
+                                            "commands": []}
+    assert m.upgrade_path and m.upgrade_path not in json.dumps(d)
     assert any(b["label"] and m.steps_reviewed in b["label"] for b in plan["workaround"]["blocks"][1:])
     # Target = the value the counts show (AC-4) and the full report (AC-5).
     assert d["upgrade"]["target"] in plan["target"]["blocks"][0]["text"]
@@ -243,6 +263,8 @@ def _data_strings(cid, entry):
     m = get_mitigation_service().get_mitigation(cid).mitigation
     if m:
         out |= {pp._scrub(s, cid) for s in _strings(json.loads(m.model_dump_json()))}
+        if m.cisco_workaround and m.cisco_workaround.text:
+            out.add(pp._scrub(pp.cisco_excerpt(m.cisco_workaround.text)[0], cid))
     out |= {pp._scrub(s, cid) for s in _strings(json.loads(entry.model_dump_json()))}
     out |= set(_strings(pp.rollback_data()))
     return out
@@ -252,7 +274,7 @@ FIXED = ({v for k, v in vars(pp).items() if k.startswith(("MSG_", "HEADER_")) an
          | set(pp.TITLES.values()) | {"Cisco", "NetDevOps", "Dataset", "Critical", "High",
                                        "Cisco advisory", "CISA alert", pp.LABEL_VULNERABLE_IF,
                                        pp.LABEL_EXPECTED, pp.LABEL_APPLICABILITY,
-                                       pp.LABEL_OUR_NOTES} | set(SECTION_IDS))
+                                       pp.LINK_FULL_TEXT} | set(SECTION_IDS))
 FORMATTED = [
     re.compile(r"^Data as of \d{4}-\d{2}-\d{2}\.$"),
     re.compile(r"^Cisco: (mitigation|workaround)$"),
@@ -278,7 +300,7 @@ def test_ac19d_no_string_from_outside_the_data(client, kev_index, platform, vers
         if s in allowed or any(p.match(s) for p in FORMATTED):
             continue
         up = d.get("upgrade") or {}
-        if up.get("note") == s:
+        if s in (up.get("note"), up.get("target")):
             continue
         if up.get("target") and re.fullmatch(
                 re.escape(up["target"]) + r" \((same train|train change|migration to a supported train)\)\. "
@@ -405,6 +427,12 @@ def test_plan_dom(plan_dom):
     hrefs = [n["href"] for n in nodes if n["tag"] == "a"]
     assert hrefs == ["https://sec.cloudapps.cisco.com/a"]     # javascript: dropped
     assert "3 more Critical/High findings for this release are in the full report." in texts
+    # User decision 23.11 (1): section 1 open, the others folded in <details><summary>.
+    tags = [n["tag"] for n in nodes]
+    assert tags.count("section") == 1 and tags.count("details") == 1 and tags.count("summary") == 1
+    i = tags.index("summary")
+    assert nodes[i - 1]["tag"] == "details" and nodes[i + 1]["text"] == "7. Rollback"
+    assert nodes[tags.index("section") + 1]["text"] == "1. Does this apply to you"
     heads = [n for n in nodes if n["tag"] == "h4"]
     assert [h["text"] for h in heads] == ["1. Does this apply to you", "7. Rollback"]
     assert ("Built from Cisco PSIRT data and steps we checked against Cisco's text. "
@@ -459,3 +487,44 @@ def test_ac6_every_mitigation_file_names_only_its_own_cve(ios_xe_cves):
         found = {re.sub(r"\D", "", m) for m in loose.findall(tf.model_dump_json())}
         assert found <= {re.sub(r"\D", "", cid)}, (cid, found)
     assert checked > 50
+
+
+# ------------------------------------------------------------------ user decisions 23.11
+
+def test_cisco_excerpt_first_paragraph_without_raw_links():
+    text = ('See bug CSCvc12306 ["https://bst.cloudapps.cisco.com/bugsearch/bug/CSCvc12306"]), '
+            'then upgrade.\r\n\r\nSecond paragraph.\r\n\r\nThird.')
+    assert pp.cisco_excerpt(text) == ("See bug CSCvc12306), then upgrade.", True)
+    assert pp.cisco_excerpt("One paragraph only.") == ("One paragraph only.", False)
+    assert pp.cisco_excerpt('One ["https://www.cisco.com/x"] link.') == ("One link.", True)
+    assert pp.cisco_excerpt(None) == (None, False)
+
+
+def test_every_cisco_text_excerpt_is_one_paragraph_without_links():
+    svc = get_mitigation_service()
+    seen = 0
+    for cid in svc.list_available():
+        cw = svc.get_mitigation(cid).mitigation.cisco_workaround
+        if not cw or not cw.text:
+            continue
+        excerpt, _ = pp.cisco_excerpt(cw.text)
+        assert excerpt and "\n\n" not in excerpt and '["http' not in excerpt, cid
+        assert excerpt in cw.text.replace("\r\n", "\n") or "[" in cw.text, cid
+        seen += 1
+    assert seen >= 50
+
+
+@pytest.mark.parametrize("platform,version", [
+    ("IOS XE", "17.9.4"), ("ISE", "3.2 Patch 4"), ("NX-OS", "10.2(6)"), ("IOS", "15.7(3)M5")])
+def test_upgrade_section_has_no_per_cve_notes(client, kev_index, platform, version):
+    kev_index({"CVE-2023-20198": {"date_added": "2023-10-16"}})
+    d = _preview(client, platform, version).json()
+    assert "Our notes" not in json.dumps(d)
+    if d["state"] == "eol":                                   # AC-18: no upgrade section
+        assert "upgrade" not in _plan(d)
+        return
+    up = _plan(d)["upgrade"]
+    assert up["source"] == "Cisco"
+    assert up["blocks"][-1]["text"] == pp.MSG_UPGRADE_LINK
+    if d["upgrade"] and d["upgrade"].get("target"):
+        assert up["blocks"][0]["text"] == d["upgrade"]["target"]

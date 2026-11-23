@@ -887,6 +887,12 @@
 .preview-plan-subtitle { color: var(--muted); }
 .preview-plan-section { margin: 14px 0 0; }
 .preview-plan-heading { margin: 0 0 4px; font-size: 1rem; }
+/* User decision 23.11 (1): sections 2-7 folded in <details>. */
+.preview-plan-fold { border-top: 1px solid var(--border); padding-top: 8px; }
+.preview-plan-summary { cursor: pointer; }
+.preview-plan-summary .preview-plan-heading { display: inline; margin: 0; }
+.preview-plan-fold[open] .preview-plan-summary { margin-bottom: 4px; }
+.preview-plan-fold + .preview-plan-caution { border-top: 1px solid var(--border); padding-top: 10px; }
 .preview-plan-source {
   margin-left: 8px;
   font-size: 0.75rem;
