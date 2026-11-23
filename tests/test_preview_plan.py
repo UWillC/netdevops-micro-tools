@@ -94,7 +94,10 @@ def test_link_filter():
     assert pp._link("x", "https://sec.cloudapps.cisco.com/security/center/x", own)
     assert pp._link("x", "https://www.cisa.gov/known-exploited", own)
     for bad in ["javascript:alert(1)", "http://www.cisco.com/x", "https://evil.example/x",
-                "https://cisco.com.evil.example/x", "https://www.cisa.gov/x?q=CVE-2023-20273", None, 7]:
+                "https://cisco.com.evil.example/x", "https://www.cisa.gov/x?q=CVE-2023-20273", None, 7,
+                "https://evil.com\\@cisco.com/x", "https://evil.com\\.cisco.com/", "https://u:p@www.cisco.com/x",
+                "https://www.cisco.com/x?q=CVE%2D2023%2D20273", "https://www.cisco.com/x cve_2023_20273",
+                "https://www.cisco.com/x?q=cve_2023_20273"]:
         assert pp._link("x", bad, own) is None, bad
 
 
@@ -430,3 +433,29 @@ def test_copy_v1_strings_in_place():
     assert pp.MSG_NO_STEPS == "No reviewed steps for this CVE yet. See the Cisco advisory."
     assert pp.MSG_ROLLBACK_FALLBACK == "Rollback: follow Cisco's upgrade guide for {family}."
     assert "See the full report: CVE list" not in js
+
+
+@pytest.mark.parametrize("spelling", ["CVE-2023-20273", "cve-2023-20273", "CVE 2023 20273",
+                                      "cve_2023_20273", "CVE-2023\u201320273", "CVE2023-20273"])
+def test_ac6_loose_spellings_of_other_ids_are_replaced(spelling):
+    # @ciso P5
+    out = pp._scrub(f"see {spelling} and CVE-2023-20198", "CVE-2023-20198")
+    assert out == f"see {pp.OTHER_CVE} and CVE-2023-20198"
+
+
+def test_ac6_every_mitigation_file_names_only_its_own_cve(ios_xe_cves):
+    # @ciso P5: on the real data, not only on the example.
+    loose = re.compile(r"CVE[\s_\-\u2010-\u2015]*\d{4}[\s_\-\u2010-\u2015]*\d{4,}", re.I)
+    checked = 0
+    for cid in get_mitigation_service().list_available():
+        entry = ios_xe_cves.get(cid)
+        if entry is None:
+            continue
+        full = SimpleNamespace(matched=[entry], coverage_uncertain=[])
+        tf = pp.build_top_finding(full, "IOS XE", "17.9.4", None, "2026-11-22", eol=False)
+        if tf is None:   # Medium/Low record: never a top finding
+            continue
+        checked += 1
+        found = {re.sub(r"\D", "", m) for m in loose.findall(tf.model_dump_json())}
+        assert found <= {re.sub(r"\D", "", cid)}, (cid, found)
+    assert checked > 50

@@ -28,6 +28,12 @@ from services.mitigation_service import get_mitigation_service
 ROLLBACK_FILE = Path(__file__).resolve().parent.parent / "cve_rollback" / "rollback_templates.json"
 
 CVE_ID = re.compile(r"CVE-\d{4}-\d+", re.I)
+# @ciso P5: also catch loose spellings ("CVE 2023 20273", "cve_2023_20273", "CVE-2023–20273").
+CVE_LOOSE = re.compile(r"CVE[\s_\-\u2010-\u2015]*(\d{4})[\s_\-\u2010-\u2015]*(\d{4,})", re.I)
+# @ciso P2: the whole link is checked by one strict pattern (no userinfo, no backslash,
+# no percent-encoding, host = cisco.com / cisa.gov or a subdomain), not by urlparse alone.
+LINK_RE = re.compile(r"^https://(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)*(?:cisco\.com|cisa\.gov)"
+                     r"(?:/[A-Za-z0-9._~!$&'()*+,;=:/?#\-]*)?$", re.I)
 OTHER_CVE = "[another CVE, listed in the full report]"
 # Links we pass on: Cisco and CISA pages over https only.
 LINK_HOSTS = ("cisco.com", "cisa.gov")
@@ -116,19 +122,22 @@ def _scrub(text: Optional[str], own_id: str) -> Optional[str]:
     if text is None:
         return None
     own = own_id.upper()
-    return CVE_ID.sub(lambda m: m.group(0) if m.group(0).upper() == own else OTHER_CVE, str(text))
+    return CVE_LOOSE.sub(lambda m: m.group(0) if f"CVE-{m.group(1)}-{m.group(2)}" == own else OTHER_CVE,
+                         str(text))
 
 
 def _link(label: str, url: Optional[str], own_id: str) -> Optional[PlanLink]:
     if not url or not isinstance(url, str):
         return None
-    p = urlparse(url.strip())
-    host = (p.hostname or "").lower()
-    if p.scheme != "https" or not any(host == h or host.endswith("." + h) for h in LINK_HOSTS):
+    url = url.strip()
+    if not LINK_RE.match(url) or "@" in url or "\\" in url or "%" in url:
         return None
-    if any(m.upper() != own_id.upper() for m in CVE_ID.findall(url)):
+    host = (urlparse(url).hostname or "").lower()
+    if not any(host == h or host.endswith("." + h) for h in LINK_HOSTS):
         return None
-    return PlanLink(label=label, url=url.strip())
+    if any(f"CVE-{a}-{b}" != own_id.upper() for a, b in CVE_LOOSE.findall(url)):
+        return None
+    return PlanLink(label=label, url=url)
 
 
 def _block(own_id: str, label=None, text=None, commands=None) -> PlanBlock:
