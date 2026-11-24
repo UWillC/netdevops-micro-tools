@@ -15,6 +15,9 @@ closed here by default instead of per test.
 """
 
 import datetime
+import ipaddress
+import socket
+import threading
 
 import pytest
 
@@ -98,4 +101,179 @@ def _rate_limit_off(monkeypatch):
     tests/test_rate_limit.py turns it back on for its own tests."""
     from api import rate_limit
     monkeypatch.setattr(rate_limit, "ENABLED", False)
+
+
+# ---------------------------------------------------------------------------
+# TEST-NET-01 (2026-11-24): no test leaves the machine.
+#
+# Before this, only four test files replaced cve_router._fetch_latest_advisories.
+# Every other test that rendered the feed called the real Cisco PSIRT API
+# (id.cisco.com, apix.cisco.com) with the developer's own PSIRT credentials and
+# wrote cache/cisco/latest.json. CI has no credentials, so it never showed there.
+#
+# Three layers:
+#   1. the PSIRT credentials can not be found (file path redirected, env cleared),
+#   2. the known fetchers are replaced by offline stand-ins,
+#   3. Python sockets and name lookups are refused for anything that is not
+#      loopback, for the whole session (installed at import, so collection is
+#      covered too). Tests with a real local server on 127.0.0.1 / ::1 still work.
+#
+# A refused attempt raises NetworkBlockedError (an OSError, so code under test
+# takes its normal "network down" path) AND is recorded; the test that made it
+# fails in teardown with the host it tried, so a leak can not hide behind a
+# broad `except Exception`.
+#
+# Not covered: child processes (node, a second python) do not inherit these
+# patches; the node harnesses in this suite stub fetch themselves.
+# ---------------------------------------------------------------------------
+
+class NetworkBlockedError(OSError):
+    """Raised by the suite-wide guard for a non-loopback connect or lookup."""
+
+
+_LOOPBACK_NAMES = {"localhost", "localhost.localdomain", "ip6-localhost", "ip6-loopback"}
+_network_attempts = []            # [(nodeid, what, target)]
+_current_test = {"nodeid": "<collection>"}
+_attempts_lock = threading.Lock()
+
+
+def _is_local_host(host) -> bool:
+    if host is None:
+        return True
+    if isinstance(host, bytes):
+        host = host.decode("ascii", "replace")
+    host = str(host).strip().strip("[]").split("%", 1)[0].lower()
+    if host in ("", "0.0.0.0", "::") or host in _LOOPBACK_NAMES:
+        return True     # "" / unspecified: bind-style lookups, they stay on this host
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False    # any other name would need a DNS query
+
+
+def _refuse(what: str, target) -> None:
+    with _attempts_lock:
+        _network_attempts.append((_current_test["nodeid"], what, repr(target)))
+    raise NetworkBlockedError(f"TEST-NET-01: network blocked in tests ({what} {target!r})")
+
+
+def _check_address(sock, address, what) -> None:
+    if sock.family == getattr(socket, "AF_UNIX", None):
+        return
+    if isinstance(address, tuple) and address and not _is_local_host(address[0]):
+        _refuse(what, address)
+
+
+_real_connect = socket.socket.connect
+_real_connect_ex = socket.socket.connect_ex
+_real_sendto = socket.socket.sendto
+_real_getaddrinfo = socket.getaddrinfo
+_real_gethostbyname = socket.gethostbyname
+_real_gethostbyname_ex = socket.gethostbyname_ex
+_real_gethostbyaddr = socket.gethostbyaddr
+_real_getnameinfo = socket.getnameinfo
+
+
+def _guarded_connect(self, address):
+    _check_address(self, address, "connect")
+    return _real_connect(self, address)
+
+
+def _guarded_connect_ex(self, address):
+    _check_address(self, address, "connect_ex")
+    return _real_connect_ex(self, address)
+
+
+def _guarded_sendto(self, data, *args):
+    _check_address(self, args[-1] if args else None, "sendto")
+    return _real_sendto(self, data, *args)
+
+
+def _name_guard(what, real):
+    def guarded(host, *args, **kwargs):
+        if not _is_local_host(host):
+            _refuse(what, host)
+        return real(host, *args, **kwargs)
+    guarded.__name__ = f"_guarded_{what}"
+    return guarded
+
+
+def _guarded_getnameinfo(sockaddr, flags):
+    if isinstance(sockaddr, tuple) and sockaddr and not _is_local_host(sockaddr[0]):
+        _refuse("getnameinfo", sockaddr)
+    return _real_getnameinfo(sockaddr, flags)
+
+
+socket.socket.connect = _guarded_connect
+socket.socket.connect_ex = _guarded_connect_ex
+socket.socket.sendto = _guarded_sendto
+socket.getaddrinfo = _name_guard("getaddrinfo", _real_getaddrinfo)
+socket.gethostbyname = _name_guard("gethostbyname", _real_gethostbyname)
+socket.gethostbyname_ex = _name_guard("gethostbyname_ex", _real_gethostbyname_ex)
+socket.gethostbyaddr = _name_guard("gethostbyaddr", _real_gethostbyaddr)
+socket.getnameinfo = _guarded_getnameinfo
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_protocol(item, nextitem):
+    _current_test["nodeid"] = item.nodeid
+    yield
+    _current_test["nodeid"] = "<between tests>"
+
+
+@pytest.fixture
+def network_attempts():
+    """The guard's record, for tests that provoke a refusal on purpose.
+
+    Such a test removes its own entries; anything left fails the test."""
+    return _network_attempts
+
+
+@pytest.fixture(autouse=True)
+def _no_network(request):
+    start = len(_network_attempts)
+    yield
+    with _attempts_lock:
+        mine = [a for a in _network_attempts[start:] if a[0] == request.node.nodeid]
+    if mine:
+        targets = ", ".join(f"{what} {target}" for _, what, target in mine)
+        pytest.fail(f"TEST-NET-01: test tried to reach the network: {targets}", pytrace=False)
+
+
+def pytest_terminal_summary(terminalreporter):
+    if not _network_attempts:
+        return
+    terminalreporter.section("TEST-NET-01: blocked network attempts")
+    for nodeid, what, target in _network_attempts:
+        terminalreporter.write_line(f"{nodeid}: {what} {target}")
+
+
+@pytest.fixture(autouse=True)
+def _psirt_offline(monkeypatch, tmp_path):
+    """No test may read the developer's Cisco PSIRT credentials or call PSIRT.
+
+    The provider finds no credentials (file path redirected to a file that does
+    not exist, env pair removed), so every PSIRT path takes its documented "no
+    credentials" branch. The feed's latest-advisories fetch is replaced by an
+    empty list; tests that need data install their own fake, which wins because
+    it is set later. cisco_software_checker's cached provider is dropped so no
+    instance created before this fixture can carry credentials in.
+    """
+    from api.routers import cve as cve_router
+    from services import cisco_software_checker, cve_sources
+    monkeypatch.setattr(cve_sources, "CISCO_CREDENTIALS_PATH",
+                        str(tmp_path / "no-psirt-credentials.json"))
+    monkeypatch.delenv("CISCO_CLIENT_ID", raising=False)
+    monkeypatch.delenv("CISCO_CLIENT_SECRET", raising=False)
+    monkeypatch.setattr(cisco_software_checker, "_provider", None)
+    monkeypatch.setattr(cve_router, "_fetch_latest_advisories", lambda: [])
+
+
+@pytest.fixture(autouse=True)
+def _whoami_offline(monkeypatch):
+    """/whoami does a PTR lookup of the caller; under TestClient that is a DNS
+    query for "testclient" sent to the developer's resolver (found by the guard,
+    test_beta_activity). Answer as the endpoint does on a miss."""
+    from api.routers import whoami
+    monkeypatch.setattr(whoami, "reverse_dns", lambda ip: "unavailable")
 
