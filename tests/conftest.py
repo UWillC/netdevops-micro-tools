@@ -123,8 +123,17 @@ def _rate_limit_off(monkeypatch):
 # fails in teardown with the host it tried, so a leak can not hide behind a
 # broad `except Exception`.
 #
-# Not covered: child processes (node, a second python) do not inherit these
-# patches; the node harnesses in this suite stub fetch themselves.
+# An attempt that no test can own (collection, between tests, teardown of a
+# module/session fixture after the per-test check) fails the session in
+# pytest_sessionfinish, so CI can not go green over a leak.
+#
+# Not covered (@ciso review 2026-11-24, R3):
+#   - child processes (node, a second python, uvicorn in test_websec_03) do not
+#     inherit these patches; the node harnesses in this suite stub fetch themselves,
+#   - uvloop / libuv: its event loop opens sockets and resolves names in C, past
+#     the socket module (installed, not imported by the code under test),
+#   - a raw `_socket.socket` (the C class, not the socket.socket subclass),
+#   - C extensions with their own network stack (grpc is installed, unused).
 # ---------------------------------------------------------------------------
 
 class NetworkBlockedError(OSError):
@@ -167,6 +176,7 @@ def _check_address(sock, address, what) -> None:
 _real_connect = socket.socket.connect
 _real_connect_ex = socket.socket.connect_ex
 _real_sendto = socket.socket.sendto
+_real_sendmsg = socket.socket.sendmsg
 _real_getaddrinfo = socket.getaddrinfo
 _real_gethostbyname = socket.gethostbyname
 _real_gethostbyname_ex = socket.gethostbyname_ex
@@ -189,6 +199,12 @@ def _guarded_sendto(self, data, *args):
     return _real_sendto(self, data, *args)
 
 
+def _guarded_sendmsg(self, buffers, *args):
+    # sendmsg(buffers[, ancdata[, flags[, address]]]): W1, @ciso 2026-11-24.
+    _check_address(self, args[2] if len(args) >= 3 else None, "sendmsg")
+    return _real_sendmsg(self, buffers, *args)
+
+
 def _name_guard(what, real):
     def guarded(host, *args, **kwargs):
         if not _is_local_host(host):
@@ -207,6 +223,7 @@ def _guarded_getnameinfo(sockaddr, flags):
 socket.socket.connect = _guarded_connect
 socket.socket.connect_ex = _guarded_connect_ex
 socket.socket.sendto = _guarded_sendto
+socket.socket.sendmsg = _guarded_sendmsg
 socket.getaddrinfo = _name_guard("getaddrinfo", _real_getaddrinfo)
 socket.gethostbyname = _name_guard("gethostbyname", _real_gethostbyname)
 socket.gethostbyname_ex = _name_guard("gethostbyname_ex", _real_gethostbyname_ex)
@@ -248,6 +265,15 @@ def pytest_terminal_summary(terminalreporter):
         terminalreporter.write_line(f"{nodeid}: {what} {target}")
 
 
+def pytest_sessionfinish(session, exitstatus):
+    """W2, @ciso 2026-11-24: a leftover attempt fails the run.
+
+    Tests that provoke a refusal on purpose remove their own entries, so
+    anything still here is a leak, including ones no per-test check could see."""
+    if _network_attempts and session.exitstatus == pytest.ExitCode.OK:
+        session.exitstatus = pytest.ExitCode.TESTS_FAILED
+
+
 @pytest.fixture(autouse=True)
 def _psirt_offline(monkeypatch, tmp_path):
     """No test may read the developer's Cisco PSIRT credentials or call PSIRT.
@@ -265,6 +291,13 @@ def _psirt_offline(monkeypatch, tmp_path):
                         str(tmp_path / "no-psirt-credentials.json"))
     monkeypatch.delenv("CISCO_CLIENT_ID", raising=False)
     monkeypatch.delenv("CISCO_CLIENT_SECRET", raising=False)
+    # R2, @ciso 2026-11-24: the developer's shell must not switch providers on
+    # or hand a real MailerLite key to the suite (subscribe reads it at import).
+    for var in ("CVE_CISCO_PSIRT", "CVE_NVD_ENRICH", "CVE_TENABLE_PROVIDER",
+                "MAILERLITE_API_KEY"):
+        monkeypatch.delenv(var, raising=False)
+    from api.routers import subscribe
+    monkeypatch.setattr(subscribe, "MAILERLITE_API_KEY", "")
     monkeypatch.setattr(cisco_software_checker, "_provider", None)
     monkeypatch.setattr(cve_router, "_fetch_latest_advisories", lambda: [])
 
