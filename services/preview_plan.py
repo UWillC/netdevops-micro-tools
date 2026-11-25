@@ -296,8 +296,9 @@ def build_top_finding(full, platform: str, version: str, upgrade, data_as_of: Op
         if sid == "applies":
             return PlanSection(id=sid, title=TITLES[sid], source="Cisco",
                                blocks=[PlanBlock(text=MSG_NO_STEPS)], links=adv_links)
+        # @ciso R2 24.11: no link in section 1 = do not send people there.
         return PlanSection(id=sid, title=TITLES[sid], source="Cisco",
-                           blocks=[PlanBlock(text=MSG_NO_STEPS_SEE_1)])
+                           blocks=[PlanBlock(text=MSG_NO_STEPS_SEE_1 if adv_links else MSG_NO_STEPS)])
 
     # 1. Does this apply to you
     if m:

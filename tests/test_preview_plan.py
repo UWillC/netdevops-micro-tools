@@ -711,3 +711,26 @@ def test_upgrade_section_has_no_per_cve_notes(client, kev_index, platform, versi
     assert up["blocks"][-1]["text"] == pp.MSG_UPGRADE_LINK
     if d["upgrade"] and d["upgrade"].get("target"):
         assert up["blocks"][0]["text"] == d["upgrade"]["target"]
+
+
+def test_r2_no_advisory_link_no_pointer_to_section_1():
+    # @ciso R2 24.11: advisory link dropped by the _link filter + no mitigation file.
+    cid = "CVE-2099-0001"
+    assert not get_mitigation_service().get_mitigation(cid).found
+    top = SimpleNamespace(cve_id=cid, cvss_score=9.8, kev=None, published="2099-01-01",
+                          severity="critical", title="Test", advisory_url="https://evil.example/x")
+    full = SimpleNamespace(matched=[top], coverage_uncertain=[])
+    tf = pp.build_top_finding(full, "NX-OS", "10.2(6)", None, None, eol=False)
+    plan = {s.id: s for s in tf.plan}
+    assert all(not s.links or s.id == "rollback" for s in tf.plan)
+    for sid in ("applies", "workaround", "verify"):
+        assert [b.text for b in plan[sid].blocks] == [pp.MSG_NO_STEPS], sid
+        assert "linked in section 1" not in json.dumps(plan[sid].model_dump()), sid
+
+
+def test_w1_preview_pre_fits_on_mobile():
+    # @ciso W1 24.11: in the 600 px column layout <pre> must stretch to the card width.
+    css = (Path(__file__).resolve().parent.parent / "web" / "style-home.css").read_text()
+    blocks = re.findall(r"@media \(max-width: 600px\) \{((?:[^{}]*\{[^{}]*\})*[^{}]*)\}", css)
+    assert any(re.search(r"\.preview-plan-pre\s*\{[^}]*(align-self:\s*stretch|max-width:\s*100%)", b)
+               for b in blocks)

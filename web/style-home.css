@@ -927,6 +927,9 @@
 .preview-more { font-weight: 600; margin-top: 14px; }
 @media (max-width: 600px) {
   .preview-plan-commands { flex-direction: column; }
+  /* @ciso W1 24.11: in a column, flex-start sizes <pre> to its longest line; stretch keeps it
+     inside the card so overflow-x scrolls inside the block. */
+  .preview-plan-pre { align-self: stretch; }
   .preview-form { grid-template-columns: 1fr; }
   .preview-form button { grid-column: 1; }
 }
