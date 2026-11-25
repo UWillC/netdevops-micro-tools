@@ -51,6 +51,9 @@ TITLES = {
 }
 HEADER_UNCERTAIN = "Needs confirmation on your device"
 MSG_NO_STEPS = "No reviewed steps for this CVE yet. See the Cisco advisory."  # copy v1 (@cmo 22.11)
+# AC-19 v24.11 (copy section 9, draft @pm, @cmo final): sections 2 and 5 of the fallback,
+# no link; the advisory link stays in sections 1, 4 and 6 only.
+MSG_NO_STEPS_SEE_1 = "No reviewed steps for this CVE yet. Use the Cisco advisory linked in section 1."
 MSG_NO_WORKAROUND = "Cisco lists no workaround for this vulnerability. Upgrade is the fix."
 MSG_UNKNOWN_WORKAROUND = "Cisco's workaround section is not in our data yet, see the Cisco advisory."
 MSG_UPGRADE_LINK = "Get the target release from Cisco Software Download; the advisory lists the fixed releases."
@@ -113,11 +116,17 @@ class TopFinding(BaseModel):
 
 # ------------------------------------------------------------------ AC-18
 
+def is_severe(c) -> bool:
+    return (c.severity or "").lower() in SEVERE
+
+
 def pick_top(matched, uncertain_ids) -> Optional[object]:
-    """The one finding the preview explains: (1) in KEV, (2) highest CVSS,
-    (3) newest advisory publication, (4) CVE id ascending. Uncertain matches
-    compete only when there is no certain Critical/High one."""
-    severe = [c for c in matched or [] if (c.severity or "").lower() in SEVERE]
+    """The one finding the preview explains. AC-18 v24.11: the pool is every Critical/High
+    match plus every KEV match of any severity (the KEV warning and the plan must name the
+    same vulnerability); Medium/Low without KEV never compete. Order: (1) in KEV,
+    (2) highest CVSS, (3) newest advisory publication, (4) CVE id ascending. Uncertain
+    matches compete only when there is no certain one in the pool."""
+    severe = [c for c in matched or [] if is_severe(c) or c.kev is not None]
     if not severe:
         return None
     uncertain = set(uncertain_ids or [])
@@ -128,6 +137,15 @@ def pick_top(matched, uncertain_ids) -> Optional[object]:
     pool = sorted(pool, key=lambda c: (c.published or "")[:10], reverse=True)
     pool = sorted(pool, key=lambda c: (c.kev is None, -(c.cvss_score if c.cvss_score is not None else -1.0)))
     return pool[0]
+
+
+def count_more_findings(critical: int, high: int, top) -> Optional[int]:
+    """AC-18 v24.11: Critical/High findings other than `top_finding` (a Medium/Low KEV
+    pick is not one of them). None without a plan."""
+    if top is None:
+        return None
+    n = critical + high - (1 if top.severity.lower() in SEVERE else 0)
+    return max(n, 0)
 
 
 # ------------------------------------------------------------------ AC-6 scrubbing
@@ -274,8 +292,13 @@ def build_top_finding(full, platform: str, version: str, upgrade, data_as_of: Op
     adv_links = [advisory] if advisory else []
 
     def no_steps(sid: str) -> PlanSection:
+        # AC-19 v24.11: the advisory link only in section 1 (plus 4 and 6), not 5 times.
+        if sid == "applies":
+            return PlanSection(id=sid, title=TITLES[sid], source="Cisco",
+                               blocks=[PlanBlock(text=MSG_NO_STEPS)], links=adv_links)
+        # @ciso R2 24.11: no link in section 1 = do not send people there.
         return PlanSection(id=sid, title=TITLES[sid], source="Cisco",
-                           blocks=[PlanBlock(text=MSG_NO_STEPS)], links=adv_links)
+                           blocks=[PlanBlock(text=MSG_NO_STEPS_SEE_1 if adv_links else MSG_NO_STEPS)])
 
     # 1. Does this apply to you
     if m:

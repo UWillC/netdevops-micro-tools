@@ -45,7 +45,7 @@ from pydantic import BaseModel
 from api.routers import cve as cve_router
 from services import cisco_software_checker as csc
 from services.known_affected import version_is_listed
-from services.preview_plan import TopFinding, build_top_finding
+from services.preview_plan import TopFinding, build_top_finding, count_more_findings
 
 router = APIRouter()
 
@@ -332,7 +332,7 @@ def analyze_cve_preview(req: CVEPreviewRequest):
     upgrade = None if eol else project_upgrade(full)
     top = build_top_finding(full, platform,
                             bare, upgrade, base["data_as_of"], eol)
-    plan = dict(top_finding=top, more_findings=(crit + high - 1) if top else None)
+    plan = dict(top_finding=top, more_findings=count_more_findings(crit, high, top))
     if eol:
         _log("eol", platform)
         return CVEPreviewResponse(state="eol", eol_note=NOTE_EOL, **counts, **plan, **base)
