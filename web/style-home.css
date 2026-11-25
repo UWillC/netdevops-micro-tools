@@ -883,11 +883,16 @@
 .preview-lead { margin: 0 0 14px; color: var(--muted); }
 .preview-form {
   display: grid;
-  grid-template-columns: auto 1fr;
+  /* PREVIEW-NARROW-01: minmax(0, 1fr), not 1fr (= minmax(auto, 1fr)): the longest platform
+     option ("...Controller (vSmart)") gave the select a 324 px minimum, so the form was
+     361 px wide at 320-360 px screens. */
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 8px 12px;
   align-items: center;
   max-width: 560px;
 }
+.preview-form select,
+.preview-form input { min-width: 0; max-width: 100%; }
 .preview-form button { grid-column: 2; justify-self: start; }
 .preview-error { color: var(--danger); min-height: 1.2em; margin: 10px 0 0; }
 .preview-result p { margin: 6px 0; }
@@ -946,6 +951,6 @@
   /* @ciso W1 24.11: in a column, flex-start sizes <pre> to its longest line; stretch keeps it
      inside the card so overflow-x scrolls inside the block. */
   .preview-plan-pre { align-self: stretch; }
-  .preview-form { grid-template-columns: 1fr; }
+  .preview-form { grid-template-columns: minmax(0, 1fr); }
   .preview-form button { grid-column: 1; }
 }
