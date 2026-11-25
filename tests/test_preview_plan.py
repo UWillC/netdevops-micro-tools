@@ -150,10 +150,79 @@ def test_ac18_certain_beats_uncertain_kev():
 
 
 def test_ac18_medium_low_never_picked_and_clean_has_no_plan(client, monkeypatch):
+    # T4 (AC-18 v24.11): Medium/Low WITHOUT KEV never picked; clean without KEV = no plan.
+    assert pp.pick_top([_cve("CVE-2025-0001", 6.0, severity="medium"),
+                        _cve("CVE-2025-0002", 3.1, severity="low")], []) is None
+    hi = _cve("CVE-2025-0003", 7.0)
+    assert pp.pick_top([_cve("CVE-2025-0001", 6.9, severity="medium"), hi], []) is hi
     monkeypatch.setattr(pv, "release_listed", lambda engine, version: True)
-    assert pp.pick_top([_cve("CVE-2025-0001", 6.0, kev=True, severity="medium")], []) is None
     d = _preview(client, "IOS XE", "17.15.4a").json()
-    assert d["state"] == "clean" and d["top_finding"] is None and d["more_findings"] is None
+    assert d["state"] == "clean" and d["kev"] == 0
+    assert d["top_finding"] is None and d["more_findings"] is None
+
+
+# ------------------------------------------------------------------ AC-18 v24.11 (spec section 10, 24.11)
+
+def test_t2_kev_medium_beats_critical_without_kev():
+    crit = _cve("CVE-2025-0001", 9.8, severity="critical")
+    kev_med = _cve("CVE-2025-0002", 6.0, kev=True, severity="medium")
+    assert pp.pick_top([crit, kev_med], []) is kev_med
+
+
+def test_t3_kev_medium_vs_kev_high_cvss_decides():
+    kev_med = _cve("CVE-2025-0001", 6.0, kev=True, severity="medium")
+    kev_high = _cve("CVE-2025-0002", 8.6, kev=True, severity="high")
+    assert pp.pick_top([kev_med, kev_high], []) is kev_high
+
+
+def test_t6_certain_high_beats_uncertain_kev_medium():
+    high = _cve("CVE-2025-0001", 7.5)
+    kev_med = _cve("CVE-2025-0002", 6.0, kev=True, severity="medium")
+    assert pp.pick_top([kev_med, high], ["CVE-2025-0002"]) is high
+
+
+def test_more_findings_counts_only_other_critical_high():
+    top = lambda sev: SimpleNamespace(severity=sev)
+    assert pp.count_more_findings(2, 3, None) is None
+    assert pp.count_more_findings(2, 3, top("Critical")) == 4
+    assert pp.count_more_findings(2, 3, top("Medium")) == 5
+    assert pp.count_more_findings(0, 0, top("Low")) == 0
+    assert pp.count_more_findings(0, 1, top("High")) == 0
+
+
+NXOS_KEV = "CVE-2024-20399"
+
+
+def test_t1_t7_nxos_kev_medium_is_the_plan(client, kev_index):
+    kev_index({NXOS_KEV: {"date_added": "2024-07-02"}})
+    r = _preview(client, "NX-OS", "10.2(6)")
+    d = r.json()
+    tf = d["top_finding"]
+    assert d["state"] == "findings" and d["kev"] == 1
+    assert (tf["cve_id"], tf["kev"], tf["severity"]) == (NXOS_KEV, True, "Medium")
+    assert tf["header"] is None   # UI shows the KEV header ("Fix this one first: listed by CISA ...")
+    assert d["more_findings"] == d["critical"] + d["high"]
+    # T7 (AC-6): exactly one CVE id in the whole JSON.
+    assert _ids(r.text) == {NXOS_KEV}
+
+
+def test_t5_clean_with_kev_medium_has_a_plan(client, kev_index, monkeypatch):
+    kev_index({NXOS_KEV: {"date_added": "2024-07-02"}})
+    real = cve_router.run_analysis
+
+    def only_medium(req, **kw):
+        full = real(req, **kw)
+        keep = [c for c in full.matched if c.cve_id == NXOS_KEV]
+        assert keep, "fixture: NX-OS 10.2(6) must match CVE-2024-20399"
+        full.matched = keep
+        full.summary = dict(full.summary or {}, critical=0, high=0, medium=1, low=0)
+        return full
+
+    monkeypatch.setattr(cve_router, "run_analysis", only_medium)
+    d = _preview(client, "NX-OS", "10.2(6)").json()
+    assert d["state"] == "clean" and d["critical"] == 0 and d["high"] == 0 and d["kev"] == 1
+    assert d["top_finding"]["cve_id"] == NXOS_KEV and d["top_finding"]["kev"] is True
+    assert d["more_findings"] == 0
 
 
 def test_ac18_eol_plan_has_sections_1_2_6_only(client):
@@ -207,14 +276,24 @@ def test_ac19a_kev_with_mitigation_file_has_seven_filled_sections(client, kev_in
     assert any(l["url"] == m.cisa_alert for l in plan["sources"]["links"])
 
 
-def test_ac19b_no_mitigation_file_says_so(client):
-    d = _preview(client, "ISE", "3.2 Patch 4").json()
+@pytest.mark.parametrize("platform,version", [("ISE", "3.2 Patch 4"), ("NX-OS", "10.2(6)")])
+def test_ac19b_no_mitigation_file_says_so(client, kev_index, platform, version):
+    # T8 (AC-19 v24.11): advisory link in sections 1, 4 and 6 only; 2 and 5 text only.
+    kev_index({NXOS_KEV: {"date_added": "2024-07-02"}})
+    d = _preview(client, platform, version).json()
     cid = d["top_finding"]["cve_id"]
     assert not get_mitigation_service().get_mitigation(cid).found
     plan = _plan(d)
-    for sid in ("applies", "workaround", "verify"):
-        assert plan[sid]["blocks"] == [{"label": None, "text": pp.MSG_NO_STEPS, "commands": []}]
-        assert plan[sid]["links"] and plan[sid]["links"][0]["url"].startswith("https://")
+    assert plan["applies"]["blocks"] == [{"label": None, "text": pp.MSG_NO_STEPS, "commands": []}]
+    adv = plan["applies"]["links"]
+    assert len(adv) == 1 and adv[0]["label"] == "Cisco advisory" and adv[0]["url"].startswith("https://")
+    for sid in ("upgrade", "sources"):
+        assert adv[0] in plan[sid]["links"], sid
+    for sid in ("workaround", "verify"):
+        assert plan[sid]["blocks"] == [{"label": None, "text": pp.MSG_NO_STEPS_SEE_1, "commands": []}]
+        assert plan[sid]["links"] == [], sid
+    shown = [l for s in d["top_finding"]["plan"] for l in s["links"] if l["url"] == adv[0]["url"]]
+    assert len(shown) == 3
     for sid in ("target", "upgrade", "sources", "rollback"):
         assert _has_content(plan[sid]) or plan[sid]["links"], sid
 
@@ -272,7 +351,7 @@ def _data_strings(cid, entry):
 
 
 FIXED = ({v for k, v in vars(pp).items() if k.startswith(("MSG_", "HEADER_")) and isinstance(v, str)}
-         | set(pp.TITLES.values()) | {"Cisco", "NetDevOps", "Dataset", "Critical", "High",
+         | set(pp.TITLES.values()) | {"Cisco", "NetDevOps", "Dataset", "Critical", "High", "Medium", "Low",
                                        "Cisco advisory", "CISA alert", pp.LABEL_VULNERABLE_IF,
                                        pp.LABEL_EXPECTED, pp.LABEL_APPLICABILITY,
                                        pp.LINK_FULL_TEXT, pp.LABEL_CISCO_EXCERPT} | set(SECTION_IDS))
@@ -460,6 +539,8 @@ def test_copy_v1_strings_in_place():
               "Actively exploited: upgrade now.", "Actively exploited: replace this hardware now."]:
         assert s in js, s
     assert pp.MSG_NO_STEPS == "No reviewed steps for this CVE yet. See the Cisco advisory."
+    # T9: AC-19 v24.11, fallback text of sections 2 and 5 (copy section 9, draft @pm).
+    assert pp.MSG_NO_STEPS_SEE_1 == "No reviewed steps for this CVE yet. Use the Cisco advisory linked in section 1."
     assert pp.MSG_ROLLBACK_FALLBACK == "Rollback: follow Cisco's upgrade guide for {family}."
     assert "See the full report: CVE list" not in js
 
