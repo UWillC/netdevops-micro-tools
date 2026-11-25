@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.7.23] – 2026-11-25 (Preview form fits a 320 px phone screen, flag still OFF)
+
+### Home
+- **"Check your Cisco release" form fits narrow phones:** with the preview turned on, the
+  platform list was as wide as its longest name ("Cisco Catalyst SD-WAN Controller (vSmart)"),
+  so on a 320-360 px screen the page scrolled sideways. The form column can now shrink and the
+  list and the release field stay inside the card. Measured with every section of the plan
+  open: page width 362 -> 320 px at 320 px, 361 -> 360 px at 360 px; 390 px and desktop unchanged.
+  The preview itself stays behind its flag (OFF) in this release.
+
+### Tests
+- `tests/test_preview_narrow_01.py`: the form column and its fields may shrink below their content width.
+
 ## [v0.7.22] – 2026-11-24 (Home fits a phone screen; preview pick includes KEV of any severity, flag still OFF)
 
 ### Home
