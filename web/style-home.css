@@ -527,6 +527,22 @@
   .cisco-advisories-desc {
     display: none;
   }
+  /* HOME-OVF-01 — every chip in a row is flex-shrink:0, so a row with a KEV
+     badge was ~150 px wider than a 390 px screen and pushed the whole page
+     sideways. On narrow screens the row wraps instead: score, CVE, date and
+     severity stay on the first line, the KEV badge moves to a line of its own. */
+  .cisco-advisories-item {
+    flex-wrap: wrap;
+    row-gap: 4px;
+    min-width: 0;
+  }
+  .cisco-advisories-date {
+    margin-left: auto;
+    min-width: 0;
+  }
+  .cisco-advisories-kev {
+    order: 1;
+  }
   /* The KEV badge survives on mobile; the provenance chip is the one that
      goes, because a deadline matters more than where the row came from. */
   .cisco-advisories-src,
@@ -927,6 +943,9 @@
 .preview-more { font-weight: 600; margin-top: 14px; }
 @media (max-width: 600px) {
   .preview-plan-commands { flex-direction: column; }
+  /* @ciso W1 24.11: in a column, flex-start sizes <pre> to its longest line; stretch keeps it
+     inside the card so overflow-x scrolls inside the block. */
+  .preview-plan-pre { align-self: stretch; }
   .preview-form { grid-template-columns: 1fr; }
   .preview-form button { grid-column: 1; }
 }

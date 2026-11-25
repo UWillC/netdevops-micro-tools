@@ -4,6 +4,40 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.7.22] – 2026-11-24 (Home fits a phone screen; preview pick includes KEV of any severity, flag still OFF)
+
+### Home
+- **Cisco advisories list fits a 390 px screen:** a row with a KEV badge was wider than a
+  phone screen, so the whole Home page scrolled sideways. Below 768 px the row now wraps:
+  score, CVE, date and severity stay on the first line, the KEV badge moves to its own line.
+  Desktop is unchanged.
+
+### Platform
+- **Flag still OFF, nothing changes for users:** the changes below sit behind
+  `PREVIEW_ENABLED`, which stays unset in production. The preview endpoint keeps answering
+  404 and the home page card stays hidden.
+- **KEV of any severity in the preview pick:** the one finding with a change plan is now
+  chosen from Critical/High matches plus KEV matches of any severity (order unchanged: in
+  KEV first, then highest CVSS, newest advisory, CVE id). Medium/Low without KEV is never
+  picked, and a certain match beats an uncertain one. With no Critical/High but a KEV
+  match, the answer stays clean and carries the plan for that KEV. The "N more" count
+  covers Critical/High findings other than the pick.
+- **Advisory link without a mitigation file:** the Cisco advisory link appears in sections
+  1, 4 and 6 only; sections 2 and 5 say there are no reviewed steps yet and point to the
+  advisory in section 1 (or to "the Cisco advisory" when that link does not pass the link
+  filter).
+- **Security review fix (@ciso W1):** long command lines in the plan scroll inside their
+  block instead of leaving the card on narrow screens.
+
+### Tests
+- New `tests/test_home_ovf_01.py`: the narrow-screen rules for the advisories row.
+- `tests/test_preview_plan.py`: the KEV pick rules, the "N more" count, the clean + KEV case,
+  the fallback links per section and the two review fixes.
+- The test suite never leaves the machine: every outbound connection and name lookup
+  other than loopback is refused and fails the test that made it; Cisco PSIRT credentials
+  and the latest-advisories fetch are stubbed (`tests/conftest.py`,
+  `tests/test_net_01_offline_guard.py`).
+
 ## [v0.7.21] – 2026-11-23 (Release check without email: change plan for one finding, flag still OFF)
 
 ### Platform
