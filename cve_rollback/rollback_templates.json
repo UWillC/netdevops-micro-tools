@@ -1,5 +1,5 @@
 {
-  "_about": "PREVIEW-01 AC-19 section 7 (T14). Rollback per platform family. Every entry names the Cisco page it comes from; every command is copied character for character from that page (checked 2026-11-22 by @cto, reviewed by @ciso). An entry without commands is the fallback: 'Rollback: follow Cisco's upgrade guide for <family>' plus the link. Never add a command that is not printed on the cited page.",
+  "_about": "PREVIEW-01 AC-19 section 7 (T14). Rollback per platform family. Every entry names the Cisco page it comes from; every command is copied character for character from that page (checked 2026-11-22 by @cto, reviewed by @ciso). An entry without commands is the fallback: 'Rollback: follow Cisco's upgrade guide for <family>' plus the link. Never add a command that is not printed on the cited page. 2026-11-27 (@cto, @ciso P1/P4): the nx-os incompatibility step is copied from the cited page, Downgrade step 3 (Cisco's example image nxos.9.2.1.bin); the install all command is the same for upgrade and downgrade. ios-xe-install says the cited guide covers Catalyst 9000.",
   "checked": "2026-11-22",
   "families": [
     {
@@ -10,7 +10,7 @@
       "source_title": "Upgrade Guide for Catalyst 9000 Switches (Cisco), sections Install Abort and Roll Back Install Mode",
       "steps": [
         {
-          "text": "Before install commit: abort the upgrade. The device reloads into the previous version.",
+          "text": "Cisco's guide cited here covers Catalyst 9000 switches; for other IOS XE platforms, see their own upgrade guide. Before install commit: abort the upgrade. The device reloads into the previous version.",
           "commands": ["install abort"]
         },
         {
@@ -42,6 +42,10 @@
       "source": "https://www.cisco.com/c/en/us/td/docs/dcn/nx-os/nexus9000/105x/upgrade/cisco-nexus-9000-series-nx-os-software-upgrade-and-downgrade-guide-105x/m-upgrade-or-downgrade-the-cisco-nexus-9000-series-nx-os-software.html",
       "source_title": "Cisco Nexus 9000 Series NX-OS Software Upgrade and Downgrade Guide, Release 10.5(x), Downgrade to an earlier software release",
       "steps": [
+        {
+          "text": "Before the downgrade, run Cisco's incompatibility check for the older image (software, then hardware) and disable any features Cisco reports as incompatible. nxos.9.2.1.bin is the image in Cisco's example; use the file name of your previous image.",
+          "commands": ["show incompatibility-all nxos bootflash:nxos.9.2.1.bin", "show install all impact nxos bootflash:nxos.9.2.1.bin"]
+        },
         {
           "text": "Rollback on NX-OS is a downgrade, and it is disruptive. Cisco: the only supported method is the install all command. Save the configuration first, then install the previous image and watch the status.",
           "commands": ["copy running-config startup-config", "install all nxos bootflash:filename", "show install all status", "show version"]

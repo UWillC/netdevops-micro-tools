@@ -4,6 +4,40 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.7.24] – 2026-11-27 (Preview pre-flag fixes: rollback steps, KEV on unknown releases, openVuln budget; flag still OFF)
+
+### Platform
+- **Flag still OFF, nothing changes for users:** everything below sits behind
+  `PREVIEW_ENABLED`, which stays unset in production.
+- **Intro sentences (PREVIEW-INTRO-02):** a first paragraph that only says "There is a
+  workaround that addresses this vulnerability." (and its plural / "and a mitigation"
+  forms) takes the next paragraph with it, within the same 2 paragraphs and 900 characters.
+- **NX-OS rollback (@ciso P1):** a first step runs Cisco's incompatibility check for the
+  older image (`show incompatibility-all nxos bootflash:...`, `show install all impact nxos
+  bootflash:...`), copied from Cisco's Nexus 9000 downgrade procedure, step 3.
+- **IOS XE rollback (@ciso P4):** the install-mode steps say the cited Cisco guide covers
+  Catalyst 9000 switches; other IOS XE platforms follow their own upgrade guide.
+- **Unknown release with a KEV match (@ciso R1):** a release outside Cisco's Known Affected
+  lists, with no answer from Cisco and no Critical/High match, was "NOT EVALUATED" even when
+  a CISA KEV advisory matched. It now shows the KEV plan (AC-18: clean + KEV -> plan). A
+  release Cisco says it does not know stays "NOT EVALUATED".
+- **openVuln budget for the preview (AC-16):** 60 -> 20 uncached queries per hour (10 per
+  minute unchanged), so the preview can use at most 9.6% of Cisco's published daily quota
+  (5000/day).
+- **openVuln 429 (@ciso W11):** a 429 from Cisco no longer counts as an outage. It pauses
+  live queries for Cisco's `Retry-After` (2 s without the header, 1-5 s), instead of
+  turning the Cisco path off for 10 minutes for everyone, the full analyzer included. The
+  preview budget also gets a per-second window (4/s, under Cisco's 5/s), so parallel
+  previews alone do not trigger the 429.
+
+### Tests
+- `tests/test_preview_01.py` (@ciso W11): 429 with and without `Retry-After` -> short pause,
+  no `_failed_at`, Cisco asked again after the pause; a pause spends no preview budget;
+  the full analyzer keeps the Cisco path after a preview 429; 5 `take()` in one second -> 4.
+- `tests/test_preview_plan.py`: INTRO-02 cases; 3 R1 cases (KEV Medium -> plan, no KEV ->
+  unknown, Cisco 404 -> unknown).
+- `tests/test_preview_01.py`: default budget matches the quota rule.
+
 ## [v0.7.23] – 2026-11-25 (Preview form fits a 320 px phone screen, flag still OFF)
 
 ### Home

@@ -225,6 +225,60 @@ def test_t5_clean_with_kev_medium_has_a_plan(client, kev_index, monkeypatch):
     assert d["more_findings"] == 0
 
 
+def _only_nxos_kev_medium(monkeypatch):
+    real = cve_router.run_analysis
+
+    def only_medium(req, **kw):
+        full = real(req, **kw)
+        keep = [c for c in full.matched if c.cve_id == NXOS_KEV]
+        assert keep, "fixture: NX-OS 10.2(6) must match CVE-2024-20399"
+        full.matched = keep
+        full.summary = dict(full.summary or {}, critical=0, high=0, medium=1, low=0)
+        return full
+
+    monkeypatch.setattr(cve_router, "run_analysis", only_medium)
+
+
+def test_r1_unlisted_release_no_cisco_answer_kev_medium_gets_the_plan(client, kev_index,
+                                                                        monkeypatch):
+    # @ciso R1 (24.11) + AC-18 v24.11 "clean + KEV -> plan": a release outside the
+    # Known Affected lists, Cisco silent (release_known -> None), 0 Critical/High but a
+    # KEV Medium match is not hidden behind "unknown".
+    kev_index({NXOS_KEV: {"date_added": "2024-07-02"}})
+    _only_nxos_kev_medium(monkeypatch)
+    monkeypatch.setattr(pv, "release_listed", lambda engine, version: False)
+    monkeypatch.setattr(pv.csc, "release_known", lambda *a, **kw: None)
+    r = _preview(client, "NX-OS", "10.2(6)")
+    d = r.json()
+    assert d["state"] == "clean" and d["critical"] == 0 and d["high"] == 0 and d["kev"] == 1
+    assert d["top_finding"]["cve_id"] == NXOS_KEV and d["top_finding"]["kev"] is True
+    assert d["more_findings"] == 0
+    assert _ids(r.text) == {NXOS_KEV}
+
+
+def test_r1_unlisted_release_no_cisco_answer_without_kev_stays_unknown(client, kev_index,
+                                                                        monkeypatch):
+    kev_index({})
+    _only_nxos_kev_medium(monkeypatch)
+    monkeypatch.setattr(pv, "release_listed", lambda engine, version: False)
+    monkeypatch.setattr(pv.csc, "release_known", lambda *a, **kw: None)
+    d = _preview(client, "NX-OS", "10.2(6)").json()
+    assert d["state"] == "unknown" and "could not be confirmed" in d["note"]
+    assert d["kev"] is None and d["top_finding"] is None
+
+
+def test_r1_unlisted_release_cisco_says_404_with_kev_stays_unknown(client, kev_index,
+                                                                    monkeypatch):
+    # Cisco answering "no such release" still wins over any local match (AC-11).
+    kev_index({NXOS_KEV: {"date_added": "2024-07-02"}})
+    _only_nxos_kev_medium(monkeypatch)
+    monkeypatch.setattr(pv, "release_listed", lambda engine, version: False)
+    monkeypatch.setattr(cve_router, "_openvuln_ostype", lambda platform, version: "nxos")
+    monkeypatch.setattr(pv.csc, "release_known", lambda *a, **kw: False)
+    d = _preview(client, "NX-OS", "10.2(6)").json()
+    assert d["state"] == "unknown"
+
+
 def test_ac18_eol_plan_has_sections_1_2_6_only(client):
     d = _preview(client, "IOS", "15.7(3)M5").json()
     assert d["state"] == "eol" and d["upgrade"] is None
@@ -591,6 +645,12 @@ def _shown_cisco_texts():
             yield cid, cw.text
 
 
+def _intro_next_is_colon_only(text):
+    paras = [q for q in (pp.RAW_LINK.sub("", p).strip() for p in
+             pp.PARAGRAPH_BREAK.split(text.replace("\r\n", "\n").strip())) if q]
+    return len(paras) > 1 and paras[1].endswith(":") and not pp._drop_colon_sentence(paras[1])
+
+
 def test_every_cisco_text_excerpt_is_short_complete_and_without_links():
     seen = 0
     for cid, text in _shown_cisco_texts():
@@ -600,7 +660,8 @@ def test_every_cisco_text_excerpt_is_short_complete_and_without_links():
         assert len(excerpt) <= pp.EXCERPT_MAX_CHARS, (cid, len(excerpt))   # @ciso W2, after _scrub
         assert not re.search(r"https?://", excerpt, re.I), cid          # @ciso D2: any link form
         assert not excerpt.endswith(":"), cid                         # PREVIEW-INTRO-01 / @ciso D1
-        assert not pp.INTRO_ONLY.match(excerpt), cid
+        if pp.INTRO_ONLY.match(excerpt):   # PREVIEW-INTRO-02: only when the next paragraph
+            assert _intro_next_is_colon_only(text), cid   # is a lone colon sentence (2-para limit)
         flat = re.sub(r"\s+", " ", pp._scrub(pp.RAW_LINK.sub("", text), cid))
         assert all(re.sub(r"\s+", " ", p).rstrip(pp.ELLIPSIS) in flat for p in paras), cid   # Cisco's words
         seen += 1
@@ -672,6 +733,53 @@ def test_preview_intro_01_real_texts(cid, starts, ends):
     excerpt, shortened = pp.cisco_excerpt(text)
     assert shortened and excerpt.startswith(starts) and excerpt.endswith(ends), excerpt[-120:]
     assert len(excerpt) <= pp.EXCERPT_MAX_CHARS
+
+
+@pytest.mark.parametrize("sentence", [
+    "There is a workaround that addresses this vulnerability.",
+    "There is a workaround and a mitigation that address this vulnerability.",
+    "There are workarounds that address this vulnerability.",
+    "There are workarounds that address these vulnerabilities.",
+    "There are no workarounds that address these vulnerabilities.",
+])
+def test_preview_intro_02_intro_sentences_take_the_next_paragraph(sentence):
+    # PREVIEW-INTRO-02 (user 23.11 "3 tak"): same rule as "There are no workarounds ...".
+    assert pp.cisco_excerpt(f"{sentence}\n\nDisable X.\n\nThird.") == \
+        (f"{sentence}\n\nDisable X.", True)
+
+
+@pytest.mark.parametrize("text", [
+    "There is a workaround that addresses this vulnerability: Add an IPv4 ACL.",  # CVE-2024-20510
+    "There is a workaround that addresses this vulnerability. Disable IKEv1 fragmentation.",
+    "There are no workarounds that address this vulnerability. However, there is a mitigation.",
+    "There is a workaround that addresses this issue.",
+])
+def test_preview_intro_02_not_only_the_intro_sentence(text):
+    assert not pp.INTRO_ONLY.match(text)
+    assert pp.cisco_excerpt(f"{text}\n\nSecond.")[0] == text
+
+
+@pytest.mark.parametrize("cid,second", [
+    ("CVE-2024-20316", "Manage ACLs directly on the device CLI"),
+    ("CVE-2024-20373", "There is no support for extended IPv4 ACLs against SNMP."),
+    ("CVE-2024-20291", "After performing configuration changes to port channel member ports"),
+    ("CVE-2023-20186", "As a workaround for this vulnerability, enable privilege level 0"),
+])
+def test_preview_intro_02_real_texts(cid, second):
+    text = get_mitigation_service().get_mitigation(cid).mitigation.cisco_workaround.text
+    excerpt, shortened = pp.cisco_excerpt(text, cid)
+    first, nxt = excerpt.split("\n\n")
+    assert shortened and pp.INTRO_ONLY.match(first) and nxt.startswith(second), excerpt
+    assert len(excerpt) <= pp.EXCERPT_MAX_CHARS
+
+
+@pytest.mark.parametrize("cid", ["CVE-2024-20309", "CVE-2025-20151", "CVE-2025-20221"])
+def test_preview_intro_02_colon_paragraph_after_intro_is_dropped(cid):
+    # Intro + a lone "... as shown in the following example:" paragraph: the 2-paragraph
+    # limit leaves no room for the example, the colon sentence goes (@ciso D1), the intro stays.
+    text = get_mitigation_service().get_mitigation(cid).mitigation.cisco_workaround.text
+    excerpt, shortened = pp.cisco_excerpt(text, cid)
+    assert shortened and pp.INTRO_ONLY.match(excerpt) and _intro_next_is_colon_only(text)
 
 
 def test_d2_no_url_in_preview_json_except_the_links(ios_xe_cves):

@@ -19,13 +19,15 @@ not stop the walk: the next release is queried, and if the advisory is still
 listed there with no fix, the path says so instead of naming a target.
 
 Network: every call has a timeout, results are cached for 6 h, a failure is
-cached for 10 min, and CISCO_CHECKER_OFFLINE=1 (set suite-wide in tests)
+cached for 10 min (a 429 only pauses for Cisco's Retry-After, at most 5 s),
+and CISCO_CHECKER_OFFLINE=1 (set suite-wide in tests)
 turns the lookup off. Offline or failed = None, and the report keeps the
 dataset-only answer.
 """
 
 from __future__ import annotations
 
+import math
 import os
 import time
 import urllib.parse
@@ -35,21 +37,30 @@ API_BASE = "https://apix.cisco.com/security/advisories/v2/OSType"
 SOURCE = "Cisco PSIRT openVuln API, per-release query"
 CACHE_TTL = 6 * 3600
 FAILURE_TTL = 10 * 60
+# @ciso W11 (27.11): openVuln answers 429 over 5/s, 30/min (developer.cisco.com/docs/psirt:
+# "Expect to backoff for 1 - 2 seconds"). A 429 is not an outage, so it pauses live
+# queries for Retry-After seconds (2 s without the header, ceiling 5 s) instead of
+# setting _failed_at for FAILURE_TTL, which took the Cisco path away from the full
+# analyzer for 10 minutes.
+RATE_LIMIT_BACKOFF = 2.0
+RATE_LIMIT_BACKOFF_MAX = 5.0
 MAX_STEPS = 4
 TIME_BUDGET = 12.0   # seconds for the whole walk; the analyzer waits on it
 SEVERE = ("Critical", "High")
 
 _cache: Dict[Tuple[str, str], Tuple[float, List[dict]]] = {}
 _failed_at: Optional[float] = None
+_backoff_until: float = 0.0
 _provider = None
 
 Fetch = Callable[[str, str], Optional[List[dict]]]
 
 
 def reset_for_tests() -> None:
-    global _failed_at
+    global _failed_at, _backoff_until
     _cache.clear()
     _failed_at = None
+    _backoff_until = 0.0
 
 
 UNKNOWN_RELEASE = "unknown-release"   # openVuln 404: Cisco has no data for it
@@ -61,8 +72,28 @@ GATE_CLOSED = "gate-closed"
 LiveGate = Callable[[], bool]
 
 
+class RateLimited:
+    """openVuln 429: wait `seconds`, then ask again. Never cached, never _failed_at."""
+
+    __slots__ = ("seconds",)
+
+    def __init__(self, seconds: float = RATE_LIMIT_BACKOFF):
+        self.seconds = seconds
+
+
+def _retry_after(value) -> float:
+    """Seconds from a Retry-After header, clamped to [1, RATE_LIMIT_BACKOFF_MAX]."""
+    try:
+        seconds = float(value)
+    except (TypeError, ValueError):   # missing, or an HTTP-date: Cisco's 1-2 s advice
+        return RATE_LIMIT_BACKOFF
+    if not math.isfinite(seconds):
+        return RATE_LIMIT_BACKOFF
+    return min(max(seconds, 1.0), RATE_LIMIT_BACKOFF_MAX)
+
+
 def _live_fetch(ostype: str, release: str):
-    """Advisories for one release; UNKNOWN_RELEASE on 404; None on failure."""
+    """Advisories for one release; UNKNOWN_RELEASE on 404; RateLimited on 429; None on failure."""
     global _provider
     import json
     import urllib.error
@@ -80,6 +111,8 @@ def _live_fetch(ostype: str, release: str):
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
+        if e.code == 429:
+            return RateLimited(_retry_after(e.headers.get("Retry-After") if e.headers else None))
         return UNKNOWN_RELEASE if e.code == 404 else None
     except Exception:
         return None
@@ -90,16 +123,23 @@ def _live_fetch(ostype: str, release: str):
 
 def _advisories(ostype: str, release: str, fetch: Fetch,
                 live_gate: Optional[LiveGate] = None):
-    global _failed_at
+    global _failed_at, _backoff_until
     key = (ostype, release)
     hit = _cache.get(key)
     if hit and time.time() - hit[0] < CACHE_TTL:
         return hit[1]
     if _failed_at and time.time() - _failed_at < FAILURE_TTL:
         return None
+    if time.time() < _backoff_until:   # Cisco asked to wait (429); costs no budget
+        return None
     if live_gate is not None and not live_gate():
         return GATE_CLOSED
     result = fetch(ostype, release)
+    if isinstance(result, RateLimited):
+        seconds = min(max(result.seconds, 0.0), RATE_LIMIT_BACKOFF_MAX)
+        _backoff_until = max(_backoff_until, time.time() + seconds)
+        print(f"INFO openvuln rate_limited backoff={seconds:g}s")
+        return None
     if result is None:
         _failed_at = time.time()
         return None

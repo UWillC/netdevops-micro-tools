@@ -20,7 +20,7 @@ the openVuln quota. Hence:
   - per-IP 5/min + 30/h in api/rate_limit.py PATH_LIMITS (AC-14);
   - input rejected before the engine: platform from the analyzer's list,
     release <= 64 characters with a digit and a narrow character set (AC-3/9/10/15);
-  - a global budget of uncached openVuln queries (10/min, 60/h), independent of IP
+  - a global budget of uncached openVuln queries (10/min, 20/h), independent of IP
     (AC-16). Over budget the preview still answers, with the dataset's own
     upgrade check and "Cisco check unavailable right now" (AC-13).
 
@@ -99,7 +99,14 @@ SEVERE = ("Critical", "High")
 # AC-16: uncached openVuln QUERIES started from the preview, all callers together
 # (@ciso W2: one pass is up to 4 queries, so the budget counts queries), with a
 # per-minute sub-limit so a burst cannot spend the hour at once.
-OPENVULN_CAP = ((10, 60), (60, 60 * 60))
+# Cisco's default quota per application (developer.cisco.com/docs/psirt,
+# "Browsing, sorting, filtering and rate limits", read 2026-11-27): 5/s, 30/min,
+# 5000/day, no hourly figure. 20/h = at most 480/day = 9.6% of the daily quota
+# (AC-16, <= 10%). 10/min stays: one walk is up to 4 queries plus release_known.
+# @ciso W11: 4/s keeps parallel previews under Cisco's 5/s, so the preview alone does
+# not trigger a 429 (4, not 3: one walk of 4 uncached queries must still fit a second;
+# a 429 itself only pauses for Retry-After, see cisco_software_checker).
+OPENVULN_CAP = ((4, 1), (10, 60), (20, 60 * 60))
 
 
 def enabled() -> bool:
@@ -306,12 +313,15 @@ def analyze_cve_preview(req: CVEPreviewRequest):
 
     s = full.summary or {}
     crit, high = int(s.get("critical", 0)), int(s.get("high", 0))
+    kev = sum(1 for c in full.matched if c.kev is not None)
 
     # AC-11: a release nobody knows is NOT EVALUATED, never 0 / 0.
+    # AC-18 v24.11 (@ciso R1): a KEV match of any severity counts too, so
+    # "clean + KEV" gets its plan instead of hiding behind "unknown".
     ostype = cve_router._openvuln_ostype(eff_platform, bare)
     if engine is not None and not release_listed(engine, bare):
         cisco_known = csc.release_known(ostype, bare, live_gate=gate) if ostype else None
-        if cisco_known is False or (cisco_known is None and crit + high == 0):
+        if cisco_known is False or (cisco_known is None and crit + high + kev == 0):
             _log("unknown", platform)
             return CVEPreviewResponse(
                 state="unknown",
@@ -322,7 +332,7 @@ def analyze_cve_preview(req: CVEPreviewRequest):
     counts = dict(
         critical=crit, high=high,
         medium=int(s.get("medium", 0)), low=int(s.get("low", 0)),
-        kev=sum(1 for c in full.matched if c.kev is not None),
+        kev=kev,
         need_confirmation=sum(1 for c in full.matched
                               if c.cve_id in uncertain
                               and (c.severity or "").lower() in ("critical", "high")),

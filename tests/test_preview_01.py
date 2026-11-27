@@ -482,7 +482,101 @@ def test_budget_windows():
 
 
 def test_default_budget():
-    assert pv.OPENVULN_CAP == ((10, 60), (60, 3600))
+    # AC-16 vs Cisco's published default quota (5/s, 30/min, 5000/day, read 27.11):
+    # the hourly cap over a day stays <= 10% of the daily quota.
+    assert pv.OPENVULN_CAP == ((4, 1), (10, 60), (20, 3600))
+    assert max(n for n, w in pv.OPENVULN_CAP if w == 3600) * 24 <= 5000 * 0.10
+    assert max(n for n, w in pv.OPENVULN_CAP if w == 1) < 5      # Cisco 5/s
+
+
+# ---------------------------------------------------------------- openVuln 429 (@ciso W11)
+
+def test_default_budget_has_a_per_second_window():
+    c = Clock()
+    b = pv.OpenVulnBudget(clock=c)
+    assert [b.take() for _ in range(5)] == [True, True, True, True, False]
+    c.t += 1.01
+    assert b.take()
+
+
+class _Headers(dict):
+    def get(self, k, default=None):
+        return super().get(k, default)
+
+
+def _http_429(monkeypatch, retry_after=None):
+    import urllib.error
+    import urllib.request
+
+    class Provider:
+        def _get_token(self):
+            return "t"
+
+    headers = _Headers({"Retry-After": retry_after} if retry_after is not None else {})
+
+    def urlopen(req, timeout=None):
+        raise urllib.error.HTTPError(req.full_url, 429, "Too Many Requests", headers, None)
+
+    monkeypatch.setattr(csc, "_provider", Provider())
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen)
+
+
+@pytest.mark.parametrize("header,seconds", [("1", 1.0), ("3", 3.0), ("120", 5.0), ("0", 1.0),
+                                            (None, 2.0), ("Wed, 21 Oct 2026 07:28:00 GMT", 2.0),
+                                            ("nan", 2.0), ("inf", 2.0)])
+def test_live_fetch_maps_429_to_a_short_backoff(monkeypatch, header, seconds):
+    _http_429(monkeypatch, header)
+    r = csc._live_fetch("iosxe", "17.9.4")
+    assert isinstance(r, csc.RateLimited) and r.seconds == seconds
+
+
+@pytest.mark.parametrize("header,wait", [("3", 3.0), (None, 2.0), ("600", 5.0)])
+def test_429_pauses_briefly_and_never_sets_failed_at(monkeypatch, capsys, header, wait):
+    _http_429(monkeypatch, header)
+    now = [5000.0]
+    monkeypatch.setattr(csc.time, "time", lambda: now[0])
+    assert csc._advisories("iosxe", "17.9.4", csc._live_fetch) is None
+    assert csc._failed_at is None                       # no 10-minute lockout
+    assert csc._backoff_until == 5000.0 + wait <= 5000.0 + csc.RATE_LIMIT_BACKOFF_MAX
+    assert "INFO openvuln rate_limited" in capsys.readouterr().out
+    fake = FakeOpenVuln()
+    now[0] += wait - 0.1                                # still inside the pause:
+    assert csc._advisories("iosxe", "17.9.4", fake) is None
+    assert fake.calls == []                             # no query, no budget spent
+    now[0] += 0.2                                       # pause over: Cisco is asked again
+    assert csc._advisories("iosxe", "17.9.4", fake) == OPENVULN["17.9.4"]
+    assert fake.calls == [("iosxe", "17.9.4")]
+
+
+def test_429_during_backoff_costs_no_preview_budget(monkeypatch):
+    now = [5000.0]
+    monkeypatch.setattr(csc.time, "time", lambda: now[0])
+    csc._advisories("iosxe", "17.9.4", lambda o, r: csc.RateLimited())
+    b = pv.OpenVulnBudget(cap=((1, 3600),))
+    monkeypatch.setattr(pv, "budget", b)
+    gate = pv._RequestGate()
+    assert csc._advisories("iosxe", "17.6.3", FakeOpenVuln(), live_gate=gate) is None
+    assert not gate.denied and b.take()                 # the unit is still there
+
+
+def test_full_analyzer_keeps_cisco_path_after_a_preview_429(client, monkeypatch):
+    # @ciso W11: a 429 hit by the preview must not take the Cisco path from testers
+    fake = FakeOpenVuln()
+    calls = {"n": 0}
+
+    def flaky(ostype, release):
+        calls["n"] += 1
+        return csc.RateLimited(1.0) if calls["n"] == 1 else fake(ostype, release)
+
+    monkeypatch.delenv("CISCO_CHECKER_OFFLINE", raising=False)
+    monkeypatch.setattr(csc, "_live_fetch", flaky)
+    now = [5000.0]
+    monkeypatch.setattr(csc.time, "time", lambda: now[0])
+    d = _preview(client, "IOS XE", "17.9.4").json()
+    assert d["upgrade"]["source"] == "dataset" and csc._failed_at is None
+    now[0] += 1.5
+    full = client.post("/analyze/cve", json={"platform": "IOS XE", "version": "17.6.3"}).json()
+    assert full["cisco_upgrade_path"] is not None
 
 
 def test_422_no_echo_ignores_the_host_header(client):
