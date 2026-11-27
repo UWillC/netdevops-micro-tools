@@ -225,6 +225,60 @@ def test_t5_clean_with_kev_medium_has_a_plan(client, kev_index, monkeypatch):
     assert d["more_findings"] == 0
 
 
+def _only_nxos_kev_medium(monkeypatch):
+    real = cve_router.run_analysis
+
+    def only_medium(req, **kw):
+        full = real(req, **kw)
+        keep = [c for c in full.matched if c.cve_id == NXOS_KEV]
+        assert keep, "fixture: NX-OS 10.2(6) must match CVE-2024-20399"
+        full.matched = keep
+        full.summary = dict(full.summary or {}, critical=0, high=0, medium=1, low=0)
+        return full
+
+    monkeypatch.setattr(cve_router, "run_analysis", only_medium)
+
+
+def test_r1_unlisted_release_no_cisco_answer_kev_medium_gets_the_plan(client, kev_index,
+                                                                        monkeypatch):
+    # @ciso R1 (24.11) + AC-18 v24.11 "clean + KEV -> plan": a release outside the
+    # Known Affected lists, Cisco silent (release_known -> None), 0 Critical/High but a
+    # KEV Medium match is not hidden behind "unknown".
+    kev_index({NXOS_KEV: {"date_added": "2024-07-02"}})
+    _only_nxos_kev_medium(monkeypatch)
+    monkeypatch.setattr(pv, "release_listed", lambda engine, version: False)
+    monkeypatch.setattr(pv.csc, "release_known", lambda *a, **kw: None)
+    r = _preview(client, "NX-OS", "10.2(6)")
+    d = r.json()
+    assert d["state"] == "clean" and d["critical"] == 0 and d["high"] == 0 and d["kev"] == 1
+    assert d["top_finding"]["cve_id"] == NXOS_KEV and d["top_finding"]["kev"] is True
+    assert d["more_findings"] == 0
+    assert _ids(r.text) == {NXOS_KEV}
+
+
+def test_r1_unlisted_release_no_cisco_answer_without_kev_stays_unknown(client, kev_index,
+                                                                        monkeypatch):
+    kev_index({})
+    _only_nxos_kev_medium(monkeypatch)
+    monkeypatch.setattr(pv, "release_listed", lambda engine, version: False)
+    monkeypatch.setattr(pv.csc, "release_known", lambda *a, **kw: None)
+    d = _preview(client, "NX-OS", "10.2(6)").json()
+    assert d["state"] == "unknown" and "could not be confirmed" in d["note"]
+    assert d["kev"] is None and d["top_finding"] is None
+
+
+def test_r1_unlisted_release_cisco_says_404_with_kev_stays_unknown(client, kev_index,
+                                                                    monkeypatch):
+    # Cisco answering "no such release" still wins over any local match (AC-11).
+    kev_index({NXOS_KEV: {"date_added": "2024-07-02"}})
+    _only_nxos_kev_medium(monkeypatch)
+    monkeypatch.setattr(pv, "release_listed", lambda engine, version: False)
+    monkeypatch.setattr(cve_router, "_openvuln_ostype", lambda platform, version: "nxos")
+    monkeypatch.setattr(pv.csc, "release_known", lambda *a, **kw: False)
+    d = _preview(client, "NX-OS", "10.2(6)").json()
+    assert d["state"] == "unknown"
+
+
 def test_ac18_eol_plan_has_sections_1_2_6_only(client):
     d = _preview(client, "IOS", "15.7(3)M5").json()
     assert d["state"] == "eol" and d["upgrade"] is None

@@ -306,12 +306,15 @@ def analyze_cve_preview(req: CVEPreviewRequest):
 
     s = full.summary or {}
     crit, high = int(s.get("critical", 0)), int(s.get("high", 0))
+    kev = sum(1 for c in full.matched if c.kev is not None)
 
     # AC-11: a release nobody knows is NOT EVALUATED, never 0 / 0.
+    # AC-18 v24.11 (@ciso R1): a KEV match of any severity counts too, so
+    # "clean + KEV" gets its plan instead of hiding behind "unknown".
     ostype = cve_router._openvuln_ostype(eff_platform, bare)
     if engine is not None and not release_listed(engine, bare):
         cisco_known = csc.release_known(ostype, bare, live_gate=gate) if ostype else None
-        if cisco_known is False or (cisco_known is None and crit + high == 0):
+        if cisco_known is False or (cisco_known is None and crit + high + kev == 0):
             _log("unknown", platform)
             return CVEPreviewResponse(
                 state="unknown",
@@ -322,7 +325,7 @@ def analyze_cve_preview(req: CVEPreviewRequest):
     counts = dict(
         critical=crit, high=high,
         medium=int(s.get("medium", 0)), low=int(s.get("low", 0)),
-        kev=sum(1 for c in full.matched if c.kev is not None),
+        kev=kev,
         need_confirmation=sum(1 for c in full.matched
                               if c.cve_id in uncertain
                               and (c.severity or "").lower() in ("critical", "high")),
