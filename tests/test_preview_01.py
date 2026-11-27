@@ -482,7 +482,10 @@ def test_budget_windows():
 
 
 def test_default_budget():
-    assert pv.OPENVULN_CAP == ((10, 60), (60, 3600))
+    # AC-16 vs Cisco's published default quota (5/s, 30/min, 5000/day, read 27.11):
+    # the hourly cap over a day stays <= 10% of the daily quota.
+    assert pv.OPENVULN_CAP == ((10, 60), (20, 3600))
+    assert max(n for n, w in pv.OPENVULN_CAP if w == 3600) * 24 <= 5000 * 0.10
 
 
 def test_422_no_echo_ignores_the_host_header(client):

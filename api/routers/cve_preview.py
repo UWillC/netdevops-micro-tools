@@ -20,7 +20,7 @@ the openVuln quota. Hence:
   - per-IP 5/min + 30/h in api/rate_limit.py PATH_LIMITS (AC-14);
   - input rejected before the engine: platform from the analyzer's list,
     release <= 64 characters with a digit and a narrow character set (AC-3/9/10/15);
-  - a global budget of uncached openVuln queries (10/min, 60/h), independent of IP
+  - a global budget of uncached openVuln queries (10/min, 20/h), independent of IP
     (AC-16). Over budget the preview still answers, with the dataset's own
     upgrade check and "Cisco check unavailable right now" (AC-13).
 
@@ -99,7 +99,11 @@ SEVERE = ("Critical", "High")
 # AC-16: uncached openVuln QUERIES started from the preview, all callers together
 # (@ciso W2: one pass is up to 4 queries, so the budget counts queries), with a
 # per-minute sub-limit so a burst cannot spend the hour at once.
-OPENVULN_CAP = ((10, 60), (60, 60 * 60))
+# Cisco's default quota per application (developer.cisco.com/docs/psirt,
+# "Browsing, sorting, filtering and rate limits", read 2026-11-27): 5/s, 30/min,
+# 5000/day, no hourly figure. 20/h = at most 480/day = 9.6% of the daily quota
+# (AC-16, <= 10%). 10/min stays: one walk is up to 4 queries plus release_known.
+OPENVULN_CAP = ((10, 60), (20, 60 * 60))
 
 
 def enabled() -> bool:
