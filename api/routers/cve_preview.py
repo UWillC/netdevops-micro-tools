@@ -103,7 +103,10 @@ SEVERE = ("Critical", "High")
 # "Browsing, sorting, filtering and rate limits", read 2026-11-27): 5/s, 30/min,
 # 5000/day, no hourly figure. 20/h = at most 480/day = 9.6% of the daily quota
 # (AC-16, <= 10%). 10/min stays: one walk is up to 4 queries plus release_known.
-OPENVULN_CAP = ((10, 60), (20, 60 * 60))
+# @ciso W11: 4/s keeps parallel previews under Cisco's 5/s, so the preview alone does
+# not trigger a 429 (4, not 3: one walk of 4 uncached queries must still fit a second;
+# a 429 itself only pauses for Retry-After, see cisco_software_checker).
+OPENVULN_CAP = ((4, 1), (10, 60), (20, 60 * 60))
 
 
 def enabled() -> bool:
