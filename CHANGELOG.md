@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v0.7.24] – 2026-11-27 (Preview pre-flag fixes: rollback steps, KEV on unknown releases, openVuln budget; flag still OFF)
+
+### Platform
+- **Flag still OFF, nothing changes for users:** everything below sits behind
+  `PREVIEW_ENABLED`, which stays unset in production.
+- **Intro sentences (PREVIEW-INTRO-02):** a first paragraph that only says "There is a
+  workaround that addresses this vulnerability." (and its plural / "and a mitigation"
+  forms) takes the next paragraph with it, within the same 2 paragraphs and 900 characters.
+- **NX-OS rollback (@ciso P1):** a first step runs Cisco's incompatibility check for the
+  older image (`show incompatibility-all nxos bootflash:...`, `show install all impact nxos
+  bootflash:...`), copied from Cisco's Nexus 9000 downgrade procedure, step 3.
+- **IOS XE rollback (@ciso P4):** the install-mode steps say the cited Cisco guide covers
+  Catalyst 9000 switches; other IOS XE platforms follow their own upgrade guide.
+- **Unknown release with a KEV match (@ciso R1):** a release outside Cisco's Known Affected
+  lists, with no answer from Cisco and no Critical/High match, was "NOT EVALUATED" even when
+  a CISA KEV advisory matched. It now shows the KEV plan (AC-18: clean + KEV -> plan). A
+  release Cisco says it does not know stays "NOT EVALUATED".
+- **openVuln budget for the preview (AC-16):** 60 -> 20 uncached queries per hour (10 per
+  minute unchanged), so the preview can use at most 9.6% of Cisco's published daily quota
+  (5000/day).
+
+### Tests
+- `tests/test_preview_plan.py`: INTRO-02 cases; 3 R1 cases (KEV Medium -> plan, no KEV ->
+  unknown, Cisco 404 -> unknown).
+- `tests/test_preview_01.py`: default budget matches the quota rule.
+
 ## [v0.7.23] – 2026-11-25 (Preview form fits a 320 px phone screen, flag still OFF)
 
 ### Home
